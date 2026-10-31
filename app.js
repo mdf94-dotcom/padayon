@@ -130,7 +130,94 @@ const LS = 'padayon-app-v1';
 function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newP: 4, newW: 4, newG: 2, goal: 60, voice: 'Kore', model: 'gemini-3.8-flash', tts: 'gemini-3.8-flash-tts', ttsOn: true }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {} }; }
 function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; return s; }
 let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && r.v === 1) return migrate(r); } catch (e) { } return fresh(); })();
-function save() { S.updated = Date.now(); try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
+function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
+function save() { S.updated = Date.now(); localSave(); schedulePush(); }
+
+/* ---------- sync across devices (Firebase: Google sign-in + one Firestore doc per person) ---------- */
+const FB_CFG = { apiKey: 'AIzaSyAMedDtDrSRJbULhA5Kwz30ZyYwPKj0rc4', authDomain: 'padayon-sync.firebaseapp.com', projectId: 'padayon-sync', storageBucket: 'padayon-sync.firebasestorage.app', messagingSenderId: '1192476989', appId: '1:1192476989:web:257d2aaafd933e6ab38554' };
+const Sync = { user: null, state: 'off', last: 0, timer: null, unsub: null, err: '' };
+const userDoc = () => firebase.firestore().collection('users').doc(Sync.user.uid);
+function mergeState(a, b) {
+  a = migrate(JSON.parse(JSON.stringify(a))); b = migrate(JSON.parse(JSON.stringify(b)));
+  // gap words: keep a's ids; give b's entries a's id when the English matches, or a fresh id when only the id collides
+  const aByEn = {}, aIds = new Set(); a.custom.forEach(c => { aByEn[norm(c.en)] = c.id; aIds.add(c.id); });
+  let maxC = Math.max(0, ...a.custom.concat(b.custom).map(c => +c.id.slice(1) || 0));
+  const bCustom = [], bCards = {};
+  Object.keys(b.cards).forEach(id => { if (id[0] !== 'c') bCards[id] = b.cards[id]; });
+  b.custom.forEach(c => {
+    const same = aByEn[norm(c.en)];
+    const nid = same || (aIds.has(c.id) ? 'c' + (++maxC) : c.id);
+    if (!same) { bCustom.push(Object.assign({}, c, { id: nid })); aIds.add(nid); aByEn[norm(c.en)] = nid; }
+    if (b.cards[c.id]) bCards[nid] = b.cards[c.id];
+  });
+  b.cards = bCards;
+  const newer = (b.updated || 0) > (a.updated || 0) ? b : a, out = migrate(JSON.parse(JSON.stringify(newer)));
+  out.custom = a.custom.concat(bCustom); out.nextC = Math.max(a.nextC, b.nextC, maxC + 1);
+  out.cards = {};
+  new Set(Object.keys(a.cards).concat(Object.keys(b.cards))).forEach(id => {
+    const x = a.cards[id], y = b.cards[id];
+    out.cards[id] = !x ? y : !y ? x : ((y.r + y.w) > (x.r + x.w) || ((y.r + y.w) === (x.r + x.w) && y.d > x.d)) ? y : x;
+  });
+  out.xp = {}; new Set(Object.keys(a.xp).concat(Object.keys(b.xp))).forEach(d => out.xp[d] = Math.max(a.xp[d] || 0, b.xp[d] || 0));
+  const sa = a.streak, sb = b.streak; out.streak = (sb.last > sa.last || (sb.last === sa.last && sb.count > sa.count)) ? { ...sb } : { ...sa }; out.streak.best = Math.max(sa.best, sb.best);
+  out.bestSpeed = Math.max(a.bestSpeed, b.bestSpeed);
+  out.plan = {}; [a.plan, b.plan].forEach(p => Object.keys(p).forEach(d => { out.plan[d] = Object.assign(out.plan[d] || {}, p[d]); Object.keys(p[d]).forEach(k => { if (p[d][k]) out.plan[d][k] = p[d][k]; }); }));
+  const t = today(); Object.keys(out.plan).forEach(d => { if (+d !== t) delete out.plan[d]; });
+  out.newDay = a.newDay.d === b.newDay.d ? { d: a.newDay.d, n: Math.max(a.newDay.n, b.newDay.n) } : (a.newDay.d > b.newDay.d ? a.newDay : b.newDay);
+  out.mistakes = {}; new Set(Object.keys(a.mistakes).concat(Object.keys(b.mistakes))).forEach(k => { const x = a.mistakes[k], y = b.mistakes[k]; out.mistakes[k] = !x ? y : !y ? x : { n: Math.max(x.n, y.n), fix: (newer === b ? y.fix : x.fix) || x.fix || y.fix, last: Math.max(x.last || 0, y.last || 0) }; });
+  out.updated = Math.max(a.updated || 0, b.updated || 0);
+  return out;
+}
+function schedulePush() { if (!Sync.user) return; clearTimeout(Sync.timer); Sync.timer = setTimeout(pushNow, 2000); }
+async function pushNow() {
+  if (!Sync.user) return;
+  try { await userDoc().set({ s: JSON.stringify(S), updated: S.updated || Date.now() }); Sync.state = 'on'; Sync.last = Date.now(); Sync.err = ''; }
+  catch (e) { Sync.state = 'error'; Sync.err = e.message || String(e); }
+  refreshSyncUI();
+}
+function applyRemote(json) {
+  let remote; try { remote = JSON.parse(json); } catch (e) { return; }
+  const merged = mergeState(S, remote), changed = JSON.stringify(merged) !== JSON.stringify(S);
+  if (changed) { S = merged; localSave(); if (view === 'home' || view === 'settings') render(); }
+  if (JSON.stringify(merged) !== json) schedulePush();
+}
+function initSync() {
+  if (!window.firebase || !firebase.initializeApp) return;
+  try { firebase.initializeApp(FB_CFG); } catch (e) { return; }
+  firebase.auth().getRedirectResult().catch(e => { Sync.err = e.message; });
+  firebase.auth().onAuthStateChanged(async u => {
+    if (Sync.unsub) { Sync.unsub(); Sync.unsub = null; }
+    Sync.user = u;
+    if (!u) { Sync.state = 'off'; refreshSyncUI(); return; }
+    Sync.state = 'syncing'; refreshSyncUI();
+    try {
+      const snap = await userDoc().get();
+      if (snap.exists) applyRemote(snap.data().s); else await pushNow();
+      Sync.state = 'on'; Sync.last = Date.now();
+      Sync.unsub = userDoc().onSnapshot(sn => { if (!sn.exists || sn.metadata.hasPendingWrites) return; applyRemote(sn.data().s); Sync.last = Date.now(); refreshSyncUI(); });
+    } catch (e) { Sync.state = 'error'; Sync.err = e.message || String(e); }
+    refreshSyncUI();
+  });
+}
+async function signIn() {
+  if (!window.firebase || !firebase.auth) return toast('Sync could not load. Check your connection and reopen the app.');
+  const prov = new firebase.auth.GoogleAuthProvider(); prov.setCustomParameters({ prompt: 'select_account' });
+  try { await firebase.auth().signInWithPopup(prov); }
+  catch (e) {
+    if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment')) { try { await firebase.auth().signInWithRedirect(prov); } catch (e2) { toast(e2.message); } }
+    else if (e && e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') toast('Sign-in failed: ' + (e.message || e.code));
+  }
+}
+async function signOutSync() { clearTimeout(Sync.timer); if (Sync.user) await pushNow(); await firebase.auth().signOut(); toast('Signed out. Progress stays on this device.'); }
+function syncLine() {
+  if (!window.firebase) return 'Sync is unavailable right now (offline?).';
+  if (!Sync.user) return 'Not signed in. Progress is saved on this device only.';
+  const who = esc(Sync.user.email || Sync.user.displayName || 'your Google account');
+  if (Sync.state === 'syncing') return `Signed in as ${who}. Syncing…`;
+  if (Sync.state === 'error') return `Signed in as ${who}. Last sync failed: ${esc(Sync.err)}`;
+  return `Signed in as ${who}. Progress syncs automatically.`;
+}
+function refreshSyncUI() { document.querySelectorAll('.syncline').forEach(el => el.innerHTML = syncLine()); document.querySelectorAll('.syncbtn').forEach(el => { el.textContent = Sync.user ? 'Sign out' : 'Sign in with Google'; }); const b = $('#syncbanner'); if (b) b.hidden = !!Sync.user || !window.firebase; }
 const KEYK = 'padayon-gemini-key';
 const getKey = () => { try { return localStorage.getItem(KEYK) || ''; } catch (e) { return ''; } };
 const hasAI = () => !!getKey();
@@ -402,9 +489,12 @@ VIEWS.home = function () {
     <p class="muted small" style="margin:0">Tap Focus to pull a unit's phrases to the front.</p><div>${UNITS.map((u, i) => unitRow(u, 'u' + i)).join('')}</div></section>
   <section class="panel"><details><summary>Common words <span class="muted small tnum">· ${learned(W.map((_, i) => 'w' + i))} of ${W.length} learned</span></summary>
     <div style="margin-top:8px">${WORD_UNITS.map((u, i) => unitRow(u, 'k' + i)).join('')}</div></details></section>` : ''}
+  <section class="panel"><div class="row spread"><h2>Sync across devices</h2><button class="btn sm ${Sync.user ? 'ghost' : 'primary'} syncbtn" id="synchome">${Sync.user ? 'Sign out' : 'Sign in with Google'}</button></div>
+    <p class="small syncline" style="margin:0">${syncLine()}</p><p class="muted small" style="margin:0">Sign in with the same Google account on your phone and PC and your progress follows you.</p></section>
   <section class="panel"><div class="row spread"><h2>Settings</h2><button class="btn sm ghost" data-go="settings">Open</button></div>
     <p class="muted small" style="margin:0">Gemini key, tutor voice, cards per day, and moving your progress between devices.</p></section>`;
   $('#start').onclick = startSession; $('#dictgo').onclick = startDictation;
+  $('#synchome').onclick = () => Sync.user ? signOutSync() : signIn();
   if ($('#packretry')) $('#packretry').onclick = autoPack;
   if ($('#weakgo')) $('#weakgo').onclick = () => { TU = null; tutorStart('Practice my weak spots'); };
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
@@ -426,14 +516,19 @@ VIEWS.settings = function () {
   <section class="panel"><h2>Daily cards</h2>
     ${[['newP', 'New phrases per day', [0, 2, 4, 6, 8]], ['newW', 'New words per day', [0, 2, 4, 6, 10]], ['newG', 'New grammar cards per day', [0, 1, 2, 3]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}</section>
   <section class="panel"><h2>Content pack</h2><p class="small" style="margin:0">${hasPack() ? `Loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Not loaded yet.'}</p><div class="row"><button class="btn ${hasPack() ? 'ghost' : 'primary'}" id="pack3">${hasPack() ? 'Download again' : 'Download now'}</button><button class="btn ghost" id="pack2">Load from a file</button></div></section>
-  <section class="panel"><h2>Move progress between devices</h2>
-    <p class="small" style="margin:0">Progress is saved on each device separately. To continue on another device, save a backup here, send it to yourself, and load it there.</p>
+  <section class="panel"><h2>Sync across devices</h2>
+    <p class="small syncline" style="margin:0">${syncLine()}</p>
+    <div class="row"><button class="btn ${Sync.user ? 'ghost' : 'primary'} syncbtn" id="syncset">${Sync.user ? 'Sign out' : 'Sign in with Google'}</button></div>
+    <p class="muted small" style="margin:0">Your Gemini key never syncs. Add it on each device.</p></section>
+  <section class="panel"><h2>Backup file</h2>
+    <p class="small" style="margin:0">A manual copy of your progress, if you ever want one.</p>
     <div class="row"><button class="btn" id="exp">Save backup file</button><button class="btn ghost" id="imp">Load backup</button></div></section>
   <section class="panel"><details><summary>Advanced: model names</summary>
     <div style="display:grid;gap:8px;margin-top:10px"><label class="label" for="mdl">Listening and grading model</label><input class="field" id="mdl" value="${esc(st.model)}">
     <label class="label" for="tmdl">Voice model</label><input class="field" id="tmdl" value="${esc(st.tts)}">
     <button class="btn sm" id="savem">Save model names</button><p class="muted small" style="margin:0">Only change these if Google renames its models.</p></div></details></section>`;
   $('#quit').onclick = () => go('home');
+  $('#syncset').onclick = () => Sync.user ? signOutSync() : signIn();
   $('#savekey').onclick = () => { try { localStorage.setItem(KEYK, $('#key').value.trim()); } catch (e) { } render(); toast('Key saved'); };
   $('#testkey').onclick = async () => { $('#keymsg').textContent = 'Testing…'; try { const r = await gemJSON([{ text: 'Reply with JSON {"ok": true, "ceb": "Maayong adlaw"}' }]); $('#keymsg').textContent = r && r.ok ? 'Works. Gemini is connected.' : 'Connected, but the reply looked odd.'; } catch (e) { $('#keymsg').textContent = gemErr(e); } };
   document.querySelectorAll('#voices button').forEach(b => b.onclick = () => { S.settings.voice = b.dataset.v; Object.keys(ttsCache).forEach(k2 => delete ttsCache[k2]); save(); render(); });
@@ -865,6 +960,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter') { const b = $('#chk:not([disabled])') || $('#cont'); if (b && document.activeElement !== b) { e.preventDefault(); b.click(); } }
   if (e.key === ' ' && $('#pl') && !$('#pl').disabled) { e.preventDefault(); $('#pl').click(); }
 });
+initSync();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
 render();
 loadStoredPack().then(ok => { if (ok) { if (view === 'home') render(); } else autoPack(); });
