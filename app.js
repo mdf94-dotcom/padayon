@@ -103,6 +103,18 @@ function parsePack(buf) {
   return { h, p: buf.slice(start, start + h.plen), w: buf.slice(start + h.plen, start + h.plen + h.wlen) };
 }
 async function loadStoredPack() { try { const buf = await idbGet('pack'); if (buf) { const x = parsePack(buf); setPack(x.h, x.p, x.w); return true; } } catch (e) { } return false; }
+let packState = 'idle', packPct = 0;
+async function autoPack() {
+  packState = 'loading'; if (view === 'home') render();
+  try {
+    const r = await fetch('pack.bin', { cache: 'no-store' }); if (!r.ok) throw new Error(r.status);
+    const total = +r.headers.get('content-length') || 10114753; const reader = r.body.getReader(); const parts = []; let got = 0;
+    for (;;) { const { done, value } = await reader.read(); if (done) break; parts.push(value); got += value.length; const p = Math.min(99, Math.round(got / total * 100)); if (p !== packPct) { packPct = p; const el = $('#packpct'); if (el) el.textContent = p + '%'; } }
+    const buf = new Uint8Array(got); let o = 0; parts.forEach(x => { buf.set(x, o); o += x.length; });
+    const x = parsePack(buf.buffer); await idbSet('pack', buf.buffer); setPack(x.h, x.p, x.w); packState = 'done';
+  } catch (e) { packState = 'error'; }
+  if (view === 'home') render();
+}
 function importPack() {
   const fi = $('#filein'); fi.accept = '.bin,application/octet-stream'; fi.value = '';
   fi.onchange = async () => {
@@ -363,7 +375,7 @@ VIEWS.home = function () {
   <div class="top"><div class="brand"><h1>Padayon</h1><span class="muted small">Bisaya daily</span></div>
     <div class="stats"><span class="stat tnum" title="Day streak"><span class="flame">${I.flame}</span>${streakNow()}</span><span class="stat tnum" title="Listening speed"><span class="flame">${I.bolt}</span>${S.speed.toFixed(1)}×</span></div></div>
   ${!hasPack() || !hasAI() ? `<section class="banner"><b>Finish setting up</b>
-    ${!hasPack() ? `<div class="small">Load your content pack to get the 225 phrases and 1,002 words with native recordings. Grammar cards and the Tutor work without it.</div><button class="btn primary" id="packbtn">Load content pack</button>` : ''}
+    ${!hasPack() ? (packState === 'loading' ? `<div class="small">Downloading 225 phrases and 1,002 words with native recordings… <b id="packpct">${packPct}%</b> (about 10 MB, one time only)</div>` : `<div class="small">${packState === 'error' ? "The phrases and recordings didn't download. Check your connection and try again." : 'Phrases and recordings are not loaded yet.'}</div><button class="btn primary" id="packretry">Download phrases and recordings</button>`) : ''}
     ${!hasAI() ? `<div class="small">Add a free Gemini API key so the Tutor can hear and grade you.</div><button class="btn ${hasPack() ? 'primary' : ''}" data-go="settings">Add Gemini key</button>` : ''}</section>` : ''}
   <section class="hero">
     <div><div class="label" style="color:inherit;opacity:.8">Karon nga adlaw · Today</div><h2>${xp >= goal ? 'Goal reached. Padayon!' : "Today's session"}</h2>
@@ -393,7 +405,7 @@ VIEWS.home = function () {
   <section class="panel"><div class="row spread"><h2>Settings</h2><button class="btn sm ghost" data-go="settings">Open</button></div>
     <p class="muted small" style="margin:0">Gemini key, tutor voice, cards per day, and moving your progress between devices.</p></section>`;
   $('#start').onclick = startSession; $('#dictgo').onclick = startDictation;
-  if ($('#packbtn')) $('#packbtn').onclick = importPack;
+  if ($('#packretry')) $('#packretry').onclick = autoPack;
   if ($('#weakgo')) $('#weakgo').onclick = () => { TU = null; tutorStart('Practice my weak spots'); };
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
   document.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { const p = planDay(); p[b.dataset.plan] = !p[b.dataset.plan]; save(); render(); });
@@ -413,7 +425,7 @@ VIEWS.settings = function () {
     <button class="btn sm ghost" id="trytts" ${k ? '' : 'disabled'}>Hear a sample</button></section>
   <section class="panel"><h2>Daily cards</h2>
     ${[['newP', 'New phrases per day', [0, 2, 4, 6, 8]], ['newW', 'New words per day', [0, 2, 4, 6, 10]], ['newG', 'New grammar cards per day', [0, 1, 2, 3]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}</section>
-  <section class="panel"><h2>Content pack</h2><p class="small" style="margin:0">${hasPack() ? `Loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Not loaded yet.'}</p><button class="btn ${hasPack() ? 'ghost' : 'primary'}" id="pack2">${hasPack() ? 'Load again' : 'Load content pack'}</button></section>
+  <section class="panel"><h2>Content pack</h2><p class="small" style="margin:0">${hasPack() ? `Loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Not loaded yet.'}</p><div class="row"><button class="btn ${hasPack() ? 'ghost' : 'primary'}" id="pack3">${hasPack() ? 'Download again' : 'Download now'}</button><button class="btn ghost" id="pack2">Load from a file</button></div></section>
   <section class="panel"><h2>Move progress between devices</h2>
     <p class="small" style="margin:0">Progress is saved on each device separately. To continue on another device, save a backup here, send it to yourself, and load it there.</p>
     <div class="row"><button class="btn" id="exp">Save backup file</button><button class="btn ghost" id="imp">Load backup</button></div></section>
@@ -428,7 +440,7 @@ VIEWS.settings = function () {
   $('#ttson').onchange = e => { S.settings.ttsOn = e.target.checked; save(); };
   $('#trytts').onclick = async e => { const b = e.currentTarget; b.textContent = 'Loading…'; const u = await tts('Maayong buntag! Kumusta ka karon? Unsa imong gikaon ganina?'); b.textContent = 'Hear a sample'; if (u) playUrl(u, 1); else toast('No audio came back. Check the voice model name.'); };
   document.querySelectorAll('[data-set]').forEach(g => g.querySelectorAll('button').forEach(b => b.onclick = () => { S.settings[g.dataset.set] = +b.dataset.v; save(); render(); }));
-  $('#pack2').onclick = importPack;
+  $('#pack2').onclick = importPack; $('#pack3').onclick = () => { go('home'); autoPack(); };
   $('#exp').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' })); a.download = 'padayon-progress-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); };
   $('#imp').onclick = () => { const fi = $('#filein'); fi.accept = '.json,application/json'; fi.value = ''; fi.onchange = async () => { try { const s = JSON.parse(await fi.files[0].text()); if (s.v !== 1) throw 0; S = migrate(s); save(); toast('Progress loaded'); go('home'); } catch (e) { toast('That is not a Padayon backup file.'); } }; fi.click(); };
   $('#savem').onclick = () => { S.settings.model = $('#mdl').value.trim() || fresh().settings.model; S.settings.tts = $('#tmdl').value.trim() || fresh().settings.tts; save(); toast('Saved'); };
@@ -855,4 +867,4 @@ document.addEventListener('keydown', e => {
 });
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
 render();
-loadStoredPack().then(ok => { if (ok && (view === 'home')) render(); });
+loadStoredPack().then(ok => { if (ok) { if (view === 'home') render(); } else autoPack(); });
