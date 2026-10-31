@@ -256,6 +256,7 @@ function wireNext(id = 'nextup') { const b = $('#' + id); if (!b) return; b.oncl
 function sectionDone(label, line) {
   stopAudio();
   $('#app').innerHTML = `<section class="panel summary"><div class="label">${esc(label)}</div><h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1>${line ? `<p class="muted">${line}</p>` : ''}
+    ${cameoHtml('done')}${binkoSays(planNext() ? BINKO_NEXT[planNext().k] : BINKO_NEXT.done)}
     ${nextBtnHtml()}<button class="btn ghost block" id="home2">Home</button></section>`;
   wireNext(); $('#home2').onclick = () => go('home');
 }
@@ -492,12 +493,13 @@ VIEWS.home = function () {
   const items = planItems(), nextUp = planNext(), doneN = items.filter(i => plan[i.k]).length;
   const weak = weakList(5);
   $('#app').innerHTML = `
-  <div class="top"><div class="brand"><h1>Padayon</h1><span class="muted small">Bisaya daily</span></div>
+  <div class="top"><div class="brand"><h1>Padayon</h1><span class="muted small">Bisaya with the Lucky Clovers</span></div>
     <div class="stats"><span class="stat tnum" title="Day streak"><span class="flame">${I.flame}</span>${streakNow()}</span><span class="stat tnum" title="Listening speed"><span class="flame">${I.bolt}</span>${S.speed.toFixed(1)}×</span></div></div>
   ${!hasPack() || !hasAI() ? `<section class="banner"><b>Finish setting up</b>
     ${!hasPack() ? (packState === 'loading' ? `<div class="small">Downloading 225 phrases and 1,002 words with native recordings… <b id="packpct">${packPct}%</b> (about 10 MB, one time only)</div>` : `<div class="small">${packState === 'error' ? "The phrases and recordings didn't download. Check your connection and try again." : 'Phrases and recordings are not loaded yet.'}</div><button class="btn primary" id="packretry">Download phrases and recordings</button>`) : ''}
     ${!hasAI() ? `<div class="small">Add a free Gemini API key so the Tutor can hear and grade you.</div><button class="btn ${hasPack() ? 'primary' : ''}" data-go="settings">Add Gemini key</button>` : ''}</section>` : ''}
   <section class="hero">
+    <div class="hero-guide">${binkoSays(BINKO_NEXT[nextUp ? nextUp.k : 'done'], true)}</div>
     <div><div class="label" style="color:inherit;opacity:.8">Karon nga adlaw · Today</div><h2>${nextUp ? 'Next up: ' + esc(nextUp.name) : 'All done today. Padayon!'}</h2>
       <p>${nextUp ? esc(nextUp.k === 'session' ? due + ' review' + (due === 1 ? '' : 's') + ' due · ' + nw + ' new · about ' + Math.max(5, Math.round((Math.min(due, 16) + nw * 2 + 2) * 0.6)) + ' min' : nextUp.d) : xp + ' XP today. Come back tomorrow, or do another session.'}</p></div>
     <div class="ringwrap plandone">${ringSvg(doneN, items.length)}<span class="ringtxt tnum">${doneN}<small>of ${items.length}</small></span></div>
@@ -611,13 +613,18 @@ function result(c, item, ok, extra) {
     else { S.cards[c.id].b = Math.max(S.cards[c.id].b, 1); S.cards[c.id].r++; }
   }
   sess.total++; if (q > 0) { sess.right++; const g = q === 2 ? 10 : 6; sess.xp += g; addXP(g); }
+  // the party drops in now and then: a streak, a comeback, or a rough patch
+  const prevWrong = sess.wrongRun || 0; sess.run = q > 0 ? (sess.run || 0) + 1 : 0; sess.wrongRun = q > 0 ? 0 : prevWrong + 1;
+  const gap = sess.total - (sess.lastCameo || -9) >= 4;
+  const cameoKind = !gap ? null : q > 0 && sess.run > 0 && sess.run % 3 === 0 ? 'streak' : q > 0 && prevWrong >= 1 && Math.random() < 0.4 ? 'comeback' : q === 0 && sess.wrongRun === 2 ? 'rough' : null;
+  if (cameoKind) sess.lastCameo = sess.total;
   if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push({ id: c.id, type: c.kind === 'f' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
   save();
   const f = $('#foot'); f.className = 'foot ' + (q > 0 ? 'good' : 'bad');
   f.innerHTML = `<div class="row spread"><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
   <div class="ans"><span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}</div>
   ${c.audio ? `<button class="play sm" id="fplay" aria-label="Play">${I.play}</button>` : ''}</div>
-  <button class="btn primary block" id="cont">Continue</button>`;
+  ${cameoKind ? cameoHtml(cameoKind) : ''}<button class="btn primary block" id="cont">Continue</button>`;
   if (c.audio) { $('#fplay').onclick = e => play(c.id, 1, e.currentTarget); if (!['listen', 'tiles', 'dict', 'pron', 'say'].includes(item.type)) play(c.id, 1); }
   $('#cont').onclick = next; $('#cont').focus({ preventScroll: true });
 }
@@ -702,7 +709,7 @@ function usedIn(c) {
 const tipFor = c => c.trick ? { trick: c.trick } : (S.tips || {})[c.id] || null;
 function tipHtml(t, c) {
   if (!t) return '';
-  return `<div class="panel tip"><div class="label">Memory trick</div><div>${esc(t.trick || '')}</div>${t.english ? `<div class="small"><b>English link:</b> ${esc(t.english)}</div>` : ''}${t.when && !(c && c.note) ? `<div class="small"><b>When to use it:</b> ${esc(t.when)}</div>` : ''}${t.example ? `<div class="small"><b>${esc(t.example)}</b> <span class="muted">· ${esc(t.example_en || '')}</span></div>` : ''}</div>`;
+  return `<div class="panel tip"><div class="label">Binko's memory trick</div><div>${esc(t.trick || '')}</div>${t.english ? `<div class="small"><b>English link:</b> ${esc(t.english)}</div>` : ''}${t.when && !(c && c.note) ? `<div class="small"><b>When to use it:</b> ${esc(t.when)}</div>` : ''}${t.example ? `<div class="small"><b>${esc(t.example)}</b> <span class="muted">· ${esc(t.example_en || '')}</span></div>` : ''}</div>`;
 }
 async function fetchTip(c) {
   const r = await gemJSON([{ text: `${learnerText()}
@@ -765,7 +772,7 @@ const EX = {
     $('#ex').innerHTML = `<div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
       <div class="ceb">${esc(c.ceb)}</div><div class="prompt" style="font-weight:500">${esc(c.en)}</div>
       ${breakdown(c.ceb)}
-      ${c.note ? `<div class="panel note"><div class="label">${c.kind === 'p' || c.kind === 'w' ? 'When to use it' : 'How it fits together'}</div>${esc(c.note)}</div>` : ''}
+      ${c.note ? `<div class="panel note">${castImg('binko', 'peek')}<div class="label">Binko explains · ${c.kind === 'p' || c.kind === 'w' ? 'when to use it' : 'how it fits together'}</div>${esc(c.note)}</div>` : ''}
       ${c.combos ? `<div><div class="label">Swap in other words</div>${c.combos.map(x => `<div class="small"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span></div>`).join('')}</div>` : ''}
       ${usedIn(c)}
       <div id="tipslot"></div>
@@ -893,6 +900,7 @@ VIEWS.summary = function () {
     <div class="sumgrid"><div><b class="tnum">${sess.xp}</b><span class="small muted">XP</span></div><div><b class="tnum">${acc}%</b><span class="small muted">correct</span></div>
     <div><b class="tnum">${sess.mode === 'speed' ? sess.peak.toFixed(1) + '×' : streakNow()}</b><span class="small muted">${sess.mode === 'speed' ? 'top speed' : 'day streak'}</span></div></div>
     ${sess.mode === 'speed' ? `<p class="muted">Your listening speed is now <b>${S.speed.toFixed(1)}×</b>.</p>` : `<p class="muted">${sess.newIds.size} new · ${sess.graded.size} practiced.</p>`}
+    ${cameoHtml('done')}${binkoSays(planNext() ? BINKO_NEXT[planNext().k] : BINKO_NEXT.done)}
     ${nextBtnHtml()}<button class="btn ghost block" id="home">Home</button></section>`;
   wireNext(); $('#home').onclick = () => go('home');
 };
@@ -933,10 +941,11 @@ async function speedQ() {
     const ok = sel != null && opts[sel].id === c.id;
     btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === c.id) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); });
     sess.total++;
+    const spCameo = ok && (sess.right + 1) % 5 === 0;
     if (ok) { sess.right++; sess.xp += 5; addXP(5); SP.run++; if (SP.run >= 2) { SP.rate = Math.min(2, Math.round((SP.rate + 0.1) * 10) / 10); SP.run = 0; sess.peak = Math.max(sess.peak, SP.rate); } }
     else { SP.run = 0; SP.rate = Math.max(0.8, Math.round((SP.rate - 0.1) * 10) / 10); }
     const f = $('#foot'); f.hidden = false; f.className = 'foot ' + (ok ? 'good' : 'bad');
-    f.innerHTML = `<div class="row spread"><div style="min-width:0;flex:1"><div class="verdict">${ok ? 'Tama!' : sel == null ? "Time's up" : 'Dili pa.'}</div><div class="ans">${esc(c.ceb)} <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div></div><button class="play sm" id="fplay" aria-label="Replay at normal speed">${I.play}</button></div><button class="btn primary block" id="cont">Next</button>`;
+    f.innerHTML = `<div class="row spread"><div style="min-width:0;flex:1"><div class="verdict">${ok ? 'Tama!' : sel == null ? "Time's up" : 'Dili pa.'}</div><div class="ans">${esc(c.ceb)} <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div></div><button class="play sm" id="fplay" aria-label="Replay at normal speed">${I.play}</button></div>${spCameo ? cameoHtml('streak') : ''}<button class="btn primary block" id="cont">Next</button>`;
     $('#fplay').onclick = e => play(c.id, 1, e.currentTarget); $('#cont').onclick = () => { SP.i++; speedQ(); }; $('#cont').focus({ preventScroll: true });
   };
   btns.forEach((b, i) => b.onclick = () => finish(i));
@@ -1070,7 +1079,7 @@ VIEWS.pron = function () {
   if (!PR) { let pool = Object.keys(S.cards).filter(id => id[0] === 'p'); if (pool.length < 8) pool = pool.concat(PHRASE_ORDER.slice(0, 30)); PR = { list: shuffle([...new Set(pool)]).slice(0, 10), i: 0, scores: [] }; }
   if (PR.i >= PR.list.length) {
     const avg = PR.scores.length ? Math.round(PR.scores.reduce((a, b) => a + b, 0) / PR.scores.length) : 0;
-    $('#app').innerHTML = `<section class="panel summary"><div class="label">Pronunciation done</div><h1 style="font-size:2rem;color:var(--sea)">Maayo!</h1><div class="sumgrid"><div><b class="tnum">${avg}</b><span class="small muted">average</span></div><div><b class="tnum">${PR.scores.length}</b><span class="small muted">phrases</span></div><div><b class="tnum">${Math.max(0, ...PR.scores)}</b><span class="small muted">best</span></div></div>${(PR.scores.length && tick('pron'), nextBtnHtml())}<button class="btn ghost block" id="home">Home</button></section>`;
+    $('#app').innerHTML = `<section class="panel summary"><div class="label">Pronunciation done</div><h1 style="font-size:2rem;color:var(--sea)">Maayo!</h1><div class="sumgrid"><div><b class="tnum">${avg}</b><span class="small muted">average</span></div><div><b class="tnum">${PR.scores.length}</b><span class="small muted">phrases</span></div><div><b class="tnum">${Math.max(0, ...PR.scores)}</b><span class="small muted">best</span></div></div>${(PR.scores.length && tick('pron'), cameoHtml('done') + binkoSays(planNext() ? BINKO_NEXT[planNext().k] : BINKO_NEXT.done) + nextBtnHtml())}<button class="btn ghost block" id="home">Home</button></section>`;
     PR = null; wireNext(); $('#home').onclick = () => go('home'); return;
   }
   const c = card(PR.list[PR.i]);

@@ -4,35 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Padayon Bisaya</title>
-<meta name="theme-color" content="#0B6B66">
+<meta name="theme-color" content="#0f1719">
 <meta name="description" content="Daily Bisaya (Cebuano) practice with an AI speaking tutor.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
 <style>
 /* Layout: one phone-width column; home is a stack of panels, a session takes the whole column with a sticky check bar. */
 :root{
-  --bg:#EDF2F0; --surface:#FFFFFF; --ink:#12211D; --muted:#566963; --line:#D0DCD8; --chip:#E1EAE7;
-  --sea:#0B6B66; --sea-ink:#FFFFFF; --sea-soft:#D3E9E6;
-  --mango:#D9921A; --mango-soft:#FBEBCB;
-  --good:#1F7D49; --good-bg:#DCF0E3; --bad:#B8354A; --bad-bg:#F8DEE2;
-  --f-display:"Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  /* Rhine: Light pooled in the Darkness. Colors taken from Binko-SR157: teal-green mech, pink-to-yellow chest panel, copper legs, sky-blue birds. */
+  --bg:#0f1719; --surface:#172427; --ink:#f3f1e4; --muted:#a6bcb4; --line:#2a4245; --chip:#1f3236;
+  --sea:#34b8a3; --sea-ink:#0a1f1c; --sea-soft:#173d39;
+  --mango:#e8df7a; --mango-soft:#2c301f;
+  --good:#93d99a; --good-bg:#15301e; --bad:#ef8fa5; --bad-bg:#371c26;
+  --pink:#e98aa6; --copper:#d0875a; --sky:#7cc3ea;
+  --iri:linear-gradient(115deg,#e98aa6 0%,#e8df7a 45%,#93d99a 75%,#34b8a3 100%);
+  --f-display:"Fredoka", "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --f-body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
-  --r:14px;
+  --r:16px; color-scheme:dark;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0C1614; --surface:#14211E; --ink:#E4EEEB; --muted:#93A8A2; --line:#263833; --chip:#1B2C28;
-  --sea:#43B9AF; --sea-ink:#04201C; --sea-soft:#163834;
-  --mango:#F0B547; --mango-soft:#3A2C10;
-  --good:#52CB87; --good-bg:#11301F; --bad:#F27B8E; --bad-bg:#3B1820; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#0C1614; --surface:#14211E; --ink:#E4EEEB; --muted:#93A8A2; --line:#263833; --chip:#1B2C28;
-  --sea:#43B9AF; --sea-ink:#04201C; --sea-soft:#163834;
-  --mango:#F0B547; --mango-soft:#3A2C10;
-  --good:#52CB87; --good-bg:#11301F; --bad:#F27B8E; --bad-bg:#3B1820; color-scheme:dark}
 *{box-sizing:border-box}
 html,body{min-height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5;
@@ -211,6 +204,45 @@ body{margin:0}
 .weak:first-child{border-top:0}
 .weak .n{font-family:var(--f-display);font-weight:800;color:var(--bad);min-width:28px}
 .banner{background:var(--mango-soft);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+
+/* ---------- Rhine x Binko ---------- */
+body{background:radial-gradient(120% 55% at 50% -8%,rgba(232,223,122,.16),transparent 62%),linear-gradient(rgba(15,23,25,.84),rgba(15,23,25,.95)),url(img/darkness.webp) center top/cover fixed,#0f1719}
+.panel,.drill,.sumgrid div{border:2px solid var(--line);box-shadow:0 3px 0 rgba(0,0,0,.35)}
+.brand h1{background:var(--iri);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700}
+.stat{border:2px solid var(--line)}
+.hero{background:linear-gradient(160deg,#1e5550,#163c38 70%);color:var(--ink);border:2px solid #2c6a62;box-shadow:0 4px 0 rgba(0,0,0,.4);grid-template-columns:1fr auto}
+.hero::before{content:"";position:absolute;inset:0 0 auto 0;height:5px;background:var(--iri)}
+.hero::after{display:none}
+.hero .btn{background:var(--iri);color:#1a1a12;font-weight:700;box-shadow:0 3px 0 #9a5a3a}
+.hero-guide{grid-column:1/-1}
+.ringwrap{color:var(--mango)}
+.prog i,.bar i{background:var(--iri)}
+.btn.primary{box-shadow:0 3px 0 #1d6b60}
+.drill .big{color:var(--sea)}
+.drill:hover{border-color:var(--sea)}
+.note{background:#2b2f1d;border-color:#4a4c2a;position:relative;padding-right:84px}
+.note .peek{position:absolute;right:6px;bottom:4px;width:70px;height:auto}
+.tip{background:#1a3532;border-color:#2c5a54}
+.wb{background:var(--chip);border:1px solid var(--line)}
+.opt,.tile{border-color:var(--line);background:var(--surface)}
+.opt.sel{background:var(--sea-soft)}
+.msg.me{background:linear-gradient(140deg,#2a9e8c,#34b8a3);color:#0a1f1c}
+.banner{background:#2c301f;border:2px solid #4a4c2a}
+.art{display:block;object-fit:cover}
+.art.framed{border-radius:12px;border:2px solid var(--line);object-position:50% 15%}
+.art.cut{object-fit:contain;filter:drop-shadow(0 3px 0 rgba(0,0,0,.4))}
+.guide{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:end}
+.guide .art{width:64px;height:66px}
+.guide.big .art{width:92px;height:96px}
+.bubble{position:relative;background:#f3f1e4;color:#1d2422;border-radius:16px 16px 16px 4px;padding:10px 12px;font-size:.95rem;line-height:1.35;border:2px solid #1d2422;box-shadow:0 3px 0 rgba(0,0,0,.35)}
+.bubble .who{display:block;font-family:var(--f-display);font-weight:700;font-size:.78rem;letter-spacing:.04em;color:#1f7d6f;margin-bottom:2px}
+.cameo{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:center;background:rgba(0,0,0,.18);border-radius:12px;padding:8px;animation:pop .35s ease-out}
+.cameo .art{width:52px;height:62px}
+.cameo .who{font-family:var(--f-display);font-weight:700;font-size:.82rem;color:var(--mango)}
+.cameo .line{font-size:.92rem}
+.summary .cameo,.summary .guide{text-align:left;width:100%}
+@keyframes pop{0%{transform:translateY(6px);opacity:0}100%{transform:none;opacity:1}}
+.foot{background:var(--bg)}
 </style>
 </head>
 <body>
@@ -221,6 +253,7 @@ body{margin:0}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="learn.js"></script>
+<script src="cast.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
