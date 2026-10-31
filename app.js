@@ -50,14 +50,18 @@ const GRAM_ORDER = GRAM_UNITS.flatMap(u => u.ids);
 
 /* deck content, filled from the content pack */
 let P = [], W = [], UNITS = [], IDX = {}, PHRASE_ORDER = [], WORD_UNITS = [];
+const UNIT_OF = {};
+G.forEach((g, i) => UNIT_OF['g' + i] = 'g' + g[3]); F.forEach((f, i) => UNIT_OF['f' + i] = 'f' + f.u);
 const SPR = { p: null, w: null };
 function setPack(h, pbuf, wbuf) {
   P = h.P; W = h.W; UNITS = h.UNITS; IDX = h.IDX; SPR.p = pbuf; SPR.w = wbuf;
   PHRASE_ORDER = UNITS.flatMap(u => u.ids);
+  UNITS.forEach((u, i) => u.ids.forEach(id => UNIT_OF[id] = 'u' + i));
   WORD_UNITS = [];
   for (let i = 0; i < W.length; i += 25) {
     const ids = []; for (let j = i; j < Math.min(i + 25, W.length); j++) ids.push('w' + j);
     WORD_UNITS.push({ ceb: 'Pulong ' + (i / 25 + 1), name: 'Words ' + (i + 1) + '–' + Math.min(i + 25, W.length), ids });
+    ids.forEach(id => UNIT_OF[id] = 'k' + i);
   }
 }
 const hasPack = () => P.length > 0;
@@ -127,8 +131,8 @@ function importPack() {
 
 /* ---------- state ---------- */
 const LS = 'padayon-app-v1';
-function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newP: 4, newW: 4, newG: 2, goal: 60, voice: 'Kore', model: 'gemini-3.8-flash', tts: 'gemini-3.8-flash-tts', ttsOn: true }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {} }; }
-function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; return s; }
+function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newP: 4, newW: 4, newG: 2, newF: 2, learner: null, goal: 60, voice: 'Kore', model: 'gemini-3.8-flash', tts: 'gemini-3.8-flash-tts', ttsOn: true }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
+function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.tips = s.tips || {}; return s; }
 let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && r.v === 1) return migrate(r); } catch (e) { } return fresh(); })();
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
 function save() { S.updated = Date.now(); localSave(); schedulePush(); }
@@ -165,6 +169,7 @@ function mergeState(a, b) {
   const t = today(); Object.keys(out.plan).forEach(d => { if (+d !== t) delete out.plan[d]; });
   out.newDay = a.newDay.d === b.newDay.d ? { d: a.newDay.d, n: Math.max(a.newDay.n, b.newDay.n) } : (a.newDay.d > b.newDay.d ? a.newDay : b.newDay);
   out.mistakes = {}; new Set(Object.keys(a.mistakes).concat(Object.keys(b.mistakes))).forEach(k => { const x = a.mistakes[k], y = b.mistakes[k]; out.mistakes[k] = !x ? y : !y ? x : { n: Math.max(x.n, y.n), fix: (newer === b ? y.fix : x.fix) || x.fix || y.fix, last: Math.max(x.last || 0, y.last || 0) }; });
+  out.tips = Object.assign({}, a.tips, b.tips);
   out.updated = Math.max(a.updated || 0, b.updated || 0);
   return out;
 }
@@ -229,9 +234,10 @@ function planDay() { const t = today(); if (!S.plan[t]) S.plan = { [t]: {} }; re
 /* ---------- cards & SRS ---------- */
 function card(id) {
   const k = id[0], n = +id.slice(1);
-  if (k === 'p') return P[n] && { id, kind: 'p', ceb: P[n][0], en: P[n][1], audio: true };
-  if (k === 'w') return W[n] && { id, kind: 'w', ceb: W[n][0], en: W[n][1], audio: true };
+  if (k === 'p') return P[n] && { id, kind: 'p', ceb: P[n][0], en: P[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
+  if (k === 'w') return W[n] && { id, kind: 'w', ceb: W[n][0], en: W[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
   if (k === 'g') return G[n] && { id, kind: 'g', ceb: G[n][0], en: G[n][1], note: G[n][2], audio: false };
+  if (k === 'f') return F[n] && { id, kind: 'f', ceb: F[n].ceb, en: F[n].en, note: F[n].note, trick: F[n].trick, combos: F[n].combos, audio: false };
   const c = (S.custom || []).find(x => x.id === id);
   return c && { id, kind: 'c', ceb: c.ceb, en: c.en, ex: c.ex, exEn: c.exEn, audio: false };
 }
@@ -244,12 +250,13 @@ function grade(id, q) {
 const learned = ids => ids.filter(id => S.cards[id] && S.cards[id].b >= 2).length;
 const seen = ids => ids.filter(id => S.cards[id]).length;
 function dueIds() { const t = today(); return Object.keys(S.cards).filter(id => S.cards[id].d <= t && card(id)).sort((a, b) => S.cards[a].d - S.cards[b].d); }
-function newAllowance() { const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; return Math.max(0, S.settings.newP + S.settings.newW + S.settings.newG - S.newDay.n); }
+function newAllowance() { const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; return Math.max(0, S.settings.newP + S.settings.newW + S.settings.newG + (S.settings.newF || 0) - S.newDay.n); }
 function pickNew() {
   let left = newAllowance(); const out = [];
   const take = (order, max) => { let n = Math.min(max, left); for (const id of order) { if (n <= 0) break; if (!S.cards[id] && !out.includes(id) && card(id)) { out.push(id); n--; left--; } } };
   const focused = (pre, units, order) => (S.focus && S.focus[0] === pre && units[+S.focus.slice(1)]) ? units[+S.focus.slice(1)].ids.concat(order) : order;
   take(S.custom.map(c => c.id), 3);
+  take(focused('f', F_UNITS, F_ORDER), S.settings.newF || 0);
   take(focused('g', GRAM_UNITS, GRAM_ORDER), S.settings.newG);
   take(focused('u', UNITS, PHRASE_ORDER), S.settings.newP);
   take(focused('k', WORD_UNITS, W.map((_, i) => 'w' + i)), S.settings.newW);
@@ -258,6 +265,7 @@ function pickNew() {
 function exType(id, isNew) {
   const c = card(id), b = isNew ? 0 : (S.cards[id] ? S.cards[id].b : 0);
   const n = tokens(c.ceb).length, multi = n >= 2 && n <= 9, ai = hasAI();
+  if (c.kind === 'f') return isNew || b < 1 ? 'build' : b < 2 ? pick(['build', 'mc']) : pick(ai ? ['say', 'build', 'type'] : ['build', 'type', 'speak']);
   if (!c.audio) return isNew || b < 1 ? 'mc' : b < 2 ? pick(['mc', 'type']) : pick(ai ? ['say', 'say', 'type'] : ['speak', 'type']);
   if (isNew || b <= 0) return pick(['listen', 'mc']);
   if (b === 1) return pick(multi ? ['listen', 'tiles', 'mc', 'dict'].concat(ai ? ['pron'] : []) : ['listen', 'mc', 'type']);
@@ -400,11 +408,15 @@ async function tts(text) {
     return (ttsCache[text] = URL.createObjectURL(new Blob([h, pcm], { type: 'audio/wav' })));
   } catch (e) { return null; }
 }
-const LEARNER = 'The learner is a Filipino-American heritage speaker of Cebuano (Bisaya) who moved to the US at age 6. He understands beginner to low-intermediate Bisaya, loses track when people talk fast, and replaces words with English when he speaks. He wants to speak smoothly without switching to English.';
+const isNewLearner = () => S.settings.learner === 'new';
+function setLearner(l) { const was = S.settings.learner; S.settings.learner = l; if (l === 'new' && was !== 'new' && (S.settings.newF || 0) < 3) S.settings.newF = 3; save(); }
+const learnerText = () => isNewLearner()
+  ? 'The learner is an adult native English speaker who is new to Cebuano (Bisaya) and is not a heritage speaker. They are learning to talk with family. Keep explanations simple, tie Bisaya to English where you can, and be encouraging but honest.'
+  : 'The learner is a Filipino-American heritage speaker of Cebuano (Bisaya) who moved to the US at age 6. They understand beginner to low-intermediate Bisaya, lose track when people talk fast, and replace words with English when they speak. They want to speak smoothly without switching to English.';
 function weakList(n = 6) { return Object.entries(S.mistakes).sort((a, b) => b[1].n - a[1].n).slice(0, n); }
 function mistakeRules() {
   const labels = Object.keys(S.mistakes);
-  return `"mistakes": a list of his real errors in this answer as {"label": short reusable name for the error type, "fix": one-line fix with a Bisaya example}. [] if none.${labels.length ? ' If an error matches one of these existing labels, reuse that exact label: ' + JSON.stringify(labels.slice(0, 30)) + '.' : ''}`;
+  return `"mistakes": a list of the learner's real errors in this answer as {"label": short reusable name for the error type, "fix": one-line fix with a Bisaya example}. [] if none.${labels.length ? ' If an error matches one of these existing labels, reuse that exact label: ' + JSON.stringify(labels.slice(0, 30)) + '.' : ''}`;
 }
 function absorb(r) {
   (r.english_words || []).forEach(x => x && x.en && x.ceb && addGap(x.en, x.ceb, '', '', true));
@@ -415,25 +427,25 @@ const nativePart = id => { const ix = IDX[id], buf = SPR[id && id[0]]; return ix
 const recPart = rec => ({ inline_data: { mime_type: 'audio/wav', data: b64(rec.buf) } });
 
 async function gradeSay(c, rec) {
-  const parts = [{ text: `${LEARNER}\nHe was asked to SAY this in Bisaya: "${c.en}". One correct answer is "${c.ceb}"; other natural wordings are equally correct.\nHis recording follows.` }, recPart(rec)];
+  const parts = [{ text: `${learnerText()}\nThe learner was asked to SAY this in Bisaya: "${c.en}". One correct answer is "${c.ceb}"; other natural wordings are equally correct.\nTheir recording follows.` }, recPart(rec)];
   const np = c.audio ? nativePart(c.id) : null;
   if (np) parts.push({ text: 'Native speaker recording of the reference answer, for comparing pronunciation:' }, np);
   parts.push({ text: `Return JSON only:
-{"heard": "exactly what he said, word for word, including any English",
+{"heard": "exactly what the learner said, word for word, including any English",
  "verdict": "correct" | "close" | "wrong",
  "score": 0-100 for meaning and grammar,
  "pronunciation": 0-100,
- "pron_notes": ["up to 3 short notes on specific sounds, stress or rhythm, e.g. which syllable to stress or a glottal stop he dropped"],
+ "pron_notes": ["up to 3 short notes on specific sounds, stress or rhythm, e.g. which syllable to stress or a glottal stop they dropped"],
  "corrected": "the most natural way a Cebuano in Cebu would say it",
- "english_words": [{"en": "English word he used", "ceb": "Bisaya equivalent"}],
+ "english_words": [{"en": "English word they used", "ceb": "Bisaya equivalent"}],
  ${mistakeRules()},
  "feedback": "1-2 short plain-English sentences: what worked, then the single most useful fix"}
 "correct" = all Bisaya (loanwords Cebuanos really use are fine), meaning right, no real grammar slip. "close" = meaning right but one English word, a wrong affix or tense, or a missing particle. "wrong" = meaning off, mostly English, silent, or unintelligible.` });
   return gemJSON(parts);
 }
 async function gradePron(c, rec) {
-  const parts = [{ text: `${LEARNER}\nHe is practicing pronunciation by repeating this Bisaya phrase: "${c.ceb}" ("${c.en}").\nNative speaker recording:` }, nativePart(c.id), { text: 'His attempt:' }, recPart(rec), { text: `Compare his attempt with the native recording. Focus on sounds Cebuano learners get wrong: the vowels (Cebuano vowels are short and pure; i/e and u/o are close), stress placement, glottal stops (including in words like "bata" vs "bata'" and between vowels), the "ng" sound at the start of words, tapped r, and keeping an even, quick rhythm instead of English-style vowel reduction. Be specific and honest; don't praise what wasn't good.
-Return JSON only: {"heard": "what he said, word for word", "same_words": true or false, "score": 0-100, "pron_notes": ["up to 3 specific notes, each naming the word and what to change"], "tip": "one sentence on what to focus on next time"}` }];
+  const parts = [{ text: `${learnerText()}\nThe learner is practicing pronunciation by repeating this Bisaya phrase: "${c.ceb}" ("${c.en}").\nNative speaker recording:` }, nativePart(c.id), { text: 'Their attempt:' }, recPart(rec), { text: `Compare their attempt with the native recording. Focus on sounds Cebuano learners get wrong: the vowels (Cebuano vowels are short and pure; i/e and u/o are close), stress placement, glottal stops (including in words like "bata" vs "bata'" and between vowels), the "ng" sound at the start of words, tapped r, and keeping an even, quick rhythm instead of English-style vowel reduction. Be specific and honest; don't praise what wasn't good.
+Return JSON only: {"heard": "what the learner said, word for word", "same_words": true or false, "score": 0-100, "pron_notes": ["up to 3 specific notes, each naming the word and what to change"], "tip": "one sentence on what to focus on next time"}` }];
   return gemJSON(parts);
 }
 
@@ -464,6 +476,8 @@ VIEWS.home = function () {
   ${!hasPack() || !hasAI() ? `<section class="banner"><b>Finish setting up</b>
     ${!hasPack() ? (packState === 'loading' ? `<div class="small">Downloading 225 phrases and 1,002 words with native recordings… <b id="packpct">${packPct}%</b> (about 10 MB, one time only)</div>` : `<div class="small">${packState === 'error' ? "The phrases and recordings didn't download. Check your connection and try again." : 'Phrases and recordings are not loaded yet.'}</div><button class="btn primary" id="packretry">Download phrases and recordings</button>`) : ''}
     ${!hasAI() ? `<div class="small">Add a free Gemini API key so the Tutor can hear and grade you.</div><button class="btn ${hasPack() ? 'primary' : ''}" data-go="settings">Add Gemini key</button>` : ''}</section>` : ''}
+  ${!S.settings.learner ? `<section class="banner"><b>Who's learning on this device?</b><div class="small">This changes how the app teaches.</div>
+    <div class="row"><button class="btn primary" data-learner="heritage">I grew up hearing Bisaya</button><button class="btn" data-learner="new">I'm new to Bisaya</button></div></section>` : ''}
   <section class="hero">
     <div><div class="label" style="color:inherit;opacity:.8">Karon nga adlaw · Today</div><h2>${xp >= goal ? 'Goal reached. Padayon!' : "Today's session"}</h2>
       <p>${due} review${due === 1 ? '' : 's'} due · ${nw} new · about ${Math.max(5, Math.round((Math.min(due, 16) + nw * 2 + 2) * 0.6))} min</p></div>
@@ -476,12 +490,16 @@ VIEWS.home = function () {
     <button class="drill" data-go="speed"><span class="label">Listening</span><span class="big tnum">${S.speed.toFixed(1)}×</span><b>Speed round</b><span class="muted small">Clips get faster as you get them right.</span></button>
     <button class="drill" id="dictgo"><span class="label">Fast speech</span><span class="big">Dictation</span><b>Type what you hear</b><span class="muted small">Catch every little word.</span></button>
     <button class="drill" data-go="shadow"><span class="label">Fluency</span><span class="big">Shadow</span><b>Speak along</b><span class="muted small">Hands-free. Repeat with the speaker.</span></button>
+    <button class="drill" data-go="convos"><span class="label">Chaining</span><span class="big">Istorya</span><b>Conversations</b><span class="muted small">Real exchanges. Play your part out loud.</span></button>
     <button class="drill" data-go="gaps"><span class="label">Your words</span><span class="big tnum">${S.custom.length}</span><b>Gap words</b><span class="muted small">English you keep reaching for.</span></button>
   </section>
   <section class="panel"><div class="row spread"><h2>Your weak spots</h2>${weak.length ? '<button class="btn sm primary" id="weakgo">Practice with Tutor</button>' : ''}</div>
     ${weak.length ? `<div>${weak.map(([k, v]) => `<div class="weak"><span class="n tnum">${v.n}×</span><div style="min-width:0"><b>${esc(k)}</b><div class="small muted">${esc(v.fix)}</div></div></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Mistakes the Tutor catches in your speaking collect here. The Tutor then steers conversations toward them.</p>'}</section>
   <section class="panel"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${items.filter(i => plan[i[0]]).length} of 4</span></div>
     <div>${items.map(([k, b, d, auto]) => `<div class="check"><button class="box ${plan[k] ? 'on' : ''}" data-plan="${k}" ${auto ? 'disabled title="Ticks itself"' : ''} aria-label="${esc(b)}">${plan[k] ? I.check : ''}</button><div><b>${b}</b><span class="muted small">${d}</span></div></div>`).join('')}</div></section>
+  <section class="panel"><div class="row spread"><h2>Foundations</h2><span class="muted small tnum">${learned(F_ORDER)} of ${F.length} learned</span></div>
+    <p class="muted small" style="margin:0">How words fit together: who, whose, have, like, questions, and when. Each block comes with sentences you build yourself.</p>
+    <div>${F_UNITS.map((u, i) => unitRow(u, 'f' + i)).join('')}</div></section>
   <section class="panel"><div class="row spread"><h2>How Bisaya really works</h2><span class="muted small tnum">${learned(GRAM_ORDER)} of ${G.length} learned</span></div>
     <p class="muted small" style="margin:0">Shortcuts, little words, and verb endings that make fast speech hard to follow.</p>
     <div>${GRAM_UNITS.map((u, i) => unitRow(u, 'g' + i)).join('')}</div></section>
@@ -498,6 +516,7 @@ VIEWS.home = function () {
   if ($('#packretry')) $('#packretry').onclick = autoPack;
   if ($('#weakgo')) $('#weakgo').onclick = () => { TU = null; tutorStart('Practice my weak spots'); };
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+  document.querySelectorAll('[data-learner]').forEach(b => b.onclick = () => { setLearner(b.dataset.learner); render(); toast(b.dataset.learner === 'new' ? 'Memory tricks and building blocks turned up' : 'Set for a heritage speaker'); });
   document.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { const p = planDay(); p[b.dataset.plan] = !p[b.dataset.plan]; save(); render(); });
   document.querySelectorAll('[data-focus]').forEach(b => b.onclick = () => { S.focus = S.focus === b.dataset.focus ? null : b.dataset.focus; save(); render(); toast(S.focus ? 'New cards will come from this unit first' : 'Back to the normal order'); });
 };
@@ -513,8 +532,11 @@ VIEWS.settings = function () {
     <div class="seg" id="voices">${['Kore', 'Aoede', 'Puck', 'Charon', 'Zephyr', 'Fenrir'].map(v => `<button class="${st.voice === v ? 'on' : ''}" data-v="${v}">${v}</button>`).join('')}</div>
     <label class="row small"><input type="checkbox" id="ttson" ${st.ttsOn ? 'checked' : ''}> Read Tutor replies out loud</label>
     <button class="btn sm ghost" id="trytts" ${k ? '' : 'disabled'}>Hear a sample</button></section>
+  <section class="panel"><h2>Who's learning</h2>
+    <div class="seg" id="learner"><button class="${st.learner === 'heritage' ? 'on' : ''}" data-l="heritage">Grew up hearing Bisaya</button><button class="${st.learner === 'new' ? 'on' : ''}" data-l="new">New to Bisaya</button></div>
+    <p class="muted small" style="margin:0">New to Bisaya shows a memory trick on every new card and adds more building blocks each day. The Tutor also explains more in English.</p></section>
   <section class="panel"><h2>Daily cards</h2>
-    ${[['newP', 'New phrases per day', [0, 2, 4, 6, 8]], ['newW', 'New words per day', [0, 2, 4, 6, 10]], ['newG', 'New grammar cards per day', [0, 1, 2, 3]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}</section>
+    ${[['newF', 'New building blocks per day', [0, 1, 2, 3, 4]], ['newP', 'New phrases per day', [0, 2, 4, 6, 8]], ['newW', 'New words per day', [0, 2, 4, 6, 10]], ['newG', 'New grammar cards per day', [0, 1, 2, 3]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}</section>
   <section class="panel"><h2>Content pack</h2><p class="small" style="margin:0">${hasPack() ? `Loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Not loaded yet.'}</p><div class="row"><button class="btn ${hasPack() ? 'ghost' : 'primary'}" id="pack3">${hasPack() ? 'Download again' : 'Download now'}</button><button class="btn ghost" id="pack2">Load from a file</button></div></section>
   <section class="panel"><h2>Sync across devices</h2>
     <p class="small syncline" style="margin:0">${syncLine()}</p>
@@ -533,6 +555,7 @@ VIEWS.settings = function () {
   $('#testkey').onclick = async () => { $('#keymsg').textContent = 'Testing…'; try { const r = await gemJSON([{ text: 'Reply with JSON {"ok": true, "ceb": "Maayong adlaw"}' }]); $('#keymsg').textContent = r && r.ok ? 'Works. Gemini is connected.' : 'Connected, but the reply looked odd.'; } catch (e) { $('#keymsg').textContent = gemErr(e); } };
   document.querySelectorAll('#voices button').forEach(b => b.onclick = () => { S.settings.voice = b.dataset.v; Object.keys(ttsCache).forEach(k2 => delete ttsCache[k2]); save(); render(); });
   $('#ttson').onchange = e => { S.settings.ttsOn = e.target.checked; save(); };
+  document.querySelectorAll('#learner button').forEach(b => b.onclick = () => { setLearner(b.dataset.l); render(); });
   $('#trytts').onclick = async e => { const b = e.currentTarget; b.textContent = 'Loading…'; const u = await tts('Maayong buntag! Kumusta ka karon? Unsa imong gikaon ganina?'); b.textContent = 'Hear a sample'; if (u) playUrl(u, 1); else toast('No audio came back. Check the voice model name.'); };
   document.querySelectorAll('[data-set]').forEach(g => g.querySelectorAll('button').forEach(b => b.onclick = () => { S.settings[g.dataset.set] = +b.dataset.v; save(); render(); }));
   $('#pack2').onclick = importPack; $('#pack3').onclick = () => { go('home'); autoPack(); };
@@ -571,28 +594,125 @@ function result(c, item, ok, extra) {
     else { S.cards[c.id].b = Math.max(S.cards[c.id].b, 1); S.cards[c.id].r++; }
   }
   sess.total++; if (q > 0) { sess.right++; const g = q === 2 ? 10 : 6; sess.xp += g; addXP(g); }
-  if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push({ id: c.id, type: c.audio ? pick(['listen', 'mc']) : 'mc' }); }
+  if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push({ id: c.id, type: c.kind === 'f' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
   save();
   const f = $('#foot'); f.className = 'foot ' + (q > 0 ? 'good' : 'bad');
   f.innerHTML = `<div class="row spread"><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
-  <div class="ans"><span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}</div>
+  <div class="ans"><span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}</div>
   ${c.audio ? `<button class="play sm" id="fplay" aria-label="Play">${I.play}</button>` : ''}</div>
   <button class="btn primary block" id="cont">Continue</button>`;
   if (c.audio) { $('#fplay').onclick = e => play(c.id, 1, e.currentTarget); if (!['listen', 'tiles', 'dict', 'pron', 'say'].includes(item.type)) play(c.id, 1); }
   $('#cont').onclick = next; $('#cont').focus({ preventScroll: true });
 }
+/* ---------- answer choices that can't be guessed by elimination ----------
+   Wrong answers come from the same topic, share words or shape with the answer, and include
+   minimal-change versions (ko→ka, naa→wala, mo-→ni-, udto→hapon) so you have to know it, not spot the odd one out. */
+const confOf = {}; CONF.forEach(g => g.forEach(id => confOf[id] = g));
+const swapOf = {}; SWAPS.forEach(g => g.forEach(w => (swapOf[w] = swapOf[w] || new Set()) && g.forEach(x => x !== w && swapOf[w].add(x))));
+const lowTok = t => t.toLowerCase().replace(/[.,!?…¿¡]/g, '');
+const tokSet = ceb => new Set(tokens(ceb).map(lowTok));
+const enWords = en => en.toLowerCase().replace(/\([^)]*\)/g, '').replace(/[^a-z' ]/g, ' ').split(/\s+/).filter(Boolean);
+const isQ = s => /\?\s*$/.test(s.split('/')[0].trim());
+function sameMeaning(a, b) {
+  const x = new Set(enWords(a)), y = enWords(b); if (!x.size || !y.length) return false;
+  const inter = y.filter(w => x.has(w)).length; return inter / Math.max(x.size, y.length) >= 0.8;
+}
+function simScore(c, d) {
+  const a = tokSet(c.ceb), b = tokSet(d.ceb); let sc = 0;
+  b.forEach(t => { if (a.has(t)) sc += 3; });
+  const fa = lowTok(tokens(c.ceb)[0] || ''), fb = lowTok(tokens(d.ceb)[0] || '');
+  if (fa && fa === fb) sc += 2; else if (fa.slice(0, 2) === fb.slice(0, 2)) sc += 1;
+  if (UNIT_OF[c.id] && UNIT_OF[c.id] === UNIT_OF[d.id]) sc += 2.5;
+  if (confOf[c.id] && confOf[c.id].includes(d.id)) sc += 8;
+  const ea = enWords(c.en), eb = enWords(d.en);
+  if (ea[0] && ea[0] === eb[0]) sc += 1.5;
+  if (isQ(c.en) === isQ(d.en)) sc += 1.5; else sc -= 2;
+  const suf = w => (w.match(/(ing|ed|ly|er|s)$/) || [''])[0], la = ea[ea.length - 1] || '', lb = eb[eb.length - 1] || '';
+  if (ea.length === 1 && eb.length === 1 && suf(la) === suf(lb)) sc += 1.5;
+  if (ea[0] === 'to' && eb[0] === 'to') sc += 1.5;
+  sc -= Math.abs(a.size - b.size) * 0.9 + Math.abs(ea.length - eb.length) * 0.4;
+  return sc + Math.random() * 1.5;
+}
+function swapVariants(c) {
+  const toks = tokens(c.ceb), out = new Set(), real = new Set(alts(c.ceb));
+  toks.forEach((t, i) => {
+    const lw = lowTok(t), cand = [];
+    if (swapOf[lw]) swapOf[lw].forEach(x => cand.push(x));
+    if (lw.length >= 5) SWAP_PREFIX.forEach(g => g.forEach(pre => { if (lw.startsWith(pre)) g.forEach(o => o !== pre && cand.push(o + lw.slice(pre.length))); }));
+    cand.forEach(x => {
+      const rep = t[0] === t[0].toUpperCase() && t[0] !== t[0].toLowerCase() ? x[0].toUpperCase() + x.slice(1) : x;
+      const v = toks.map((y, j) => j === i ? rep + (y.match(/[.,!?…]+$/) || [''])[0] : y).join(' ') + (/\?\s*$/.test(firstAlt(c.ceb)) && !/\?$/.test(toks[toks.length - 1]) ? '?' : '');
+      if (!real.has(norm(v))) out.add(v);
+    });
+  });
+  return shuffle([...out]);
+}
 function distract(c, n, field) {
-  const pool = c.kind === 'w' ? W.map((_, i) => 'w' + i) : c.kind === 'p' ? PHRASE_ORDER : c.kind === 'g' ? GRAM_ORDER : GRAM_ORDER.concat(PHRASE_ORDER, S.custom.map(x => x.id));
-  const order = shuffle(pool.filter(id => id !== c.id && S.cards[id])).concat(shuffle(pool.filter(id => id !== c.id && !S.cards[id])));
+  const pool = c.kind === 'w' ? W.map((_, i) => 'w' + i).concat(PHRASE_ORDER.filter(id => tokens(P[+id.slice(1)][0]).length === 1))
+    : c.kind === 'p' ? PHRASE_ORDER : c.kind === 'g' ? GRAM_ORDER.concat(F_ORDER) : c.kind === 'f' ? F_ORDER.concat(GRAM_ORDER) : GRAM_ORDER.concat(PHRASE_ORDER, S.custom.map(x => x.id));
+  const ranked = pool.filter(id => id !== c.id).map(card).filter(Boolean).map(d => [simScore(c, d), d]).sort((x, y) => y[0] - x[0]);
   const out = [], used = new Set([norm(c[field])]);
-  for (const id of order) { const d = card(id); if (!d) continue; const v = norm(d[field]); if (used.has(v)) continue; used.add(v); out.push(d); if (out.length >= n) break; }
+  const ok = d => { const v = norm(d[field]); if (!v || used.has(v) || sameMeaning(c.en, d.en)) return false; used.add(v); return true; };
+  // minimal-change fakes only make sense when the options are in Bisaya
+  if (field === 'ceb') for (const v of swapVariants(c).slice(0, n >= 3 ? 2 : 1)) { const d = { id: 'x' + out.length, ceb: v, en: '' }; if (ok(d)) out.push(d); }
+  const top = ranked.slice(0, Math.max(8, n * 3)); shuffle(top);
+  for (const [, d] of top.sort((x, y) => y[0] - x[0] + (Math.random() - 0.5) * 3)) { if (out.length >= n) break; if (ok(d)) out.push(d); }
+  for (const [, d] of ranked) { if (out.length >= n) break; if (ok(d)) out.push(d); }
   return out;
 }
+// show every option in the same style so punctuation and capitals don't give the answer away
+const optText = (o, field) => { let t = String(o[field] || '').trim().replace(/[.!]+$/, ''); return t ? t[0].toUpperCase() + t.slice(1) : t; };
+
+/* ---------- word by word, memory tricks, where a word shows up ---------- */
+function glossOf(tok) {
+  const t = lowTok(tok); if (!t) return null;
+  if (GLOSS[t]) return GLOSS[t];
+  const w = W.findIndex(x => norm(x[0]) === t); if (w >= 0) return W[w][1];
+  const p = P.findIndex(x => tokens(x[0]).length === 1 && alts(x[0]).includes(t)); if (p >= 0) return P[p][1];
+  for (const [re, txt] of AFFIX) if (re.test(t) && t.length > 5) { const root = t.replace(re, ''); const rw = W.find(x => norm(x[0]) === root); return txt + (rw ? ' · ' + root + ' = ' + rw[1] : ''); }
+  return null;
+}
+function breakdown(ceb) {
+  const toks = tokens(ceb); if (toks.length < 2) return '';
+  return `<div><div class="label">Word by word</div><div class="wbw">${toks.map(t => { const g = glossOf(t); return `<span class="wb"><b>${esc(t.replace(/[.,!?…]/g, ''))}</b><i>${esc(g || '·')}</i></span>`; }).join('')}</div></div>`;
+}
+function usedIn(c) {
+  if (c.kind !== 'w' && !(c.kind === 'p' && tokens(c.ceb).length === 1)) return '';
+  const t = norm(firstAlt(c.ceb)); if (!t) return '';
+  const hits = P.map((x, i) => [x, i]).filter(([x, i]) => 'p' + i !== c.id && tokens(x[0]).length > 1 && tokens(x[0]).map(lowTok).includes(t)).slice(0, 2);
+  return hits.length ? `<div><div class="label">You'll hear it in</div>${hits.map(([x]) => `<div class="small"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span></div>`).join('')}</div>` : '';
+}
+const tipFor = c => c.trick ? { trick: c.trick } : (S.tips || {})[c.id] || null;
+function tipHtml(t, c) {
+  if (!t) return '';
+  return `<div class="panel tip"><div class="label">Memory trick</div><div>${esc(t.trick || '')}</div>${t.english ? `<div class="small"><b>English link:</b> ${esc(t.english)}</div>` : ''}${t.when && !(c && c.note) ? `<div class="small"><b>When to use it:</b> ${esc(t.when)}</div>` : ''}${t.example ? `<div class="small"><b>${esc(t.example)}</b> <span class="muted">· ${esc(t.example_en || '')}</span></div>` : ''}</div>`;
+}
+async function fetchTip(c) {
+  const r = await gemJSON([{ text: `${learnerText()}
+Make a memory aid for this Bisaya (Cebuano) item: "${c.ceb}" = "${c.en}".
+Return JSON only: {"trick": "one short, vivid memory trick that links the SOUND of the Bisaya to an English word or image (1-2 sentences)",
+"english": "a real English, Spanish or Tagalog connection if one exists (cognate or loanword), else \\"\\"",
+"when": "when Cebuanos actually use it vs. similar words, in one sentence",
+"example": "one short everyday Bisaya sentence that uses it, as people in Cebu talk", "example_en": "its English"}` }]);
+  if (r && r.trick) { S.tips[c.id] = { trick: String(r.trick), english: String(r.english || ''), when: String(r.when || ''), example: String(r.example || ''), example_en: String(r.example_en || '') }; save(); }
+  return S.tips[c.id];
+}
+function wireTip(c, slot, auto) {
+  const el = $(slot); if (!el) return;
+  const have = tipFor(c);
+  if (have) { el.innerHTML = tipHtml(have, c); return; }
+  if (!hasAI()) return;
+  const runIt = async () => { el.innerHTML = '<p class="muted small" style="margin:0">Making a memory trick…</p>'; try { el.innerHTML = tipHtml(await fetchTip(c), c); } catch (e) { el.innerHTML = `<p class="muted small" style="margin:0">${esc(gemErr(e))}</p>`; } };
+  if (auto) runIt(); else { el.innerHTML = '<button class="linkbtn" id="tipbtn">Show a memory trick</button>'; $('#tipbtn').onclick = runIt; }
+}
+function sayBtn(c) { return !c.audio && hasAI() && S.settings.ttsOn ? `<button class="miniplay" id="ttsb">${I.play} Hear it</button>` : ''; }
+function wireSay(c, text) { const b = $('#ttsb'); if (b) b.onclick = async () => { b.disabled = true; const u = await tts(text || firstAlt(c.ceb)); b.disabled = false; if (u) playUrl(u, 1); else toast('No audio came back.'); }; }
+
 const playBlock = rate => `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">Playing at ${rate.toFixed(1)}×.<br>Turtle plays it at 0.8×.</span></div>`;
 function wirePlay(c, rate) { $('#pl').onclick = e => play(c.id, rate, e.currentTarget); $('#pls').onclick = e => play(c.id, 0.8, e.currentTarget); play(c.id, rate, $('#pl')); }
 function choiceEx(c, item, opts, field, cls) {
   let sel = null;
-  $('#ex').querySelector('.opts').innerHTML = opts.map((o, i) => `<button class="opt ${cls || ''}" data-i="${i}">${esc(o[field])}</button>`).join('');
+  $('#ex').querySelector('.opts').innerHTML = opts.map((o, i) => `<button class="opt ${cls || ''}" data-i="${i}">${esc(optText(o, field))}</button>`).join('');
   foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
   const btns = [...document.querySelectorAll('.opt')];
   btns.forEach(b => b.onclick = () => { btns.forEach(x => x.classList.remove('sel')); b.classList.add('sel'); sel = +b.dataset.i; $('#chk').disabled = false; });
@@ -625,20 +745,45 @@ const EX = {
   teach(c, item) {
     sess.newIds.add(c.id);
     if (!S.cards[c.id]) { S.cards[c.id] = { b: 0, d: today() + 1, r: 0, w: 0 }; const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; S.newDay.n++; save(); }
-    $('#ex').innerHTML = `<div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
+    $('#ex').innerHTML = `<div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
       <div class="ceb">${esc(c.ceb)}</div><div class="prompt" style="font-weight:500">${esc(c.en)}</div>
-      ${c.note ? `<div class="panel note">${esc(c.note)}</div>` : ''}
+      ${breakdown(c.ceb)}
+      ${c.note ? `<div class="panel note"><div class="label">${c.kind === 'p' || c.kind === 'w' ? 'When to use it' : 'How it fits together'}</div>${esc(c.note)}</div>` : ''}
+      ${c.combos ? `<div><div class="label">Swap in other words</div>${c.combos.map(x => `<div class="small"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span></div>`).join('')}</div>` : ''}
+      ${usedIn(c)}
+      <div id="tipslot"></div>
       ${c.ex ? `<div class="panel"><b>${esc(c.ex)}</b><span class="muted small">${esc(c.exEn || '')}</span></div>` : ''}
-      ${c.audio ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">Say it out loud with the recording.</span></div>` : '<p class="muted small">Say it out loud twice.</p>'}`;
-    if (c.audio) wirePlay(c, 1);
+      ${c.audio ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">Say it out loud with the recording.</span></div>` : `<div class="row">${sayBtn(c)}<span class="muted small">Say it out loud twice.</span></div>`}`;
+    if (c.audio) wirePlay(c, 1); else wireSay(c);
+    wireTip(c, '#tipslot', isNewLearner());
     sess.xp += 2; addXP(2);
     foot(`<button class="btn primary block" id="cont">Got it</button>`); $('#cont').onclick = next;
   },
   listen(c, item) { $('#ex').innerHTML = `<h2>What did you hear?</h2>${playBlock(S.speed)}<div class="opts"></div>`; wirePlay(c, S.speed); choiceEx(c, item, shuffle([c, ...distract(c, 3, 'en')]), 'en'); },
   mc(c, item) { $('#ex').innerHTML = `<div class="label">How do you say</div><div class="prompt">${esc(c.en)}</div><div class="opts"></div>`; choiceEx(c, item, shuffle([c, ...distract(c, 3, 'ceb')]), 'ceb', 'cebopt'); },
+  build(c, item) {
+    const combo = c.combos ? pick([[c.ceb, c.en]].concat(c.combos)) : [c.ceb, c.en];
+    const cc = Object.assign({}, c, { ceb: combo[0], en: combo[1] });
+    const ans = tokens(cc.ceb).map(t => t.replace(/[.,!?…]/g, '')), low = ans.map(a => a.toLowerCase());
+    const swaps = [...new Set(swapVariants(cc).flatMap(v => tokens(v).map(t => t.replace(/[.,!?…]/g, ''))))].filter(t => !low.includes(t.toLowerCase()));
+    const others = (c.combos || []).concat(F.flatMap(f => f.combos)).flatMap(x => tokens(x[0]).map(t => t.replace(/[.,!?…]/g, ''))).filter(t => !low.includes(t.toLowerCase()));
+    const extra = [...new Set(shuffle(swaps).slice(0, 2).concat(shuffle(others)))].slice(0, Math.max(3, Math.ceil(ans.length * 0.8)));
+    const bank = shuffle(ans.map((t, i) => ({ t, k: 'a' + i })).concat(extra.map((t, i) => ({ t, k: 'x' + i })))); const chosen = [];
+    $('#ex').innerHTML = `<div class="label">Build it in Bisaya</div><div class="prompt">${esc(cc.en)}</div><div class="tray" id="tray"></div><div class="bank" id="bank">${bank.map(b => `<button class="tile" data-k="${b.k}">${esc(b.t)}</button>`).join('')}</div><p class="muted small" style="margin:0">Some tiles are look-alikes. Watch ko / ka, koy / kay, mo- / ni-.</p>`;
+    foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
+    const draw = () => {
+      $('#tray').innerHTML = chosen.map(k => `<button class="tile" data-k="${k}">${esc(bank.find(b => b.k === k).t)}</button>`).join('');
+      document.querySelectorAll('#bank .tile').forEach(b => b.classList.toggle('used', chosen.includes(b.dataset.k)));
+      $('#tray').querySelectorAll('.tile').forEach(b => b.onclick = () => { chosen.splice(chosen.indexOf(b.dataset.k), 1); draw(); });
+      $('#chk').disabled = !chosen.length;
+    };
+    document.querySelectorAll('#bank .tile').forEach(b => b.onclick = () => { if (!chosen.includes(b.dataset.k)) { chosen.push(b.dataset.k); draw(); } });
+    $('#chk').onclick = () => { const got = chosen.map(k => bank.find(b => b.k === k).t).join(' '); result(cc, item, norm(got) === norm(ans.join(' ')), norm(got) === norm(ans.join(' ')) ? '' : 'You built "' + esc(got) + '"'); };
+  },
   tiles(c, item) {
     const ans = tokens(c.ceb), low = ans.map(a => a.toLowerCase());
-    const extra = [...new Set(shuffle(PHRASE_ORDER.filter(id => id !== c.id)).flatMap(id => tokens(P[+id.slice(1)][0])).filter(t => !low.includes(t.toLowerCase())))].slice(0, Math.min(4, Math.max(2, Math.ceil(ans.length / 2))));
+    const swapT = [...new Set(swapVariants(c).flatMap(v => tokens(v)))].filter(t => !low.includes(t.toLowerCase()));
+    const extra = [...new Set(shuffle(swapT).slice(0, 2).concat(shuffle(PHRASE_ORDER.filter(id => id !== c.id)).flatMap(id => tokens(P[+id.slice(1)][0])).filter(t => !low.includes(t.toLowerCase()))))].slice(0, Math.min(4, Math.max(2, Math.ceil(ans.length / 2))));
     const bank = shuffle(ans.map((t, i) => ({ t, k: 'a' + i })).concat(extra.map((t, i) => ({ t, k: 'x' + i })))); const chosen = [];
     $('#ex').innerHTML = `<h2>Tap what you hear</h2>${playBlock(S.speed)}<div class="tray" id="tray"></div><div class="bank" id="bank">${bank.map(b => `<button class="tile" data-k="${b.k}">${esc(b.t)}</button>`).join('')}</div>`;
     wirePlay(c, S.speed); foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
@@ -758,7 +903,7 @@ async function speedQ() {
   const c = card(SP.list[SP.i]), opts = shuffle([c, ...distract(c, 3, 'en')]);
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End">${I.x}</button><div class="prog"><i style="width:${SP.i / SP.list.length * 100}%"></i></div><span class="speedchip">${SP.rate.toFixed(1)}×</span></div>
    <div class="ex"><h2>Listen once</h2><div class="playrow"><button class="play playing" id="pl" aria-label="Playing" disabled>${I.play}</button><span class="muted small" id="st">Playing…</span></div>
-   <div class="timer"><i id="tb"></i></div><div class="opts">${opts.map((o, i) => `<button class="opt" data-i="${i}" disabled>${esc(o.en)}</button>`).join('')}</div></div><div class="foot" id="foot" hidden></div>`;
+   <div class="timer"><i id="tb"></i></div><div class="opts">${opts.map((o, i) => `<button class="opt" data-i="${i}" disabled>${esc(optText(o, 'en'))}</button>`).join('')}</div></div><div class="foot" id="foot" hidden></div>`;
   $('#quit').onclick = () => { clearInterval(timerH); stopAudio(); if (sess.total) endSpeed(); else go('home'); };
   const myI = SP.i;
   await play(c.id, SP.rate, $('#pl'));
@@ -780,6 +925,85 @@ async function speedQ() {
   btns.forEach((b, i) => b.onclick = () => finish(i));
   timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / 7000; const tb = $('#tb'); if (tb) tb.style.width = Math.max(0, f * 100) + '%'; if (f <= 0) finish(null); }, 100);
 }
+
+
+/* ---------- conversations: chain lines into a real exchange ---------- */
+let DL = null;
+VIEWS.convos = function () {
+  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Conversations</h2></div>
+  <section class="panel"><p style="margin:0">Short, everyday exchanges. Read and listen first, then play your part out loud, then put the lines back in order. Each line has a note on how it connects to the last one.</p></section>
+  <section class="panel">${DIALOGS.map((d, i) => `<div class="unit"><div class="nm"><b>${esc(d.ceb)}</b> <span class="muted small">${esc(d.title)} · ${d.lines.length} lines</span></div><span></span>
+    <div class="row" style="grid-column:1/-1"><button class="btn sm primary" data-d="${i}" data-m="read">Read and listen</button><button class="btn sm" data-d="${i}" data-m="part">Play your part</button><button class="btn sm ghost" data-d="${i}" data-m="order">Put in order</button>${hasAI() ? `<button class="btn sm ghost" data-d="${i}" data-m="tutor">Role-play with Tutor</button>` : ''}</div></div>`).join('')}</section>`;
+  $('#quit').onclick = () => go('home');
+  document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => {
+    const d = DIALOGS[+b.dataset.d], m = b.dataset.m;
+    if (m === 'tutor') { TU = null; return tutorStart(`Role-play "${d.title}". You are the ${d.a.toLowerCase()}, the learner is themselves. Use lines like: ${d.lines.filter(l => l[0] === 'a').map(l => l[1]).join(' / ')}`); }
+    DL = { d, m, i: 0, show: {}, right: 0, order: [], pool: m === 'order' ? shuffle(d.lines.map((_, j) => j)) : [] };
+    view = 'convo'; render();
+  });
+};
+const lineSay = async (txt, btn) => { if (!hasAI() || !S.settings.ttsOn) return; if (btn) btn.classList.add('playing'); const u = await tts(txt); if (btn) btn.classList.remove('playing'); if (u && view === 'convo') await playUrl(u, 1); };
+function bubble(d, l, j, opts = {}) {
+  const me = l[0] === 'b', showEn = opts.en || DL.show[j];
+  return `<div class="msg ${me ? 'me' : 'them'}"><div class="small" style="opacity:.75">${esc(me ? d.b : d.a)}</div><div style="font-weight:700">${esc(l[1])}</div>
+    ${showEn ? `<div class="tr" ${me ? 'style="color:inherit;opacity:.85"' : ''}>${esc(l[2])}</div>` : `<button class="linkbtn" data-en="${j}" ${me ? 'style="color:inherit"' : ''}>English</button>`}
+    ${opts.note && l[3] ? `<div class="tr" ${me ? 'style="color:inherit;opacity:.85"' : ''}><i>${esc(l[3])}</i></div>` : ''}
+    ${hasAI() && S.settings.ttsOn ? `<button class="miniplay" data-say="${j}" style="margin-top:6px">${I.play}</button>` : ''}</div>`;
+}
+function wireBubbles(d) {
+  document.querySelectorAll('[data-en]').forEach(b => b.onclick = () => { DL.show[+b.dataset.en] = true; render(); });
+  document.querySelectorAll('[data-say]').forEach(b => b.onclick = () => lineSay(d.lines[+b.dataset.say][1], b));
+}
+VIEWS.convo = function () {
+  const d = DL.d, n = d.lines.length;
+  const head = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><div class="prog"><i style="width:${(DL.m === 'order' ? DL.order.length : DL.i) / n * 100}%"></i></div><span class="muted small">${esc(d.ceb)}</span></div>`;
+  const done = () => { const xp = DL.m === 'part' ? 4 * DL.right + 6 : 10; addXP(xp); save(); toast('+' + xp + ' XP'); go('convos'); };
+  if (DL.m === 'read') {
+    $('#app').innerHTML = `${head}<div class="ex"><div class="label">${esc(d.title)}</div><div class="chat">${d.lines.slice(0, DL.i + 1).map((l, j) => bubble(d, l, j, { note: true })).join('')}</div></div><div class="foot" id="foot"></div>`;
+    foot(DL.i < n - 1 ? `<button class="btn primary block" id="nx">Next line</button>` : `<button class="btn primary block" id="nx">Done. Now play your part</button>`);
+    $('#nx').onclick = () => { if (DL.i < n - 1) { DL.i++; render(); lineSay(d.lines[DL.i][1]); } else { DL = { d, m: 'part', i: 0, show: {}, right: 0 }; render(); } };
+    if (DL.i === 0 && !DL.spoke) { DL.spoke = 1; lineSay(d.lines[0][1]); }
+  } else if (DL.m === 'part') {
+    if (DL.i >= n) { $('#app').innerHTML = `${head}<section class="panel summary"><div class="label">Conversation done</div><h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1><p class="muted">${DL.right} of ${d.lines.filter(l => l[0] === 'b').length} of your lines said right.</p><button class="btn primary block" id="fin">Back to conversations</button></section>`; $('#fin').onclick = done; $('#quit').onclick = () => go('convos'); return; }
+    const l = d.lines[DL.i], mine = l[0] === 'b';
+    $('#app').innerHTML = `${head}<div class="ex"><div class="chat">${d.lines.slice(0, DL.i).map((x, j) => bubble(d, x, j)).join('')}${mine ? '' : bubble(d, l, DL.i)}</div>
+      ${mine ? `<div class="panel"><div class="label">Your turn. Say it in Bisaya</div><div class="prompt">${esc(l[2])}</div>${l[3] ? `<div class="small muted">Hint: ${esc(l[3])}</div>` : ''}<div id="micw"></div><div id="res"></div></div>` : ''}</div><div class="foot" id="foot"></div>`;
+    wireBubbles(d);
+    const adv = () => { DL.i++; render(); };
+    if (!mine) { foot(`<button class="btn primary block" id="nx">Next</button>`); $('#nx').onclick = adv; if (DL.spoke !== 'p' + DL.i) { DL.spoke = 'p' + DL.i; lineSay(l[1]); } }
+    else if (hasAI()) {
+      foot(`<button class="btn ghost block" id="skip">Show me the line</button>`);
+      $('#skip').onclick = () => { Rec.cancel(); $('#res').innerHTML = `<div class="corr">${esc(l[1])}</div>`; foot(`<button class="btn primary block" id="nx">Next</button>`); $('#nx').onclick = adv; lineSay(l[1]); };
+      micWidget($('#micw'), async rec => {
+        try {
+          const r = await gradeSay({ id: 'dl', ceb: l[1], en: l[2], audio: false }, rec); absorb(r);
+          $('#res').innerHTML = aiFeedback(r, rec, null) + `<div class="small">The line: <b>${esc(l[1])}</b></div>`; wireCompare(rec, { audio: false });
+          if (r.verdict !== 'wrong') DL.right++;
+          foot(`<button class="btn primary block" id="nx">Next</button>`); $('#nx').onclick = adv;
+        } catch (e) { $('#micst').textContent = gemErr(e); }
+      });
+    } else {
+      foot(`<button class="btn primary block" id="show">Show the line</button>`);
+      $('#show').onclick = () => { $('#res').innerHTML = `<div class="corr">${esc(l[1])}</div>`; foot(`<div class="grades"><button class="btn" data-q="1">I said it</button><button class="btn" data-q="0">I blanked or used English</button></div>`); document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { if (+b.dataset.q) DL.right++; adv(); }); };
+    }
+  } else {
+    const left = DL.pool.filter(j => !DL.order.includes(j)), full = DL.order.length === n;
+    $('#app').innerHTML = `${head}<div class="ex"><div class="label">Tap the lines in the order they're said</div><div class="chat">${DL.order.map(j => bubble(d, d.lines[j], j, { en: DL.checked })).join('')}</div>
+      ${full ? '' : `<div class="opts">${left.map(j => `<button class="opt cebopt" data-o="${j}">${esc(d.lines[j][1])}</button>`).join('')}</div>`}</div><div class="foot" id="foot"></div>`;
+    wireBubbles(d);
+    document.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { DL.order.push(+b.dataset.o); render(); });
+    if (!full) { foot(`<button class="btn ghost block" id="undo" ${DL.order.length ? '' : 'disabled'}>Undo last</button>`); $('#undo').onclick = () => { DL.order.pop(); render(); }; }
+    else {
+      const ok = DL.order.every((j, k) => j === k); DL.checked = true;
+      const f = $('#foot'); f.className = 'foot ' + (ok ? 'good' : 'bad');
+      f.innerHTML = `<div class="verdict">${ok ? 'Tama! That flows.' : 'Not quite.'}</div>${ok ? '' : `<div class="small">The real order:</div><ol class="small" style="margin:0;padding-left:20px">${d.lines.map(l => `<li><b>${esc(l[1])}</b> <span class="muted">· ${esc(l[2])}</span></li>`).join('')}</ol>`}
+        <div class="row"><button class="btn primary" id="fin">${ok ? 'Done' : 'Back'}</button>${ok ? '' : '<button class="btn ghost" id="again">Try again</button>'}</div>`;
+      $('#fin').onclick = ok ? done : () => go('convos');
+      if ($('#again')) $('#again').onclick = () => { DL.order = []; DL.checked = false; DL.pool = shuffle(DL.pool); render(); };
+    }
+  }
+  $('#quit').onclick = () => go('convos');
+};
 
 /* ---------- shadowing ---------- */
 let SH = null;
@@ -847,30 +1071,30 @@ VIEWS.pron = function () {
 };
 
 /* ---------- voice tutor ---------- */
-const TOPICS = ['Your day so far', 'What you ate today', 'Family news', 'Weekend plans', 'Your work at the clinic', 'Growing up in the Philippines vs. here', 'Shopping at the palengke', 'Practice my weak spots'];
+const TOPICS = ['Your day so far', 'What you ate today', 'Family news', 'Weekend plans', 'Your work', 'Family and where they come from', 'Shopping at the palengke', 'Practice my weak spots'];
 let TU = null;
 function tutorStart(topic) { TU = { topic, msgs: [], busy: false, turns: 0 }; view = 'tutor'; render(); tutorTurn(null); }
 function tutorSystem() {
   const weak = weakList(6), gaps = S.custom.slice(-10);
-  return `${LEARNER}
-You are his Bisaya conversation tutor: a friendly native Cebuano speaker from Cebu. You are talking OUT LOUD; he hears your reply as audio.
+  return `${learnerText()}
+You are the learner's Bisaya conversation tutor: a friendly native Cebuano speaker from Cebu. You are talking OUT LOUD; they hear your reply as audio.
 Topic: ${TU.topic}.
-${weak.length ? 'His recurring mistakes (steer the conversation so he has to use these correctly): ' + weak.map(([k, v]) => k + ' (fix: ' + v.fix + ')').join('; ') + '.' : ''}
-${gaps.length ? 'Words he keeps saying in English (ask questions that make him use the Bisaya): ' + gaps.map(g => g.en + ' = ' + g.ceb).join(', ') + '.' : ''}
-Rules for your reply: only everyday Cebuano as people in Cebu really talk (loanwords Cebuanos really use are fine); 1 to 3 short sentences at low-intermediate level; always end with one question he must answer; react to what he actually said.`;
+${weak.length ? 'Their recurring mistakes (steer the conversation so they have to use these correctly): ' + weak.map(([k, v]) => k + ' (fix: ' + v.fix + ')').join('; ') + '.' : ''}
+${gaps.length ? 'Words they keep saying in English (ask questions that make them use the Bisaya): ' + gaps.map(g => g.en + ' = ' + g.ceb).join(', ') + '.' : ''}
+Rules for your reply: only everyday Cebuano as people in Cebu really talk (loanwords Cebuanos really use are fine); 1 to 3 short sentences at low-intermediate level; always end with one question they must answer; react to what they actually said.`;
 }
 async function tutorTurn(rec) {
   TU.busy = true; drawTutor();
   const hist = TU.msgs.map(m => (m.role === 'me' ? 'Learner: ' + (m.heard || '') : 'Tutor: ' + m.text)).join('\n');
   const parts = rec
     ? [{ text: (hist ? 'Conversation so far:\n' + hist + '\n\n' : '') + "The learner's new spoken turn is this recording:" }, recPart(rec), { text: `Return JSON only:
-{"heard": "exactly what he said, word for word, including any English",
+{"heard": "exactly what the learner said, word for word, including any English",
  "reply": "your spoken reply in Bisaya",
  "reply_en": "English translation of your reply",
- "fixed": "how a Cebuano would naturally say what he meant, all in Bisaya; \\"\\" if he already said it naturally",
- "english_words": [{"en": "English word he used", "ceb": "Bisaya equivalent"}],
+ "fixed": "how a Cebuano would naturally say what they meant, all in Bisaya; \\"\\" if they already said it naturally",
+ "english_words": [{"en": "English word they used", "ceb": "Bisaya equivalent"}],
  ${mistakeRules()},
- "pron_note": "one short note on a sound he mispronounced, or \\"\\""}` }]
+ "pron_note": "one short note on a sound they mispronounced, or \\"\\""}` }]
     : [{ text: 'Open the conversation with a short greeting and one question about the topic. Return JSON only: {"reply": "...", "reply_en": "..."}' }];
   try {
     const r = await gemJSON(parts, tutorSystem());
@@ -945,7 +1169,7 @@ VIEWS.gaps = function () {
     if (!hasAI()) { $('#gmsg').textContent = 'Type the Bisaya yourself, or add a Gemini key in Settings.'; return; }
     $('#gadd').disabled = true; $('#gmsg').textContent = 'Looking it up…';
     try {
-      const r = await gemJSON([{ text: `${LEARNER}\nHe keeps saying "${en}" in English when speaking Bisaya. Give what Cebuanos in Cebu would naturally say instead (a common loanword is fine if that's what people really say) and one short everyday example. JSON only: {"ceb": "...", "example": "...", "example_en": "..."}` }]);
+      const r = await gemJSON([{ text: `${learnerText()}\nThe learner keeps saying "${en}" in English when speaking Bisaya. Give what Cebuanos in Cebu would naturally say instead (a common loanword is fine if that's what people really say) and one short everyday example. JSON only: {"ceb": "...", "example": "...", "example_en": "..."}` }]);
       if (addGap(en, r.ceb, r.example, r.example_en)) render(); else { $('#gmsg').textContent = 'Already on your list.'; $('#gadd').disabled = false; }
     } catch (e) { $('#gmsg').textContent = gemErr(e); $('#gadd').disabled = false; }
   };
