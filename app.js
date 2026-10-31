@@ -131,8 +131,8 @@ function importPack() {
 
 /* ---------- state ---------- */
 const LS = 'padayon-app-v1';
-function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newP: 4, newW: 4, newG: 2, newF: 2, learner: null, goal: 60, voice: 'Kore', model: 'gemini-3.8-flash', tts: 'gemini-3.8-flash-tts', ttsOn: true }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
-function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.tips = s.tips || {}; return s; }
+function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newP: 4, newW: 4, newG: 2, newF: 3, learner: 'all', goal: 60, voice: 'Kore', model: 'gemini-3.8-flash', tts: 'gemini-3.8-flash-tts', ttsOn: true }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
+function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.tips = s.tips || {}; if (s.settings.learner !== 'all') { s.settings.learner = 'all'; s.settings.newF = Math.max(3, s.settings.newF || 0); } return s; }
 let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && r.v === 1) return migrate(r); } catch (e) { } return fresh(); })();
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
 function save() { S.updated = Date.now(); localSave(); schedulePush(); }
@@ -230,6 +230,35 @@ function addXP(n) { const t = today(); S.xp[t] = (S.xp[t] || 0) + n; }
 function bumpStreak() { const t = today(); const s = S.streak; if (s.last === t) return; s.count = s.last === t - 1 ? s.count + 1 : 1; s.last = t; s.best = Math.max(s.best, s.count); }
 function streakNow() { const s = S.streak, t = today(); return (s.last === t || s.last === t - 1) ? s.count : 0; }
 function planDay() { const t = today(); if (!S.plan[t]) S.plan = { [t]: {} }; return S.plan[t]; }
+/* Today's plan is every activity, in order. The hero ring fills as they tick, and finishing one offers the next. */
+function planItems() {
+  const ai = hasAI();
+  return [
+    { k: 'session', name: 'Daily session', d: 'Reviews, new words, and building blocks.', run: () => startSession() },
+    { k: 'convo', name: 'One conversation', d: 'Read it, then play your part out loud.', run: () => go('convos') },
+    { k: 'speed', name: 'Speed round', d: 'Fast listening that speeds up as you get it right.', run: () => go('speed') },
+    { k: 'dict', name: 'Dictation', d: 'Type what you hear, every little word.', run: () => startDictation() },
+    { k: 'shadow', name: 'Shadowing', d: 'Speak along with one unit. Hands-free.', run: () => go('shadow') },
+    ai ? { k: 'pron', name: 'Pronunciation', d: 'Repeat 10 phrases and get scored.', run: () => { PR = null; go('pron'); } } : null,
+    ai ? { k: 'talk', name: 'Talk with the Tutor', d: '5 turns out loud.', run: () => go('tutor') } : { k: 'talk', name: 'Talk out loud', d: 'A call with family in Bisaya. Tick it when done.', manual: true },
+    { k: 'input', name: '10 minutes of real Bisaya', d: "A vlog, radio, or teleserye. Follow the gist. Tick it when done.", manual: true }
+  ].filter(Boolean);
+}
+const planNext = () => { const p = planDay(); return planItems().find(i => !p[i.k]) || null; };
+function tick(k) { const p = planDay(); if (!p[k]) { p[k] = true; if (k === 'session') bumpStreak(); save(); } }
+function nextBtnHtml(id = 'nextup') {
+  const n = planNext();
+  return n ? (n.manual ? `<div class="small muted">Next on today's plan: <b>${esc(n.name)}</b>. ${esc(n.d)}</div><button class="btn primary block" id="${id}">Back to today's plan</button>`
+    : `<button class="btn primary block" id="${id}">Next: ${esc(n.name)}</button>`)
+    : `<div class="small"><b>Everything on today's plan is done.</b> Padayon!</div><button class="btn primary block" id="${id}">Back home</button>`;
+}
+function wireNext(id = 'nextup') { const b = $('#' + id); if (!b) return; b.onclick = () => { const n = planNext(); if (n && !n.manual) n.run(); else go('home'); }; }
+function sectionDone(label, line) {
+  stopAudio();
+  $('#app').innerHTML = `<section class="panel summary"><div class="label">${esc(label)}</div><h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1>${line ? `<p class="muted">${line}</p>` : ''}
+    ${nextBtnHtml()}<button class="btn ghost block" id="home2">Home</button></section>`;
+  wireNext(); $('#home2').onclick = () => go('home');
+}
 
 /* ---------- cards & SRS ---------- */
 function card(id) {
@@ -408,11 +437,8 @@ async function tts(text) {
     return (ttsCache[text] = URL.createObjectURL(new Blob([h, pcm], { type: 'audio/wav' })));
   } catch (e) { return null; }
 }
-const isNewLearner = () => S.settings.learner === 'new';
-function setLearner(l) { const was = S.settings.learner; S.settings.learner = l; if (l === 'new' && was !== 'new' && (S.settings.newF || 0) < 3) S.settings.newF = 3; save(); }
-const learnerText = () => isNewLearner()
-  ? 'The learner is an adult native English speaker who is new to Cebuano (Bisaya) and is not a heritage speaker. They are learning to talk with family. Keep explanations simple, tie Bisaya to English where you can, and be encouraging but honest.'
-  : 'The learner is a Filipino-American heritage speaker of Cebuano (Bisaya) who moved to the US at age 6. They understand beginner to low-intermediate Bisaya, lose track when people talk fast, and replace words with English when they speak. They want to speak smoothly without switching to English.';
+const isNewLearner = () => true;
+const learnerText = () => 'The learner is an English-speaking adult learning Cebuano (Bisaya) to talk with family. They may be a heritage speaker who understands some Bisaya but loses track of fast speech and falls back on English, or a beginner. Keep explanations simple, tie Bisaya to English where you can, and be encouraging but honest.';
 function weakList(n = 6) { return Object.entries(S.mistakes).sort((a, b) => b[1].n - a[1].n).slice(0, n); }
 function mistakeRules() {
   const labels = Object.keys(S.mistakes);
@@ -463,12 +489,7 @@ function unitRow(u, key) {
 }
 VIEWS.home = function () {
   const t = today(), xp = S.xp[t] || 0, goal = S.settings.goal, due = dueIds().length, nw = Math.min(newAllowance(), pickNew().length), plan = planDay();
-  const items = [
-    ['session', 'Daily session', 'Reviews and new cards. Ticks itself when you finish.', true],
-    ['speed', 'Speed round', 'Fast listening at your edge. Ticks itself when you finish.', true],
-    ['input', '10 minutes of real Bisaya audio', "A vlog, radio, or a teleserye in Bisaya. Don't pause to translate; follow the gist.", false],
-    ['talk', 'Talk out loud', '5 turns with the Tutor, or a call with family. Ticks itself after 5 Tutor turns.', false]
-  ];
+  const items = planItems(), nextUp = planNext(), doneN = items.filter(i => plan[i.k]).length;
   const weak = weakList(5);
   $('#app').innerHTML = `
   <div class="top"><div class="brand"><h1>Padayon</h1><span class="muted small">Bisaya daily</span></div>
@@ -476,13 +497,11 @@ VIEWS.home = function () {
   ${!hasPack() || !hasAI() ? `<section class="banner"><b>Finish setting up</b>
     ${!hasPack() ? (packState === 'loading' ? `<div class="small">Downloading 225 phrases and 1,002 words with native recordings… <b id="packpct">${packPct}%</b> (about 10 MB, one time only)</div>` : `<div class="small">${packState === 'error' ? "The phrases and recordings didn't download. Check your connection and try again." : 'Phrases and recordings are not loaded yet.'}</div><button class="btn primary" id="packretry">Download phrases and recordings</button>`) : ''}
     ${!hasAI() ? `<div class="small">Add a free Gemini API key so the Tutor can hear and grade you.</div><button class="btn ${hasPack() ? 'primary' : ''}" data-go="settings">Add Gemini key</button>` : ''}</section>` : ''}
-  ${!S.settings.learner ? `<section class="banner"><b>Who's learning on this device?</b><div class="small">This changes how the app teaches.</div>
-    <div class="row"><button class="btn primary" data-learner="heritage">I grew up hearing Bisaya</button><button class="btn" data-learner="new">I'm new to Bisaya</button></div></section>` : ''}
   <section class="hero">
-    <div><div class="label" style="color:inherit;opacity:.8">Karon nga adlaw · Today</div><h2>${xp >= goal ? 'Goal reached. Padayon!' : "Today's session"}</h2>
-      <p>${due} review${due === 1 ? '' : 's'} due · ${nw} new · about ${Math.max(5, Math.round((Math.min(due, 16) + nw * 2 + 2) * 0.6))} min</p></div>
-    <div class="ringwrap">${ringSvg(xp, goal)}<span class="ringtxt tnum">${xp}<small>/ ${goal} XP</small></span></div>
-    <div class="hero-actions"><button class="btn" id="start">${plan.session ? 'Do another session' : 'Start session'}</button></div>
+    <div><div class="label" style="color:inherit;opacity:.8">Karon nga adlaw · Today</div><h2>${nextUp ? 'Next up: ' + esc(nextUp.name) : 'All done today. Padayon!'}</h2>
+      <p>${nextUp ? esc(nextUp.k === 'session' ? due + ' review' + (due === 1 ? '' : 's') + ' due · ' + nw + ' new · about ' + Math.max(5, Math.round((Math.min(due, 16) + nw * 2 + 2) * 0.6)) + ' min' : nextUp.d) : xp + ' XP today. Come back tomorrow, or do another session.'}</p></div>
+    <div class="ringwrap plandone">${ringSvg(doneN, items.length)}<span class="ringtxt tnum">${doneN}<small>of ${items.length}</small></span></div>
+    <div class="hero-actions">${nextUp ? (nextUp.manual ? `<button class="btn" id="start">I did it</button>` : `<button class="btn" id="start">Start ${esc(nextUp.name.toLowerCase())}</button>`) : `<button class="btn" id="start">Do another session</button>`}</div>
   </section>
   <section class="drills">
     <button class="drill" data-go="tutor"><span class="label">Speaking</span><span class="big">Tutor</span><b>Talk out loud</b><span class="muted small">A voice conversation in Bisaya that corrects you as you go.</span></button>
@@ -495,8 +514,9 @@ VIEWS.home = function () {
   </section>
   <section class="panel"><div class="row spread"><h2>Your weak spots</h2>${weak.length ? '<button class="btn sm primary" id="weakgo">Practice with Tutor</button>' : ''}</div>
     ${weak.length ? `<div>${weak.map(([k, v]) => `<div class="weak"><span class="n tnum">${v.n}×</span><div style="min-width:0"><b>${esc(k)}</b><div class="small muted">${esc(v.fix)}</div></div></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Mistakes the Tutor catches in your speaking collect here. The Tutor then steers conversations toward them.</p>'}</section>
-  <section class="panel"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${items.filter(i => plan[i[0]]).length} of 4</span></div>
-    <div>${items.map(([k, b, d, auto]) => `<div class="check"><button class="box ${plan[k] ? 'on' : ''}" data-plan="${k}" ${auto ? 'disabled title="Ticks itself"' : ''} aria-label="${esc(b)}">${plan[k] ? I.check : ''}</button><div><b>${b}</b><span class="muted small">${d}</span></div></div>`).join('')}</div></section>
+  <section class="panel"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${doneN} of ${items.length}</span></div>
+    <div class="bar" style="grid-column:auto"><i style="width:${doneN / items.length * 100}%"></i></div>
+    <div>${items.map(it => `<div class="check"><button class="box ${plan[it.k] ? 'on' : ''}" data-plan="${it.k}" ${it.manual ? '' : 'disabled title="Ticks itself when you finish"'} aria-label="${esc(it.name)}">${plan[it.k] ? I.check : ''}</button><div style="flex:1;min-width:0"><b>${esc(it.name)}</b><span class="muted small">${esc(it.d)}</span></div>${!plan[it.k] && !it.manual ? `<button class="btn sm ghost" data-run="${it.k}">Go</button>` : ''}</div>`).join('')}</div></section>
   <section class="panel"><div class="row spread"><h2>Foundations</h2><span class="muted small tnum">${learned(F_ORDER)} of ${F.length} learned</span></div>
     <p class="muted small" style="margin:0">How words fit together: who, whose, have, like, questions, and when. Each block comes with sentences you build yourself.</p>
     <div>${F_UNITS.map((u, i) => unitRow(u, 'f' + i)).join('')}</div></section>
@@ -511,12 +531,13 @@ VIEWS.home = function () {
     <p class="small syncline" style="margin:0">${syncLine()}</p><p class="muted small" style="margin:0">Sign in with the same Google account on your phone and PC and your progress follows you.</p></section>
   <section class="panel"><div class="row spread"><h2>Settings</h2><button class="btn sm ghost" data-go="settings">Open</button></div>
     <p class="muted small" style="margin:0">Gemini key, tutor voice, cards per day, and moving your progress between devices.</p></section>`;
-  $('#start').onclick = startSession; $('#dictgo').onclick = startDictation;
+  $('#start').onclick = () => { if (!nextUp) return startSession(); if (nextUp.manual) { tick(nextUp.k); return render(); } nextUp.run(); };
+  document.querySelectorAll('[data-run]').forEach(b => b.onclick = () => planItems().find(i => i.k === b.dataset.run).run());
+  $('#dictgo').onclick = startDictation;
   $('#synchome').onclick = () => Sync.user ? signOutSync() : signIn();
   if ($('#packretry')) $('#packretry').onclick = autoPack;
   if ($('#weakgo')) $('#weakgo').onclick = () => { TU = null; tutorStart('Practice my weak spots'); };
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
-  document.querySelectorAll('[data-learner]').forEach(b => b.onclick = () => { setLearner(b.dataset.learner); render(); toast(b.dataset.learner === 'new' ? 'Memory tricks and building blocks turned up' : 'Set for a heritage speaker'); });
   document.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { const p = planDay(); p[b.dataset.plan] = !p[b.dataset.plan]; save(); render(); });
   document.querySelectorAll('[data-focus]').forEach(b => b.onclick = () => { S.focus = S.focus === b.dataset.focus ? null : b.dataset.focus; save(); render(); toast(S.focus ? 'New cards will come from this unit first' : 'Back to the normal order'); });
 };
@@ -532,9 +553,6 @@ VIEWS.settings = function () {
     <div class="seg" id="voices">${['Kore', 'Aoede', 'Puck', 'Charon', 'Zephyr', 'Fenrir'].map(v => `<button class="${st.voice === v ? 'on' : ''}" data-v="${v}">${v}</button>`).join('')}</div>
     <label class="row small"><input type="checkbox" id="ttson" ${st.ttsOn ? 'checked' : ''}> Read Tutor replies out loud</label>
     <button class="btn sm ghost" id="trytts" ${k ? '' : 'disabled'}>Hear a sample</button></section>
-  <section class="panel"><h2>Who's learning</h2>
-    <div class="seg" id="learner"><button class="${st.learner === 'heritage' ? 'on' : ''}" data-l="heritage">Grew up hearing Bisaya</button><button class="${st.learner === 'new' ? 'on' : ''}" data-l="new">New to Bisaya</button></div>
-    <p class="muted small" style="margin:0">New to Bisaya shows a memory trick on every new card and adds more building blocks each day. The Tutor also explains more in English.</p></section>
   <section class="panel"><h2>Daily cards</h2>
     ${[['newF', 'New building blocks per day', [0, 1, 2, 3, 4]], ['newP', 'New phrases per day', [0, 2, 4, 6, 8]], ['newW', 'New words per day', [0, 2, 4, 6, 10]], ['newG', 'New grammar cards per day', [0, 1, 2, 3]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}</section>
   <section class="panel"><h2>Content pack</h2><p class="small" style="margin:0">${hasPack() ? `Loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Not loaded yet.'}</p><div class="row"><button class="btn ${hasPack() ? 'ghost' : 'primary'}" id="pack3">${hasPack() ? 'Download again' : 'Download now'}</button><button class="btn ghost" id="pack2">Load from a file</button></div></section>
@@ -555,7 +573,6 @@ VIEWS.settings = function () {
   $('#testkey').onclick = async () => { $('#keymsg').textContent = 'Testing…'; try { const r = await gemJSON([{ text: 'Reply with JSON {"ok": true, "ceb": "Maayong adlaw"}' }]); $('#keymsg').textContent = r && r.ok ? 'Works. Gemini is connected.' : 'Connected, but the reply looked odd.'; } catch (e) { $('#keymsg').textContent = gemErr(e); } };
   document.querySelectorAll('#voices button').forEach(b => b.onclick = () => { S.settings.voice = b.dataset.v; Object.keys(ttsCache).forEach(k2 => delete ttsCache[k2]); save(); render(); });
   $('#ttson').onchange = e => { S.settings.ttsOn = e.target.checked; save(); };
-  document.querySelectorAll('#learner button').forEach(b => b.onclick = () => { setLearner(b.dataset.l); render(); });
   $('#trytts').onclick = async e => { const b = e.currentTarget; b.textContent = 'Loading…'; const u = await tts('Maayong buntag! Kumusta ka karon? Unsa imong gikaon ganina?'); b.textContent = 'Hear a sample'; if (u) playUrl(u, 1); else toast('No audio came back. Check the voice model name.'); };
   document.querySelectorAll('[data-set]').forEach(g => g.querySelectorAll('button').forEach(b => b.onclick = () => { S.settings[g.dataset.set] = +b.dataset.v; save(); render(); }));
   $('#pack2').onclick = importPack; $('#pack3').onclick = () => { go('home'); autoPack(); };
@@ -868,16 +885,16 @@ const EX = {
     if (qi === tok) document.querySelectorAll('.stage span').forEach(s => s.className = 'done');
   }
 };
-function finishSession() { stopAudio(); if (sess.mode === 'daily') { planDay().session = true; bumpStreak(); } save(); go('summary'); }
+function finishSession() { stopAudio(); const full = qi >= Q.length; if (full && sess.mode === 'daily') tick('session'); if (full && sess.mode === 'dict') tick('dict'); if (sess.mode === 'daily' && !full) bumpStreak(); save(); go('summary'); }
 VIEWS.summary = function () {
   const acc = sess.total ? Math.round(sess.right / sess.total * 100) : 0;
   $('#app').innerHTML = `<section class="panel summary"><div class="label">${sess.mode === 'speed' ? 'Speed round done' : sess.mode === 'dict' ? 'Dictation done' : 'Session done'}</div>
     <h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1>
     <div class="sumgrid"><div><b class="tnum">${sess.xp}</b><span class="small muted">XP</span></div><div><b class="tnum">${acc}%</b><span class="small muted">correct</span></div>
     <div><b class="tnum">${sess.mode === 'speed' ? sess.peak.toFixed(1) + '×' : streakNow()}</b><span class="small muted">${sess.mode === 'speed' ? 'top speed' : 'day streak'}</span></div></div>
-    ${sess.mode === 'speed' ? `<p class="muted">Your listening speed is now <b>${S.speed.toFixed(1)}×</b>.</p>` : `<p class="muted">${sess.newIds.size} new · ${sess.graded.size} practiced. Next: talk with the Tutor for 5 turns.</p>`}
-    <button class="btn primary block" id="home">Back home</button></section>`;
-  $('#home').onclick = () => go('home');
+    ${sess.mode === 'speed' ? `<p class="muted">Your listening speed is now <b>${S.speed.toFixed(1)}×</b>.</p>` : `<p class="muted">${sess.newIds.size} new · ${sess.graded.size} practiced.</p>`}
+    ${nextBtnHtml()}<button class="btn ghost block" id="home">Home</button></section>`;
+  wireNext(); $('#home').onclick = () => go('home');
 };
 
 /* ---------- speed round ---------- */
@@ -896,7 +913,7 @@ function startSpeed() {
   pool = shuffle(pool).slice(0, 20); while (pool.length < 20) pool.push(pick(PHRASE_ORDER));
   SP = { list: pool, i: 0, rate: S.speed, run: 0 }; sess = newSess('speed'); speedQ();
 }
-function endSpeed() { S.speed = Math.max(1, Math.round(SP.rate * 10) / 10); S.bestSpeed = Math.max(S.bestSpeed, sess.peak); planDay().speed = true; save(); view = 'summary'; VIEWS.summary(); }
+function endSpeed() { S.speed = Math.max(1, Math.round(SP.rate * 10) / 10); S.bestSpeed = Math.max(S.bestSpeed, sess.peak); if (SP.i >= SP.list.length - 1) tick('speed'); save(); view = 'summary'; VIEWS.summary(); }
 async function speedQ() {
   if (SP.i >= SP.list.length) return endSpeed();
   view = 'speedrun';
@@ -957,14 +974,14 @@ function wireBubbles(d) {
 VIEWS.convo = function () {
   const d = DL.d, n = d.lines.length;
   const head = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><div class="prog"><i style="width:${(DL.m === 'order' ? DL.order.length : DL.i) / n * 100}%"></i></div><span class="muted small">${esc(d.ceb)}</span></div>`;
-  const done = () => { const xp = DL.m === 'part' ? 4 * DL.right + 6 : 10; addXP(xp); save(); toast('+' + xp + ' XP'); go('convos'); };
+  const done = () => { const xp = DL.m === 'part' ? 4 * DL.right + 6 : 10; addXP(xp); if (DL.m === 'part' || DL.m === 'order') tick('convo'); save(); view = 'done'; sectionDone('Conversation done', '+' + xp + ' XP · ' + esc(d.title)); };
   if (DL.m === 'read') {
     $('#app').innerHTML = `${head}<div class="ex"><div class="label">${esc(d.title)}</div><div class="chat">${d.lines.slice(0, DL.i + 1).map((l, j) => bubble(d, l, j, { note: true })).join('')}</div></div><div class="foot" id="foot"></div>`;
     foot(DL.i < n - 1 ? `<button class="btn primary block" id="nx">Next line</button>` : `<button class="btn primary block" id="nx">Done. Now play your part</button>`);
     $('#nx').onclick = () => { if (DL.i < n - 1) { DL.i++; render(); lineSay(d.lines[DL.i][1]); } else { DL = { d, m: 'part', i: 0, show: {}, right: 0 }; render(); } };
     if (DL.i === 0 && !DL.spoke) { DL.spoke = 1; lineSay(d.lines[0][1]); }
   } else if (DL.m === 'part') {
-    if (DL.i >= n) { $('#app').innerHTML = `${head}<section class="panel summary"><div class="label">Conversation done</div><h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1><p class="muted">${DL.right} of ${d.lines.filter(l => l[0] === 'b').length} of your lines said right.</p><button class="btn primary block" id="fin">Back to conversations</button></section>`; $('#fin').onclick = done; $('#quit').onclick = () => go('convos'); return; }
+    if (DL.i >= n) { $('#app').innerHTML = `${head}<section class="panel summary"><div class="label">Conversation done</div><h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1><p class="muted">${DL.right} of ${d.lines.filter(l => l[0] === 'b').length} of your lines said right.</p><button class="btn primary block" id="fin">Continue</button></section>`; $('#fin').onclick = done; $('#quit').onclick = () => go('convos'); return; }
     const l = d.lines[DL.i], mine = l[0] === 'b';
     $('#app').innerHTML = `${head}<div class="ex"><div class="chat">${d.lines.slice(0, DL.i).map((x, j) => bubble(d, x, j)).join('')}${mine ? '' : bubble(d, l, DL.i)}</div>
       ${mine ? `<div class="panel"><div class="label">Your turn. Say it in Bisaya</div><div class="prompt">${esc(l[2])}</div>${l[3] ? `<div class="small muted">Hint: ${esc(l[3])}</div>` : ''}<div id="micw"></div><div id="res"></div></div>` : ''}</div><div class="foot" id="foot"></div>`;
@@ -1040,7 +1057,7 @@ function runShadow(u) {
       }
       addXP(2); save(); SH.i++;
     }
-    if (SH.tok === my) { toast('Unit done. Maayo!'); go('shadow'); }
+    if (SH.tok === my) { tick('shadow'); view = 'done'; sectionDone('Shadowing done', esc(u.ceb) + ' · ' + u.ids.length + ' phrases spoken along.'); }
   };
   loop();
 }
@@ -1053,8 +1070,8 @@ VIEWS.pron = function () {
   if (!PR) { let pool = Object.keys(S.cards).filter(id => id[0] === 'p'); if (pool.length < 8) pool = pool.concat(PHRASE_ORDER.slice(0, 30)); PR = { list: shuffle([...new Set(pool)]).slice(0, 10), i: 0, scores: [] }; }
   if (PR.i >= PR.list.length) {
     const avg = PR.scores.length ? Math.round(PR.scores.reduce((a, b) => a + b, 0) / PR.scores.length) : 0;
-    $('#app').innerHTML = `<section class="panel summary"><div class="label">Pronunciation done</div><h1 style="font-size:2rem;color:var(--sea)">Maayo!</h1><div class="sumgrid"><div><b class="tnum">${avg}</b><span class="small muted">average</span></div><div><b class="tnum">${PR.scores.length}</b><span class="small muted">phrases</span></div><div><b class="tnum">${Math.max(0, ...PR.scores)}</b><span class="small muted">best</span></div></div><button class="btn primary block" id="home">Back home</button></section>`;
-    PR = null; $('#home').onclick = () => go('home'); return;
+    $('#app').innerHTML = `<section class="panel summary"><div class="label">Pronunciation done</div><h1 style="font-size:2rem;color:var(--sea)">Maayo!</h1><div class="sumgrid"><div><b class="tnum">${avg}</b><span class="small muted">average</span></div><div><b class="tnum">${PR.scores.length}</b><span class="small muted">phrases</span></div><div><b class="tnum">${Math.max(0, ...PR.scores)}</b><span class="small muted">best</span></div></div>${(PR.scores.length && tick('pron'), nextBtnHtml())}<button class="btn ghost block" id="home">Home</button></section>`;
+    PR = null; wireNext(); $('#home').onclick = () => go('home'); return;
   }
   const c = card(PR.list[PR.i]);
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><div class="prog"><i style="width:${PR.i / PR.list.length * 100}%"></i></div><span class="speedchip tnum">${PR.i + 1}/${PR.list.length}</span></div>
@@ -1102,7 +1119,7 @@ async function tutorTurn(rec) {
       absorb(r);
       TU.msgs.push({ role: 'me', heard: r.heard || '(could not make it out)', url: rec.url, fixed: r.fixed || '', swaps: r.english_words || [], mistakes: r.mistakes || [], pron: r.pron_note || '' });
       TU.turns++; addXP(5);
-      const p = planDay(); if (TU.turns >= 5 && !p.talk) { p.talk = true; toast('Ticked "Talk out loud" for today'); }
+      if (TU.turns >= 5 && !planDay().talk) { tick('talk'); TU.justDone = true; }
       save();
     }
     const m = { role: 'tutor', text: r.reply || '…', en: r.reply_en || '', showEn: false, url: null };
@@ -1126,7 +1143,7 @@ VIEWS.tutor = function () {
 };
 function drawTutor() {
   const body = $('#tbody'); if (!body || view !== 'tutor') return;
-  body.innerHTML = `<div class="small muted" style="margin-bottom:8px">Topic: ${esc(TU.topic)} · ${TU.turns} turn${TU.turns === 1 ? '' : 's'}</div>
+  body.innerHTML = `${TU.justDone ? `<section class="banner" style="margin-bottom:10px"><b>Talk ticked for today.</b> Keep going, or move on.${nextBtnHtml('tnext')}</section>` : ''}<div class="small muted" style="margin-bottom:8px">Topic: ${esc(TU.topic)} · ${TU.turns} turn${TU.turns === 1 ? '' : 's'}</div>
   <div class="chat">${TU.msgs.map((m, i) => m.role === 'me'
     ? `<div class="msg me"><span class="small" style="opacity:.8">You said</span><br>${esc(m.heard)}${m.url ? `<br><button class="linkbtn" style="color:inherit" data-mine="${i}">Play yours</button>` : ''}</div>
        ${m.fixed ? `<div class="fix"><b>More natural:</b> ${esc(m.fixed)}</div>` : ''}
@@ -1141,6 +1158,7 @@ function drawTutor() {
   body.querySelectorAll('[data-say]').forEach(b => b.onclick = () => playUrl(TU.msgs[+b.dataset.say].url, 1));
   body.querySelectorAll('[data-slow]').forEach(b => b.onclick = () => playUrl(TU.msgs[+b.dataset.slow].url, 0.8));
   body.querySelectorAll('[data-mine]').forEach(b => b.onclick = () => playUrl(TU.msgs[+b.dataset.mine].url, 1));
+  wireNext('tnext');
   if (!TU.busy) micWidget($('#micw'), async rec => { await tutorTurn(rec); }, 40);
   else $('#micw').innerHTML = '<div class="small muted">Waiting for the Tutor…</div>';
   const last = body.querySelector('.chat > :last-child'); if (last && TU.msgs.length > 1) last.scrollIntoView({ block: 'nearest' });
