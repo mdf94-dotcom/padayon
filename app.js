@@ -137,6 +137,7 @@ function importPack() {
 const LS = 'padayon-app-v1';
 function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newPerDay: 8, newP: 4, newW: 4, newG: 2, newF: 3, newD: 2, newM: 3, learner: 'all', goal: 60 }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
 function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.tips = s.tips || {}; if (s.planResetV !== 2) { s.planResetV = 2; s.plan = {}; }
+  if (!s.started) { const days = Object.keys(s.xp || {}).map(Number).filter(Boolean); s.started = days.length ? Math.min(...days) : (s.streak && s.streak.last) || 0; }
   if (!s.settings.pathV) { s.settings.pathV = 1; s.settings.newPerDay = 8; }
   if (s.settings.learner !== 'all') { s.settings.learner = 'all'; s.settings.newF = Math.max(3, s.settings.newF || 0); } return s; }
 let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && r.v === 1) return migrate(r); } catch (e) { } return fresh(); })();
@@ -178,6 +179,7 @@ function mergeState(a, b) {
   out.tips = Object.assign({}, a.tips, b.tips);
   out.announced = Math.max(a.announced || 0, b.announced || 0);
   out.convoDone = {}; [a.convoDone || {}, b.convoDone || {}].forEach(x => Object.keys(x).forEach(k => out.convoDone[k] = Math.max(out.convoDone[k] || 0, x[k])));
+  out.started = Math.min(...[a.started, b.started].filter(Boolean).concat([out.started || Infinity])) || 0; if (!isFinite(out.started)) out.started = 0;
   out.realDone = {}; [a.realDone || {}, b.realDone || {}].forEach(x => Object.keys(x).forEach(k => out.realDone[k] = Math.max(out.realDone[k] || 0, x[k])));
   out.updated = Math.max(a.updated || 0, b.updated || 0);
   return out;
@@ -232,7 +234,7 @@ function syncLine() {
   return `Signed in as ${who}. Progress syncs automatically.`;
 }
 function refreshSyncUI() { document.querySelectorAll('.syncline').forEach(el => el.innerHTML = syncLine()); document.querySelectorAll('.syncbtn').forEach(el => { el.textContent = Sync.user ? 'Sign out' : 'Sign in with Google'; }); const b = $('#syncbanner'); if (b) b.hidden = !!Sync.user || !window.firebase; }
-function addXP(n) { const t = today(); S.xp[t] = (S.xp[t] || 0) + n; }
+function addXP(n) { const t = today(); S.xp[t] = (S.xp[t] || 0) + n; if (!S.started || S.started > t) S.started = t; }
 function bumpStreak() { const t = today(); const s = S.streak; if (s.last === t) return; s.count = s.last === t - 1 ? s.count + 1 : 1; s.last = t; s.best = Math.max(s.best, s.count); }
 function streakNow() { const s = S.streak, t = today(); return (s.last === t || s.last === t - 1) ? s.count : 0; }
 function planDay() { const t = today(); if (!S.plan[t]) S.plan = { [t]: {} }; return S.plan[t]; }
@@ -441,6 +443,12 @@ function unitRow(u, key) {
   <button class="btn sm ghost" data-focus="${key}">${S.focus === key ? 'Focused' : 'Focus'}</button>
   <div class="bar" title="${l} learned, ${s} started of ${n}"><i style="width:${(l / n) * 100}%"></i></div></div>`;
 }
+function sinceHtml() {
+  if (!S.started) return `<div class="since">Your first day starts with today's session.</div>`;
+  const d = new Date(S.started * 864e5 + new Date().getTimezoneOffset() * 60000 + 12 * 36e5);
+  const days = today() - S.started + 1, active = Object.keys(S.xp).filter(k => S.xp[k] > 0).length, st = streakNow();
+  return `<div class="since"><span>Padayon since <b>${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</b></span><span><b class="tnum">${days}</b> day${days === 1 ? '' : 's'} in · <b class="tnum">${active}</b> practiced</span>${st ? `<span>${I.flame.replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px"')} <b class="tnum">${st}</b>-day streak</span>` : ''}</div>`;
+}
 VIEWS.home = function () {
   const t = today(), xp = S.xp[t] || 0, goal = S.settings.goal, due = dueIds().length, nw = Math.min(newAllowance(), pickNew().length), plan = planDay();
   const items = planItems(), nextUp = planNext(), doneN = items.filter(i => isDone(i, plan)).length;
@@ -454,7 +462,7 @@ VIEWS.home = function () {
   <section class="hero">
     <div class="hero-guide">${binkoSays(BINKO_NEXT[nextUp ? nextUp.k : 'done'], true)}</div>
     <div><div class="label" style="color:inherit;opacity:.8">Karon nga adlaw · Today</div><h2>${nextUp ? 'Next up: ' + esc(nextUp.name) : 'All done today. Padayon!'}</h2>
-      <p>${nextUp ? esc(nextUp.k === 'session' ? due + ' review' + (due === 1 ? '' : 's') + ' due · ' + nw + ' new · about ' + Math.max(5, Math.round((Math.min(due, 16) + nw * 2 + 2) * 0.6)) + ' min' : nextUp.d) : xp + ' XP today. Come back tomorrow, or do another session.'}</p></div>
+      <p>${nextUp ? esc(nextUp.k === 'session' ? due + ' review' + (due === 1 ? '' : 's') + ' due · ' + nw + ' new · about ' + Math.max(5, Math.round((Math.min(due, 16) + nw * 2 + 2) * 0.6)) + ' min' : nextUp.d) : xp + ' XP today. Come back tomorrow, or do another session.'}</p>${sinceHtml()}</div>
     <div class="ringwrap plandone">${ringSvg(doneN, items.length)}<span class="ringtxt tnum">${doneN}<small>of ${items.length}</small></span></div>
     <div class="hero-actions">${nextUp ? (nextUp.manual ? `<button class="btn" id="start">I did it</button>` : `<button class="btn" id="start">Start ${esc(nextUp.name.toLowerCase())}</button>`) : `<button class="btn" id="start">Do another session</button>`}</div>
   </section>
@@ -567,7 +575,8 @@ function result(c, item, ok, extra) {
   if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push({ id: c.id, type: c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
   save();
   const f = $('#foot'); f.className = 'foot ' + (q > 0 ? 'good' : 'bad');
-  f.innerHTML = `<div class="row spread"><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
+  const bxKind = q > 0 && sess.run >= 3 ? 'streak' : q > 0 ? 'right' : 'wrong';
+  f.innerHTML = `<div class="row spread" style="gap:12px;align-items:flex-start"><div class="bx ${bxKind}"><img src="img/binko-face.webp" alt="Binko">${bxKind === 'streak' ? `<span class="run">${sess.run}🔥</span>` : ''}</div><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
   <div class="ans"><span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && ruleFor(c.ceb) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
   ${c.audio ? `<button class="play sm" id="fplay" aria-label="Play">${I.play}</button>` : ''}</div>
   ${cameoKind ? cameoHtml(cameoKind) : ''}<button class="btn primary block" id="cont">Continue</button>`;
