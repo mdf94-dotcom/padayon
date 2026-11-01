@@ -163,6 +163,11 @@ const GLOSS = {
   hangyo: 'discount (haggle)', kwarenta: 'forty', kuhaon: 'will take (it)', balik: 'come back', buhaton: 'will do', nganong: 'why', nangutana: 'asked',
   moadto: 'will go', moapil: 'will join', unsang: 'what (+ linker)', orasa: 'time', alas: "o'clock", otso: 'eight', sayo: 'early', diha: 'there (where you are)',
   saysenta: 'sixty', ta: 'we (incl. you) / let\'s', kaon: 'eat', gutom: 'hungry', inyong: 'your (all)',
+  gikapoy: 'tired', sabaw: 'soup', uy: 'hey', bukton: 'arm', no: 'right?', naghimo: 'made', mohimo: 'make', butang: 'things', cute: 'cute', lagi: 'indeed',
+  pangutana: 'question', gikan: 'from / came from', tinuod: 'true', busy: 'busy', gusto: 'want', tattoo: 'tattoo', lingkod: 'sit', lihok: 'move', show: 'show',
+  para: 'for', ninyo: 'you all', bayad: 'pay', daghan: 'a lot / many', mi: 'we (not you)', pagluwas: 'saving', prinsesa: 'princess', samad: 'wound', bisan: 'even / any',
+  higala: 'friend', mga: '(plural)', inyong: 'your (all)', ulo: 'head', katawa: 'laugh', libre: 'free', duol: 'come close / near', reyna: 'queen', 'dad-a': 'take (it)',
+  kini: 'this', sulat: 'letter', abriha: 'open (it)', 'o-oo': 'y-yes', lucky: 'Lucky', clovers: 'Clovers', justice: 'Justice', binko: 'Binko', penn: 'Penn', cat: 'Cat',
   kumusta: 'how are', ha: 'okay?', lagi: 'indeed', bitaw: 'right', kaha: 'I wonder', unta: 'hopefully', baya: 'you know', gani: 'again/even'
 };
 const AFFIX = [
@@ -262,6 +267,73 @@ const DIALOGS = [
     ['a', 'Alas otso sa buntag.', 'Eight in the morning.', 'Clock times use Spanish numbers: alas otso.'],
     ['b', 'Sayo kaayo! Pero okay ra.', "That's so early! But it's fine.", 'Kaayo = very, after the word.'],
     ['a', 'Sige, kita ta ugma!', 'Okay, see you tomorrow!', 'Ta = we, including you.']
+  ] },
+  /* NPCs of Rhine, from what the Lucky Clovers know (nothing from behind the GM's curtain) */
+  { title: 'A warm bowl on the road', ceb: 'Si Ann', a: 'Ann', b: 'You', npc: true, lines: [
+    ['a', 'Maayong gabii! Kumusta ka?', 'Good evening! How are you?', 'Gabii, because it\'s dark out on the road.'],
+    ['b', 'Okay ra ko. Gikapoy lang.', "I'm fine. Just tired.", 'Lang = just. Softens it.'],
+    ['a', 'Gutom ka? Naa koy sabaw.', 'Are you hungry? I have soup.', 'Naa koy… = I have…'],
+    ['b', 'Oo, salamat kaayo!', 'Yes, thank you so much!', ''],
+    ['a', 'Asa man si Penn?', "Where's Penn?", 'Si comes before a name.'],
+    ['b', 'Wala siya diri.', "He's not here.", 'Wala = not there. Diri = here.'],
+    ['a', 'Ay… Pag-amping mo tanan, ha.', 'Oh… take care, all of you.', 'Mo tanan = all of you.']
+  ] },
+  { title: 'Show-off arm', ceb: 'Si Trish', a: 'Trish', b: 'You', npc: true, lines: [
+    ['a', 'Uy! Nindot akong bukton, no?', "Hey! My arm's cool, right?", 'No? at the end = right?'],
+    ['b', 'Oo, nindot kaayo! Kinsa naghimo?', 'Yes, really cool! Who made it?', 'Naghimo = made (it).'],
+    ['a', 'Ako! Ganahan ko mohimo og mga butang.', 'Me! I like making things.', 'Ganahan ko + mo-verb = I like to…'],
+    ['b', 'Ako sad!', 'Me too!', ''],
+    ['a', 'Cute kaayo si Binko, no?', "Binko's so cute, right?", 'Kaayo goes after the word.'],
+    ['b', 'Mao lagi!', 'Exactly!', 'Strong agreement.']
+  ] },
+  { title: 'Just a few questions', ceb: 'Si Hoodwink', a: 'Hoodwink', b: 'You', npc: true, lines: [
+    ['a', 'Maayong hapon. Pangutana lang.', 'Good afternoon. Just a question.', ''],
+    ['b', 'Sige, unsa man?', 'Sure, what is it?', 'Man softens the question.'],
+    ['a', 'Asa ka gikan gahapon?', 'Where were you yesterday?', 'Gikan = coming from.'],
+    ['b', 'Gikan ko sa merkado.', 'I was at the market.', ''],
+    ['a', 'Tinuod ba?', 'Is that true?', 'Ba makes it a yes/no question.'],
+    ['b', 'Oo, tinuod!', "Yes, it's true!", ''],
+    ['a', 'Sige. Salamat.', 'Okay. Thanks.', '*honk*']
+  ] },
+  { title: 'A tattoo, if you ask nicely', ceb: 'Si Yamaguchi', a: 'Yamaguchi', b: 'You', npc: true, lines: [
+    ['a', 'Unsa man? Busy ko.', "What? I'm busy.", 'Busy is everyday Taglish/English.'],
+    ['b', 'Palihug, gusto ko og tattoo.', 'Please, I want a tattoo.', 'Gusto ko og + thing = I want (thing).'],
+    ['a', 'Pila imong kwarta?', 'How much money do you have?', 'Pila = how much / how many.'],
+    ['b', 'Gamay ra.', 'Just a little.', ''],
+    ['a', 'Hmph. Lingkod diha.', 'Hmph. Sit there.', 'Diha = there, near you.'],
+    ['b', 'Salamat kaayo!', 'Thank you so much!', ''],
+    ['a', 'Ayaw lihok.', "Don't move.", 'Ayaw + action = don\'t…']
+  ] },
+  { title: 'Got a gig for you', ceb: 'Si Nog', a: 'Nog', b: 'You', npc: true, lines: [
+    ['a', 'Lucky Clovers! Naa koy show para ninyo!', "I've got a show for you!", 'Para ninyo = for you all.'],
+    ['b', 'Kanus-a?', 'When?', ''],
+    ['a', 'Ugma sa gabii.', 'Tomorrow night.', ''],
+    ['b', 'Pila ang bayad?', 'How much does it pay?', 'Bayad = pay / payment.'],
+    ['a', 'Daghan!', 'A lot!', ''],
+    ['b', 'Sige, moadto mi!', "Okay, we'll be there!", 'Mi = we, not including Nog.']
+  ] },
+  { title: 'Thanks from the princess', ceb: 'Si Koraljka', a: 'Koraljka', b: 'You', npc: true, lines: [
+    ['a', 'Salamat sa pagluwas nako.', 'Thank you for saving me.', 'Pagluwas = saving / rescuing.'],
+    ['b', 'Walay sapayan, Prinsesa.', "You're welcome, Princess.", ''],
+    ['a', 'Okay ra ba si Cat?', 'Is Cat okay?', ''],
+    ['b', 'Naa pay samad, pero okay ra.', 'Still hurt, but okay.', 'Naa pay = there is still. Samad = wound.'],
+    ['a', 'Maayo. Balik mo diri bisan kanus-a.', 'Good. Come back anytime.', 'Bisan kanus-a = anytime.'],
+    ['b', 'Salamat!', 'Thank you!', '']
+  ] },
+  { title: 'Laugh it off', ceb: 'Si Gyatters', a: 'Gyatters', b: 'You', npc: true, lines: [
+    ['a', 'Maayong gabii, mga higala!', 'Good evening, friends!', 'Mga makes it plural.'],
+    ['b', 'Maayong gabii!', 'Good evening!', ''],
+    ['a', 'Kumusta na inyong mga ulo?', 'How are your heads now?', 'He cured the party\'s mirror madness.'],
+    ['b', 'Okay na! Salamat kaayo.', 'Fine now! Thanks so much.', 'Na = now (already).'],
+    ['a', 'Katawa lang! Libre ra na.', "Just laugh! It's free.", '']
+  ] },
+  { title: 'A letter for Justice', ceb: 'Ang Pulang Reyna', a: 'The Red Queen', b: 'You', npc: true, lines: [
+    ['a', 'Ikaw. Duol diri.', 'You. Come here.', 'Duol = come close.'],
+    ['b', 'O-oo, Reyna.', 'Y-yes, my Queen.', ''],
+    ['a', 'Dad-a kini nga sulat sa Justice.', 'Take this letter to Justice.', 'Dad-a = take (it). Sulat = letter.'],
+    ['b', 'Sige, Reyna.', 'Yes, my Queen.', ''],
+    ['a', 'Ayaw abriha.', "Don't open it.", ''],
+    ['b', 'Dili gyud!', 'Never!', 'Gyud makes it strong.']
   ] }
 ];
 
