@@ -296,6 +296,7 @@ function card(id) {
   if (k === 'w') return W[n] && { id, kind: 'w', ceb: W[n][0], en: W[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
   if (k === 'g') return G[n] && { id, kind: 'g', ceb: G[n][0], en: G[n][1], note: G[n][2], audio: false };
   if (k === 'd') { const [di, li] = id.slice(1).split('_').map(Number), d = DIALOGS[di], l = d && d.lines[li]; return l && { id, kind: 'd', ceb: l[1], en: l[2], note: l[3] || '', audio: false, convo: d.title }; }
+  if (k === 'e') return EXTRA[n] && { id, kind: 'p', ceb: EXTRA[n][0], en: EXTRA[n][1], note: EXTRA[n][2], audio: false };
   if (k === 'f') return F[n] && { id, kind: 'f', ceb: F[n].ceb, en: F[n].en, note: F[n].note, trick: F[n].trick, combos: F[n].combos, audio: false };
   const c = (S.custom || []).find(x => x.id === id);
   return c && { id, kind: 'c', ceb: c.ceb, en: c.en, ex: c.ex, exEn: c.exEn, audio: false };
@@ -318,7 +319,7 @@ function pickNew() {
   take(focused('f', F_UNITS, F_ORDER), S.settings.newF || 0);
   take(D_ORDER, S.settings.newD ?? 2);
   take(focused('g', GRAM_UNITS, GRAM_ORDER), S.settings.newG);
-  take(focused('u', UNITS, PHRASE_ORDER), S.settings.newP);
+  take(focused('u', UNITS, PHRASE_ORDER).concat(E_ORDER), S.settings.newP);
   take(focused('k', WORD_UNITS, W.map((_, i) => 'w' + i)), S.settings.newW);
   return out;
 }

@@ -264,3 +264,9 @@ const DIALOGS = [
     ['a', 'Sige, kita ta ugma!', 'Okay, see you tomorrow!', 'Ta = we, including you.']
   ] }
 ];
+
+/* ---------- extra phrases from the "Let's talk in Bisaya with loved ones" deck that the content pack doesn't have (no recording; read aloud by Gemini when a key is set) ---------- */
+const EXTRA = [
+  ['Pagpahalipay sa imong kasal', 'Congratulations on your wedding', 'Pagpahalipay = congratulations. Sa imong = on your. Kasal = wedding.']
+];
+const E_ORDER = EXTRA.map((_, i) => 'e' + i);
