@@ -270,8 +270,10 @@ async function announceLesson() {
   const lines = ['BINKO REPORTING!', 'Log entry from Binko!', 'Binko binks this is worth announcing!', 'Ding ding ding! Binko has news!'];
   const fd = new FormData();
   fd.append('payload_json', JSON.stringify({
-    username: 'Binko-SR157', avatar_url: new URL('icon-512.png', location.href).href,
-    embeds: [{ color: 0x34b8a3, description: `${lines[Math.floor(Math.random() * lines.length)]} **${who}** finished today's Bisaya lesson!\n🔥 Streak: **${n} day${n === 1 ? '' : 's'}**${n >= 7 && n % 7 === 0 ? ' · a whole week! SUPER DUPER!' : ''}` }]
+    username: '🔧✨ Binko-SR157 ✨🔧', avatar_url: new URL('icon-512.png', location.href).href,
+    embeds: [{ color: [0x34b8a3, 0xf2a7c3, 0xf0e278, 0x6cc4ee, 0xc9824a][Math.floor(Math.random() * 5)],
+      author: { name: '🌈🤖 BINKO-SR157 · Lucky Clover Field Log 🍀⚙️', icon_url: new URL('img/binko-face.webp', location.href).href },
+      footer: { text: '💛 Adventurer & Creator Binko · Bink bink! 🩵' }, description: `${lines[Math.floor(Math.random() * lines.length)]} **${who}** finished today's Bisaya lesson!\n🔥 Streak: **${n} day${n === 1 ? '' : 's'}**${n >= 7 && n % 7 === 0 ? ' · a whole week! SUPER DUPER!' : ''}` }]
   }));
   try { await fetch(url, { method: 'POST', body: fd, mode: 'no-cors' }); } catch (e) { }
 }
