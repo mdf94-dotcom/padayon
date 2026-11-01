@@ -178,6 +178,7 @@ function mergeState(a, b) {
   out.tips = Object.assign({}, a.tips, b.tips);
   out.announced = Math.max(a.announced || 0, b.announced || 0);
   out.convoDone = {}; [a.convoDone || {}, b.convoDone || {}].forEach(x => Object.keys(x).forEach(k => out.convoDone[k] = Math.max(out.convoDone[k] || 0, x[k])));
+  out.realDone = {}; [a.realDone || {}, b.realDone || {}].forEach(x => Object.keys(x).forEach(k => out.realDone[k] = Math.max(out.realDone[k] || 0, x[k])));
   out.updated = Math.max(a.updated || 0, b.updated || 0);
   return out;
 }
@@ -240,11 +241,12 @@ function planItems() {
   return [
     { k: 'session', name: 'Daily session', d: 'Reviews, new words, and building blocks.', run: () => startSession() },
     pickDialog() || planDay().convo ? { k: 'convo', name: "Today's conversation", d: 'New words first, then read it and say your part out loud.', run: () => go('convos') } : (() => { const n = nextConvo(); return { k: 'convo', locked: true, name: "Today's conversation", d: `Locked for now, so it counts as done. "${n.d.title}" opens after you learn ${n.left.length} more word${n.left.length === 1 ? '' : 's'} in your daily sessions.` }; })(),
+    buildLock() ? { k: 'build', locked: true, name: 'Build sentences', d: 'Locked for now, so it counts as done. ' + buildLock() } : { k: 'build', name: 'Build sentences', d: 'Make your own sentences from words you know, using the sentence rules.', run: () => startBuild() },
+    realLockItem(),
     { k: 'speed', name: 'Speed round', d: 'Fast listening that speeds up as you get it right.', run: () => go('speed') },
     { k: 'dict', name: 'Dictation', d: 'Type what you hear, every little word.', run: () => startDictation() },
     { k: 'shadow', name: 'Shadowing', d: 'Speak along with one unit. Hands-free.', run: () => go('shadow') },
-    { k: 'talk', name: 'Talk out loud', d: 'A call or chat with family in Bisaya. Tick it when done.', manual: true },
-    { k: 'input', name: '10 minutes of real Bisaya', d: "A vlog, radio, or teleserye. Follow the gist. Tick it when done.", manual: true }
+    { k: 'talk', name: 'Talk out loud', d: 'A call or chat with family in Bisaya. Tick it when done.', manual: true }
   ].filter(Boolean).map(lockDrill);
 }
 const lockDrill = it => { if (!it || !DRILL_MIN[it.k]) return it; const L = drillLock(it.k); return L && !planDay()[it.k] ? Object.assign({}, it, { locked: true, d: `Locked for now, so it counts as done. Opens after you learn ${L.need} more ${L.what}${L.need === 1 ? '' : 's'} with a recording.` }) : it; };
@@ -465,6 +467,9 @@ VIEWS.home = function () {
     <button class="drill" id="dictgo"><span class="label">Fast speech</span><span class="big">Dictation</span><b>Type what you hear</b><span class="muted small">Catch every little word.</span></button>
     <button class="drill" data-go="shadow"><span class="label">Fluency</span><span class="big">Shadow</span><b>Speak along</b><span class="muted small">Hands-free. Repeat with the speaker.</span></button>
     <button class="drill" data-go="convos"><span class="label">Chaining</span><span class="big">Istorya</span><b>Today's conversation</b><span class="muted small">Picked to match what you know. Play your part out loud.</span></button>
+    <button class="drill" id="buildgo"><span class="label">Grammar</span><span class="big">Himo</span><b>Build sentences</b><span class="muted small">Your own sentences from words you know.</span></button>
+    <button class="drill" data-go="rules"><span class="label">Grammar</span><span class="big">${RULES.length}</span><b>Sentence rules</b><span class="muted small">Where ko goes, dili vs wala, mo- vs ni-, and more.</span></button>
+    <button class="drill" data-go="real"><span class="label">Real life</span><span class="big">Tinuod</span><b>Real Bisaya</b><span class="muted small">Tweets and show clips, once you know the words.</span></button>
     <button class="drill" data-go="gaps"><span class="label">Your words</span><span class="big tnum">${S.custom.length}</span><b>Gap words</b><span class="muted small">English you keep reaching for.</span></button>
   </section>
   ${weak.length ? `<section class="panel"><h2>Your weak spots</h2><div>${weak.map(([k, v]) => `<div class="weak"><span class="n tnum">${v.n}×</span><div style="min-width:0"><b>${esc(k)}</b><div class="small muted">${esc(v.fix)}</div></div></div>`).join('')}</div></section>` : ''}
@@ -489,7 +494,7 @@ VIEWS.home = function () {
     <p class="muted small" style="margin:0">Your name, cards per day, sync, and backups.</p></section>`;
   $('#start').onclick = () => { if (!nextUp) return startSession(); if (nextUp.manual) { tick(nextUp.k); return render(); } nextUp.run(); };
   document.querySelectorAll('[data-run]').forEach(b => b.onclick = () => planItems().find(i => i.k === b.dataset.run).run());
-  $('#dictgo').onclick = startDictation;
+  $('#dictgo').onclick = startDictation; $('#buildgo').onclick = startBuild;
   $('#synchome').onclick = () => Sync.user ? signOutSync() : signIn();
   if ($('#packretry')) $('#packretry').onclick = autoPack;
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
@@ -563,7 +568,7 @@ function result(c, item, ok, extra) {
   save();
   const f = $('#foot'); f.className = 'foot ' + (q > 0 ? 'good' : 'bad');
   f.innerHTML = `<div class="row spread"><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
-  <div class="ans"><span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}</div>
+  <div class="ans"><span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && ruleFor(c.ceb) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
   ${c.audio ? `<button class="play sm" id="fplay" aria-label="Play">${I.play}</button>` : ''}</div>
   ${cameoKind ? cameoHtml(cameoKind) : ''}<button class="btn primary block" id="cont">Continue</button>`;
   if (c.audio) { $('#fplay').onclick = e => play(c.id, 1, e.currentTarget); if (!['listen', 'tiles', 'dict', 'pron', 'say'].includes(item.type)) play(c.id, 1); }
@@ -690,6 +695,7 @@ const EX = {
       <div class="ceb">${esc(c.ceb)}</div><div class="prompt" style="font-weight:500">${esc(c.en)}</div>
       ${breakdown(c.ceb)}
       ${c.note ? `<div class="panel note">${castImg('binko', 'peek')}<div class="label">Binko explains · ${c.kind === 'p' || c.kind === 'w' ? 'when to use it' : 'how it fits together'}</div>${esc(c.note)}</div>` : ''}
+      ${ruleChip(c.ceb)}
       ${c.combos ? `<div><div class="label">Swap in other words</div>${c.combos.map(x => `<div class="small"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span></div>`).join('')}</div>` : ''}
       ${usedIn(c)}
       <div id="tipslot"></div>
@@ -941,6 +947,211 @@ VIEWS.convo = function () {
     }
   }
   $('#quit').onclick = () => go('home');
+};
+
+/* ---------- sentence rules: which rule a sentence shows, and the guide ---------- */
+const QWORDS = new Set(['asa', 'unsa', 'unsay', 'kinsa', 'kanus-a', 'ngano', 'nganong', 'pila', 'tagpila', 'hain']);
+const SHORTP = new Set(['ko', 'ka', 'ta', 'mi', 'mo']);
+function ruleFor(ceb) {
+  const t = tokens(ceb || '').map(lowTok); if (t.length < 2) return null;
+  const f = t[0];
+  if (['dili', 'di', 'wala', 'wa', 'ayaw'].includes(f)) return RULE.neg;
+  if (QWORDS.has(f)) return RULE.ask;
+  if (['gusto', 'ganahan', 'kinahanglan'].includes(f) && t.some(x => /^mo\w{2,}/.test(x))) return RULE.want;
+  if (t.some(x => /^(koy|kay|siyay|naay|way|walay|adunay)$/.test(x))) return RULE.have;
+  if (/^gi\w{3,}/.test(f) && t.some(x => ['nako', 'nimo', 'niya', 'nato', 'namo', 'nila'].includes(x))) return RULE.nako;
+  if (t.slice(1, 3).some(x => ['na', 'pa', 'ra', 'gyud', 'jud', 'kaayo', 'lang'].includes(x)) && t.some((x, i) => i > 1 && SHORTP.has(x))) return RULE.little;
+  if (/^(mo|ni|mi|nag|mag)\w{3,}/.test(f)) return RULE.time;
+  if (t.includes('kaayo') || t.includes('nga')) return RULE.desc;
+  if (SHORTP.has(t[1])) return RULE.ko;
+  if (t.some(x => ['sa', 'og', 'si', 'ang'].includes(x))) return RULE.mark;
+  return null;
+}
+function ruleChip(ceb) {
+  const r = ruleFor(ceb); if (!r) return '';
+  return `<div class="panel rulechip"><div class="label">How it's built · rule ${r.n}</div><b>${esc(r.title)}</b><div class="small">${esc(r.short)}</div><button class="linkbtn" data-rule="${r.id}">See the rule</button></div>`;
+}
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-rule]'); if (!b) return; ruleOpen = b.dataset.rule; ruleBack = view; go('rules'); });
+let ruleOpen = null, ruleBack = 'home';
+VIEWS.rules = function () {
+  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Sentence rules</h2></div>
+    ${binkoSays('Binko took a Bisaya sentence apart like an engine! These are the parts. Learn the rules once, and every word you know can go into a sentence of your own.')}
+    ${RULES.map(r => `<details class="panel rule" id="r-${r.id}" ${ruleOpen === r.id ? 'open' : ''}><summary><b>${r.n}. ${esc(r.title)}</b><div class="small muted">${esc(r.short)}</div></summary>
+      <p class="small">${esc(r.body)}</p>
+      ${r.ex.map(x => `<div class="small" style="margin:4px 0"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span><div class="muted" style="font-size:.85em">${esc(x[2])}</div></div>`).join('')}</details>`).join('')}
+    <button class="btn primary block" id="tryb">Practice: build sentences</button>`;
+  $('#quit').onclick = () => { const b = ruleBack; ruleOpen = null; ruleBack = 'home'; go(b === 'rules' ? 'home' : b); };
+  $('#tryb').onclick = startBuild;
+  if (ruleOpen) { const el = $('#r-' + ruleOpen); if (el) setTimeout(() => el.scrollIntoView({ block: 'start' }), 30); }
+};
+
+/* ---------- build sentences: real sentences from the learner's own words ---------- */
+function buildPool() {
+  const kw = knownWords(), has = w => kw.has(w.toLowerCase());
+  const verbs = VERBS.filter(v => has(v[0]) || has(v[1]) || has(v[2]) || has('nag' + v[0]));
+  const states = STATES.filter(x => has(x[0]));
+  const prons = PRONS.filter(p => has(p[0]));
+  const out = [];
+  PATTERNS.forEach(pt => {
+    if (!pt.need.every(has)) return;
+    const ps = prons.filter(p => !pt.pron || pt.pron.includes(p[0])); if (!ps.length) return;
+    (pt.uses === 'v' ? verbs : states).forEach(w => ps.forEach(p => out.push({ pt, w, p })));
+  });
+  return { out, verbs, states, prons };
+}
+function buildLock() {
+  const { out, verbs, states, prons } = buildPool();
+  const kinds = new Set(out.map(x => x.pt.id)).size;
+  if (out.length >= 4 && kinds >= 2) return null;
+  const miss = [!prons.length && 'ko (I)', !verbs.length && !states.length && 'an action word like kaon or a feeling like gutom'].filter(Boolean);
+  return `Opens once you've learned ${miss.length ? miss.join(' and ') : 'a few more words to build with'} in your daily sessions.`;
+}
+let BD = null;
+function startBuild() {
+  const L = buildLock();
+  if (L) { view = 'locked'; $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Build sentences</h2></div>${binkoSays('Build sentences is still locked! Binko only builds with parts you already have. ' + esc(L))}<button class="btn ghost block" data-rule="first">Read the sentence rules meanwhile</button>`; $('#quit').onclick = () => go('home'); return; }
+  const { out } = buildPool();
+  // spread across patterns so one session touches several rules
+  const byPt = {}; shuffle(out).forEach(x => (byPt[x.pt.id] = byPt[x.pt.id] || []).push(x));
+  const qs = []; let round = 0;
+  while (qs.length < 8 && round < 8) { Object.values(byPt).forEach(l => { if (qs.length < 8 && l[round]) qs.push(l[round]); }); round++; }
+  BD = { qs: shuffle(qs), i: 0, right: 0, mode: 'tiles' }; sess = newSess('build'); go('build');
+}
+VIEWS.build = function () {
+  const head = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><div class="prog"><i style="width:${BD.i / (BD.qs.length + 1) * 100}%"></i></div><span class="muted small">Build</span></div>`;
+  if (BD.i >= BD.qs.length) return buildOwn(head);
+  const q = BD.qs[BD.i], [toks, en] = q.pt.make(q.p, q.w), r = RULE[q.pt.rule];
+  const ans = toks.map(t => t.replace(/[?]/g, '')), decoys = q.pt.decoy(q.p, q.w).filter(d => !ans.map(a => a.toLowerCase()).includes(d.toLowerCase()));
+  const kw = knownWords(); const extra = decoys.filter(d => kw.has(d.toLowerCase())).slice(0, 2);
+  const bank = shuffle(ans.map((t, i) => ({ t: i ? t : t.toLowerCase(), k: 'a' + i })).concat(extra.map((t, i) => ({ t, k: 'x' + i })))), chosen = [];
+  $('#app').innerHTML = `${head}<div class="ex"><div class="label">Build it in Bisaya</div><div class="prompt">${esc(en)}${/\?$/.test(toks[toks.length - 1]) ? '' : ''}</div>
+    <div class="small muted">Rule ${r.n}: ${esc(r.short)}</div><div class="tray" id="tray"></div><div class="bank" id="bank">${bank.map(b => `<button class="tile" data-k="${b.k}">${esc(b.t)}</button>`).join('')}</div></div><div class="foot" id="foot"></div>`;
+  foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
+  const draw = () => {
+    $('#tray').innerHTML = chosen.map(k => `<button class="tile" data-k="${k}">${esc(bank.find(b => b.k === k).t)}</button>`).join('');
+    document.querySelectorAll('#bank .tile').forEach(b => b.classList.toggle('used', chosen.includes(b.dataset.k)));
+    $('#tray').querySelectorAll('.tile').forEach(b => b.onclick = () => { chosen.splice(chosen.indexOf(b.dataset.k), 1); draw(); });
+    $('#chk').disabled = !chosen.length;
+  };
+  document.querySelectorAll('#bank .tile').forEach(b => b.onclick = () => { if (!chosen.includes(b.dataset.k)) { chosen.push(b.dataset.k); draw(); } });
+  $('#chk').onclick = () => {
+    const got = chosen.map(k => bank.find(b => b.k === k).t).join(' '), want = cap(toks.join(' ')), ok = norm(got) === norm(want);
+    if (ok) { BD.right++; addXP(6); }
+    const f = $('#foot'); f.className = 'foot ' + (ok ? 'good' : 'bad');
+    f.innerHTML = `<div class="verdict">${ok ? 'Tama!' : 'Dili pa. Not yet.'}</div><div class="ans"><span>${esc(want)}</span> <span class="muted" style="font-weight:400">· ${esc(en)}</span></div>
+      ${ok ? '' : `<div class="small">You built "${esc(got)}"</div>`}<div class="small"><b>Rule ${r.n}, ${esc(r.title)}:</b> ${esc(r.short)}</div>
+      <button class="btn primary block" id="cont">Continue</button>`;
+    $('#cont').onclick = () => { BD.i++; render(); };
+  };
+  $('#quit').onclick = () => go('home');
+};
+// the last step: the learner makes a sentence of their own and checks it against the pattern
+function buildOwn(head) {
+  const { verbs, states, prons } = buildPool();
+  const p = prons.find(x => x[0] === 'ko') || prons[0];
+  const kw = knownWords(), has = w => kw.has(w);
+  const opts = [verbs.length && has('dili') && { pat: `Dili ${p[0]} mo___`, tip: 'Something you won\'t do. Remember: ' + p[0] + ' goes right after dili.', re: new RegExp(`^dili ${p[0]} mo\\S+`), words: verbs.map(v => v[1]) },
+    verbs.length && has('gusto') && { pat: `Gusto ${p[0]} mo___`, tip: 'Something you want to do.', re: new RegExp(`^gusto ${p[0]} mo\\S+`), words: verbs.map(v => v[1]) },
+    verbs.length && { pat: `Ni___ ${p[0]}`, tip: 'Something you did today.', re: new RegExp(`^(ni|mi)\\S+ ${p[0]}\\b`), words: verbs.map(v => v[2]) },
+    states.length && { pat: `___ ${p[0]}`, tip: 'How you feel right now.', re: new RegExp(`^\\S+ ${p[0]}$`), words: states.map(x => x[0]) }].filter(Boolean);
+  const o = opts[Math.floor(Math.random() * opts.length)];
+  $('#app').innerHTML = `${head}<div class="ex">${binkoSays('Your turn to be the creator! Make your own sentence. Any word you know can go in the blank.')}
+    <div class="panel"><div class="label">Pattern</div><div class="ceb">${esc(o.pat)}</div><div class="small">${esc(o.tip)}</div>
+    <div class="small muted" style="margin-top:6px">Words you know that fit: ${o.words.slice(0, 12).map(esc).join(', ')}</div></div>
+    <input class="field" id="own" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type your sentence in Bisaya"><div id="res"></div></div><div class="foot" id="foot"></div>`;
+  foot(`<button class="btn primary block" id="chk" disabled>Check my sentence</button>`);
+  const inp = $('#own'); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
+  const finish = () => { tick('build'); addXP(10); save(); view = 'done'; sectionDone('Sentences built', BD.right + ' of ' + BD.qs.length + ' right, plus one of your own'); };
+  const check = () => {
+    const v = norm(inp.value), okShape = o.re.test(v), fill = o.words.some(w => v.split(' ').includes(w));
+    $('#res').innerHTML = okShape ? `<div class="panel good-note"><b>${fill ? 'Tama! That follows the pattern.' : 'The order is right.'}</b>${fill ? '' : '<div class="small">Check the action word is one you know: ' + esc(o.words.slice(0, 6).join(', ')) + '…</div>'}<div class="small muted">Say it out loud twice.</div></div>`
+      : `<div class="panel"><b>Close. Check the order.</b><div class="small">The pattern is <b>${esc(o.pat)}</b>. ${esc(RULE.ko.short)}</div></div>`;
+    foot(`<button class="btn primary block" id="fin">${okShape ? 'Done' : 'Finish anyway'}</button>${okShape ? '' : '<button class="btn ghost block" id="again">Try again</button>'}`);
+    $('#fin').onclick = finish; if ($('#again')) $('#again').onclick = () => { inp.focus(); foot(`<button class="btn primary block" id="chk">Check my sentence</button>`); $('#chk').onclick = check; };
+  };
+  $('#chk').onclick = check;
+  $('#quit').onclick = () => go('home');
+}
+
+/* ---------- Real Bisaya: tweets and show clips ---------- */
+const realKey = (kind, i) => kind + i;
+const tweetWords = t => {
+  const out = [];
+  t[2].replace(/["“”/]|\.\.\./g, ' ').split(/\s+/).forEach(raw => {
+    const w = raw.replace(/[.,!?…¿¡:;()]/g, '').toLowerCase(); if (!w || REAL_SKIP.has(w) || !/[a-z]/.test(w)) return;
+    (t[4][w] ? t[4][w].split(' ') : [w]).forEach(x => out.push(x));
+  });
+  return [...new Set(out)];
+};
+const RE_AFFIX = /^(nag|mag|mo|ni|mi|gi|na|pag|ka|ma|mu|ga|naka|maka)-?/;
+const knowsWord = (kw, w) => kw.has(w) || (w.length > 4 && kw.has(w.replace(RE_AFFIX, '')));
+function realItems() {
+  const kw = knownWords(), { stats, cur } = pathState();
+  const tw = REAL_TWEETS.map((t, i) => { const left = tweetWords(t).filter(w => !knowsWord(kw, w)); return { key: realKey('t', i), kind: 't', i, t, left, open: !left.length }; });
+  const cl = REAL_CLIPS.map((c, i) => ({ key: realKey('c', i), kind: 'c', i, c, open: cur > c.stage || (cur === c.stage && stats[c.stage].frac >= 0.5) }));
+  return tw.concat(cl);
+}
+function realToday() {
+  const p = planDay(), items = realItems();
+  if (p.realKey) { const it = items.find(x => x.key === p.realKey); if (it && it.open) return it; }
+  const done = S.realDone || {}, open = items.filter(x => x.open);
+  if (!open.length) return null;
+  // least-done first; alternate tweets and clips day to day
+  const pref = today() % 2 ? 'c' : 't';
+  open.sort((a, b) => (done[a.key] || 0) - (done[b.key] || 0) || (a.kind === pref ? -1 : 0) - (b.kind === pref ? -1 : 0) || a.i - b.i);
+  p.realKey = open[0].key; return open[0];
+}
+function realLockHint() {
+  const items = realItems(), tw = items.filter(x => x.kind === 't').sort((a, b) => a.left.length - b.left.length)[0];
+  return tw ? `A post from ${tw.t[1]} opens after you learn ${tw.left.length} more word${tw.left.length === 1 ? '' : 's'} (${tw.left.slice(0, 4).join(', ')}${tw.left.length > 4 ? '…' : ''}).` : '';
+}
+function realLockItem() {
+  const it = realToday();
+  return it ? { k: 'real', name: 'Real Bisaya', d: it.kind === 't' ? `A real post by ${it.t[1]}. Translate it, then reply in Bisaya.` : `A clip from ${it.c.show}. Watch, catch the gist, then answer in Bisaya.`, run: () => go('real') }
+    : { k: 'real', locked: true, name: 'Real Bisaya', d: 'Locked for now, so it counts as done. ' + realLockHint() };
+}
+let RB = null, twLoaded = false;
+function loadTwitter() { if (twLoaded) { window.twttr && twttr.widgets && twttr.widgets.load(); return; } twLoaded = true; const s = document.createElement('script'); s.src = 'https://platform.twitter.com/widgets.js'; s.async = true; document.head.appendChild(s); }
+VIEWS.real = function () {
+  const it = RB && RB.it ? RB.it : realToday();
+  const top = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Real Bisaya</h2></div>`;
+  if (!it) { $('#app').innerHTML = `${top}${binkoSays('Real Bisaya is still locked! Binko only shows you real posts once you know every word in them. ' + esc(realLockHint()) + ' Keep doing your daily sessions!')}`; $('#quit').onclick = () => go('home'); return; }
+  if (!RB || RB.it !== it) RB = { it, step: 'see' };
+  const done = () => { tick('real'); S.realDone = S.realDone || {}; S.realDone[it.key] = (S.realDone[it.key] || 0) + 1; addXP(12); save(); const was = it; RB = null; view = 'done'; sectionDone('Real Bisaya done', '+12 XP · ' + esc(was.kind === 't' ? 'post by ' + was.t[1] : was.c.show)); };
+  const respond = (prompt, ex) => {
+    $('#step').innerHTML = `<div class="panel"><div class="label">Now answer in Bisaya</div><div class="prompt">${esc(prompt)}</div><input class="field" id="rep" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type or say it out loud"><div id="exr"></div></div>`;
+    foot(`<button class="btn primary block" id="sh">Show an example</button>`);
+    $('#sh').onclick = () => { $('#exr').innerHTML = `<div class="corr">${esc(ex)}</div>${ruleChip(ex)}`; foot(`<button class="btn primary block" id="fin">Done</button>`); $('#fin').onclick = done; };
+  };
+  if (it.kind === 't') {
+    const t = it.t, url = 'https://twitter.com' + t[0];
+    const notes = Object.entries(t[4]).filter(([k, v]) => k !== v).map(([k, v]) => `<b>${esc(k)}</b> = ${esc(v)}`).join(' · ');
+    $('#app').innerHTML = `${top}<div class="ex"><div class="label">A real post · every Bisaya word in it is one you've learned</div>
+      <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true" data-conversation="none"><p lang="ceb">${esc(t[2])}</p>&mdash; ${esc(t[1])} <a href="${url}">${esc(url)}</a></blockquote>
+      <div id="step"></div></div><div class="foot" id="foot"></div>`;
+    loadTwitter();
+    $('#step').innerHTML = `<div class="panel"><div class="label">Translate it</div><textarea class="field" id="tr" rows="2" placeholder="What does it say in English?"></textarea><div id="key"></div></div>`;
+    foot(`<button class="btn primary block" id="chk">Check</button>`);
+    $('#chk').onclick = () => {
+      $('#key').innerHTML = `<div class="corr">${esc(t[3])}</div>${breakdown(t[2].replace(/["“”]/g, ''))}${notes ? `<div class="small"><b>Shortcuts in this post:</b> ${notes}</div>` : ''}${ruleChip(t[2].replace(/["“”]/g, ''))}`;
+      foot(`<div class="grades"><button class="btn" data-g="1">I got the gist</button><button class="btn" data-g="0">I missed it</button></div>`);
+      document.querySelectorAll('[data-g]').forEach(b => b.onclick = () => respond(t[5], t[6]));
+    };
+  } else {
+    const c = it.c;
+    $('#app').innerHTML = `${top}<div class="ex"><div class="label">${esc(c.show)}</div>
+      <div class="vid"><iframe src="https://www.youtube-nocookie.com/embed/${c.yt}?start=${c.from}&end=${c.to}&rel=0&playsinline=1&modestbranding=1&cc_load_policy=0" title="${esc(c.show)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+      <p class="muted small" style="margin:0">Sound on, subtitles off. It stops by itself after ${c.to - c.from} seconds. Replay it as often as you like.</p><div id="step"></div></div><div class="foot" id="foot"></div>`;
+    const opts = shuffle(c.a.map((x, j) => ({ x, ok: j === 0 })));
+    $('#step').innerHTML = `<div class="panel"><div class="label">${esc(c.q)}</div><div class="opts">${opts.map((o, j) => `<button class="opt" data-o="${j}">${esc(o.x)}</button>`).join('')}</div><div id="key"></div></div>`;
+    foot('<div class="small muted">Pick an answer after you watch.</div>');
+    document.querySelectorAll('[data-o]').forEach(b => b.onclick = () => {
+      const j = +b.dataset.o; document.querySelectorAll('[data-o]').forEach((x, k) => { x.disabled = true; if (opts[k].ok) x.classList.add('right'); else if (k === j) x.classList.add('wrong'); });
+      $('#key').innerHTML = `<div class="label" style="margin-top:8px">What they said (the show's subtitles)</div>${c.en.map(l => `<div class="small">${esc(l)}</div>`).join('')}`;
+      foot(`<button class="btn primary block" id="nx">Next: answer in Bisaya</button>`); $('#nx').onclick = () => respond(c.say, c.ex);
+    });
+  }
+  $('#quit').onclick = () => { RB = null; go('home'); };
 };
 
 /* ---------- shadowing ---------- */

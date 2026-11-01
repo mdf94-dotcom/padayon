@@ -228,6 +228,18 @@ body{background:radial-gradient(120% 55% at 50% -8%,rgba(232,223,122,.16),transp
 .opt.sel{background:var(--sea-soft)}
 .msg.me{background:linear-gradient(140deg,#2a9e8c,#34b8a3);color:#0a1f1c}
 .banner{background:#2c301f;border:2px solid #4a4c2a}
+.rulechip{background:#1e2b3a;border-color:#33506b;gap:4px}
+.rulechip b{color:#8fd0f5}
+details.rule summary{cursor:pointer;list-style:none}
+details.rule summary::-webkit-details-marker{display:none}
+details.rule[open]{border-color:var(--sea)}
+.vid{position:relative;width:100%;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:#000}
+.vid iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.good-note{background:#1a3532;border-color:#2c5a54}
+.twitter-tweet{margin:0 auto!important;max-width:100%!important}
+blockquote.twitter-tweet{border-left:3px solid var(--sea);padding:8px 12px;background:var(--surface);border-radius:10px}
+textarea.field{resize:vertical;font:inherit}
+
 .art{display:block;object-fit:cover}
 .art.framed{border-radius:12px;border:2px solid var(--line);object-position:50% 15%}
 .art.cut{object-fit:contain;filter:drop-shadow(0 3px 0 rgba(0,0,0,.4))}
@@ -264,6 +276,8 @@ details>summary{cursor:pointer}
 <script src="mega.js"></script>
 <script src="path.js"></script>
 <script src="cast.js"></script>
+<script src="grammar.js"></script>
+<script src="real.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -17,6 +17,8 @@ const BINKO_NEXT = {
   dict: 'Dictation! Catch every little word like a loose bolt: ko, na, pa, sa. Do not drop any!',
   shadow: 'Shadowing! Talk along with the voice, like a duet. Binko does this with the DJ set all the time.',
   pron: 'Pronunciation check! Binko\'s sensors are listening super duper closely.',
+  build: 'Build time! Binko loves building. Take words you know and put them together YOUR way. Ko goes second, remember!',
+  real: 'Real Bisaya from real people! Binko found it on the internet. Every word in it is one you know!',
   talk: 'Talk out loud! Call or chat with family in Bisaya, then tick it off. Binko binks you\'ve got this!',
   input: 'Ten minutes of real Bisaya! Put on a vlog or the radio and let it flow. No pausing to translate!',
   done: 'ALL DONE! Binko is SO proud of you. That is it for today. BINKO OUT!'
