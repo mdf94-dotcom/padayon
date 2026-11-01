@@ -46,6 +46,8 @@ mark{background:linear-gradient(transparent 52%,var(--mark) 52%);color:inherit;p
 .muted{color:var(--muted)}
 .small{font-size:.86rem}
 .label{font-size:.74rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.recnote{display:block;font-size:.78rem}
+.recnote a{color:inherit}
 .pron{display:block;font-size:1rem;color:var(--muted);letter-spacing:.02em;margin-top:2px;font-family:var(--f-body)}
 .sayb{border:1px solid var(--line);background:var(--surface);color:var(--indigo);border-radius:50%;width:40px;height:40px;display:inline-grid;place-items:center;vertical-align:middle;padding:0;flex:none}
 .sayb svg{width:22px;height:22px}
@@ -459,8 +461,46 @@ let VOICE = null;
 function pickVoice(){ if (!canSpeak) return; const vs = speechSynthesis.getVoices(); VOICE = vs.find(v => /en-US/i.test(v.lang) && /natural|google|samantha|aria|jenny/i.test(v.name)) || vs.find(v => /en-US/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null; }
 if (canSpeak){ pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
 function say(text, slow){ if (!canSpeak || !text) return; try{ speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = 'en-US'; if (VOICE) u.voice = VOICE; u.rate = slow ? 0.6 : 0.9; speechSynthesis.speak(u); }catch(e){} }
-const sayBtn = (w, cls) => canSpeak ? `<button class="sayb ${cls || ''}" data-a="say" data-t="${esc(w.w)}" aria-label="Hear ${esc(w.w)}" title="Hear it (tap twice for slow)">${IC.speaker}</button>` : '';
-const pronHTML = w => w.pr ? `<span class="pron" title="Capitals mark the stressed syllable">${esc(w.pr)}</span>` : '';
+/* Real recordings: looked up once per word from dictionaryapi.dev (recordings mostly from Wikimedia Commons, CC BY-SA). Remembered on this device. */
+const AKEY = 'wordhoard.audio';
+const AUD = (() => { try{ return JSON.parse(localStorage.getItem(AKEY)) || {}; }catch(e){ return {}; } })();
+const AWAIT = {};
+function audioFor(word){
+  const k = String(word || '').toLowerCase().trim();
+  if (!k || /\s/.test(k)) return Promise.resolve(null);
+  if (k in AUD) return Promise.resolve(AUD[k]);
+  if (AWAIT[k]) return AWAIT[k];
+  return AWAIT[k] = fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(k)).then(async r => {
+    if (r.status === 404){ AUD[k] = null; return null; }
+    if (!r.ok) return null;
+    const ph = (await r.json()).flatMap(e => e.phonetics || []).filter(x => x.audio);
+    const best = ph.find(x => /-us\.mp3$/i.test(x.audio)) || ph.find(x => /-(uk|ca|au)\.mp3$/i.test(x.audio)) || ph[0];
+    const out = best ? {url: best.audio.replace(/^\/\//, 'https://'), accent: ((best.audio.match(/-(us|uk|ca|au)\.mp3$/i) || [])[1] || '').toUpperCase(), src: best.sourceUrl || ''} : null;
+    AUD[k] = out; return out;
+  }).catch(() => null).finally(() => { delete AWAIT[k]; try{ localStorage.setItem(AKEY, JSON.stringify(AUD)); }catch(e){} });
+}
+let PLAYING = null;
+async function playWord(word, slow){
+  const rec = await audioFor(word);
+  if (canSpeak) speechSynthesis.cancel();
+  if (PLAYING){ try{ PLAYING.pause(); }catch(e){} PLAYING = null; }
+  if (rec && rec.url){
+    const a = new Audio(rec.url); a.playbackRate = slow ? 0.7 : 1; PLAYING = a;
+    try{ await a.play(); return; }catch(e){ /* fall through to the device voice */ }
+  }
+  say(word, slow);
+}
+function recNote(w){ return `<span class="recnote small muted" data-w="${esc(w.w)}"></span>`; }
+function fillRec(){
+  document.querySelectorAll('.recnote[data-w]:not([data-done])').forEach(el => {
+    el.dataset.done = '1';
+    audioFor(el.dataset.w).then(r => {
+      el.innerHTML = r ? `Recorded voice${r.accent ? ' · ' + r.accent + ' accent' : ''}${r.src ? ` · <a href="${esc(r.src)}" target="_blank" rel="noopener">source</a>` : ''}` : (canSpeak ? 'Device voice' : '');
+    });
+  });
+}
+const sayBtn = (w, cls) => (canSpeak || !/\s/.test(w.w)) ? `<button class="sayb ${cls || ''}" data-a="say" data-t="${esc(w.w)}" aria-label="Hear ${esc(w.w)}" title="Hear it (tap twice for slow)">${IC.speaker}</button>` : '';
+const pronHTML = w => (w.pr ? `<span class="pron" title="Capitals mark the stressed syllable">${esc(w.pr)}</span>` : '') + recNote(w);
 function allWords(){ return BASE.concat(S.custom.map(c => Object.assign({lv:0}, c))); }
 let BY = {};
 function reindex(){ BY = {}; allWords().forEach(w => BY[w.id] = w); }
@@ -665,7 +705,8 @@ function renderSession(){
     <div class="prog" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
     <span class="cnt">${s.i + 1}/${s.q.length}</span></div>
     <div class="ex">${body}</div>${foot}`;
-  if (it.t === 'intro' && !a && S.set.speak !== false && sess.spoke !== sess.i){ sess.spoke = sess.i; setTimeout(() => say(w.w), 250); }
+  if (it.t === 'intro' && !a && S.set.speak !== false && sess.spoke !== sess.i){ sess.spoke = sess.i; setTimeout(() => playWord(w.w), 250); }
+  fillRec();
   const ti = $('#typein'); if (ti && !a) ti.focus();
   const go = $('#go'); if (go && (a || it.t === 'intro')) go.focus({preventScroll:true});
 }
@@ -760,7 +801,7 @@ function settingsHTML(){
   return `<section class="panel"><h2>New words per day</h2>
     <div class="seg" role="group" aria-label="New words per day">${[3,5,8,10].map(n => `<button data-a="per" data-n="${n}" class="${S.set.per === n ? 'on' : ''}">${n}</button>`).join('')}</div>
     <p class="small muted" style="margin:0">Reviews of words you’ve already met always come first. Each new word adds about a minute.</p></section>
-  ${canSpeak ? `<section class="panel"><h2>Pronunciation</h2><label class="toggle"><input type="checkbox" id="speakset" data-a="speakset" ${S.set.speak !== false ? 'checked' : ''}><span><b>Read new words aloud</b><br><span class="small muted">Uses your device’s voice. Tap the speaker on any word to hear it again; tap twice for a slower version.</span></span></label></section>` : ''}
+  ${true ? `<section class="panel"><h2>Pronunciation</h2><label class="toggle"><input type="checkbox" id="speakset" data-a="speakset" ${S.set.speak !== false ? 'checked' : ''}><span><b>Read new words aloud</b><br><span class="small muted">Plays a real recording when one exists (from Wiktionary contributors on Wikimedia Commons), otherwise your device’s voice. Tap the speaker to hear it again; tap twice for slower.</span></span></label></section>` : ''}
   <section class="panel"><h2>Decks</h2>
     ${LEVELS.map((n, i) => `<label class="toggle"><input type="checkbox" id="lv${i + 1}" data-a="lvtoggle" data-n="${i + 1}" ${S.set.lv.includes(i + 1) ? 'checked' : ''}>
       <span><b>${n}</b><br><span class="small muted">${DECK_INFO[i]} · ${BASE.filter(w => w.lv === i + 1).length} ${i === 3 ? 'expressions' : 'words'}</span></span></label>`).join('')}
@@ -779,6 +820,7 @@ function render(){
   if (view === 'done') return renderDone();
   if (view === 'speed') return renderSpeed();
   app.innerHTML = header() + (view === 'words' ? wordsHTML() : view === 'settings' ? settingsHTML() : homeHTML());
+  fillRec();
 }
 
 /* ---------- events ---------- */
@@ -789,7 +831,7 @@ app.addEventListener('click', e => {
   if (a !== 'reset') ui.resetArm = false;
   if (a !== 'delword') ui.delArm = null;
   switch (a){
-    case 'say': { const t = b.dataset.t; const now = Date.now(); say(t, ui.lastSay === t && now - ui.lastSayAt < 2500); ui.lastSay = t; ui.lastSayAt = now; return; }
+    case 'say': { const t = b.dataset.t; const now = Date.now(); playWord(t, ui.lastSay === t && now - ui.lastSayAt < 2500); ui.lastSay = t; ui.lastSayAt = now; return; }
     case 'tab': view = b.dataset.v; spd = view === 'speed' ? spd : null; render(); window.scrollTo(0, 0); break;
     case 'start': startSession('daily'); break;
     case 'tricky': startSession('tricky'); break;
@@ -802,7 +844,7 @@ app.addEventListener('click', e => {
     case 'sopt': speedAnswer(+b.dataset.i); break;
     case 'savesent': { const t = $('#usein').value.trim(); if (!t){ toast('Write a sentence first, or tap Skip.'); return; }
       (S.sent[done.useId] = S.sent[done.useId] || []).push({d:today(), t}); save(); done.saved = t; render(); break; }
-    case 'wopen': wf.open = wf.open === b.dataset.id ? null : b.dataset.id; $('#wlist').innerHTML = wordRows(); break;
+    case 'wopen': wf.open = wf.open === b.dataset.id ? null : b.dataset.id; $('#wlist').innerHTML = wordRows(); fillRec(); break;
     case 'wlv': wf.lv = b.dataset.k; render(); break;
     case 'wm': wf.m = b.dataset.k; render(); break;
     case 'addword': addWord(); break;
