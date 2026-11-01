@@ -52,6 +52,8 @@ const GRAM_ORDER = GRAM_UNITS.flatMap(u => u.ids);
 let P = [], W = [], UNITS = [], IDX = {}, PHRASE_ORDER = [], WORD_UNITS = [];
 const UNIT_OF = {};
 G.forEach((g, i) => UNIT_OF['g' + i] = 'g' + g[3]); F.forEach((f, i) => UNIT_OF['f' + i] = 'f' + f.u);
+const M_UNITS = MEGA_UNITS.map(([name, idx]) => ({ ceb: name, name: idx.length + ' cards', ids: idx.map(i => 'm' + i) }));
+const M_ORDER = M_UNITS.flatMap(u => u.ids); M_UNITS.forEach((u, i) => u.ids.forEach(id => UNIT_OF[id] = 'm' + i));
 const D_ORDER = DIALOGS.flatMap((d, i) => d.lines.map((_, j) => 'd' + i + '_' + j)); D_ORDER.forEach(id => UNIT_OF[id] = 'd' + id.slice(1).split('_')[0]);
 const SPR = { p: null, w: null };
 function setPack(h, pbuf, wbuf) {
@@ -132,7 +134,7 @@ function importPack() {
 
 /* ---------- state ---------- */
 const LS = 'padayon-app-v1';
-function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newP: 4, newW: 4, newG: 2, newF: 3, newD: 2, learner: 'all', goal: 60, voice: 'Kore', model: 'gemini-3.8-flash', tts: 'gemini-3.8-flash-tts', ttsOn: true }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
+function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newP: 4, newW: 4, newG: 2, newF: 3, newD: 2, newM: 3, learner: 'all', goal: 60, voice: 'Kore', model: 'gemini-3.8-flash', tts: 'gemini-3.8-flash-tts', ttsOn: true }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
 function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.tips = s.tips || {}; if (s.settings.learner !== 'all') { s.settings.learner = 'all'; s.settings.newF = Math.max(3, s.settings.newF || 0); } return s; }
 let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && r.v === 1) return migrate(r); } catch (e) { } return fresh(); })();
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
@@ -296,6 +298,7 @@ function card(id) {
   if (k === 'w') return W[n] && { id, kind: 'w', ceb: W[n][0], en: W[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
   if (k === 'g') return G[n] && { id, kind: 'g', ceb: G[n][0], en: G[n][1], note: G[n][2], audio: false };
   if (k === 'd') { const [di, li] = id.slice(1).split('_').map(Number), d = DIALOGS[di], l = d && d.lines[li]; return l && { id, kind: 'd', ceb: l[1], en: l[2], note: l[3] || '', audio: false, convo: d.title }; }
+  if (k === 'm') return MEGA[n] && { id, kind: 'm', ceb: MEGA[n][0], en: MEGA[n][1], audio: false };
   if (k === 'e') return EXTRA[n] && { id, kind: 'p', ceb: EXTRA[n][0], en: EXTRA[n][1], note: EXTRA[n][2], audio: false };
   if (k === 'f') return F[n] && { id, kind: 'f', ceb: F[n].ceb, en: F[n].en, note: F[n].note, trick: F[n].trick, combos: F[n].combos, audio: false };
   const c = (S.custom || []).find(x => x.id === id);
@@ -310,7 +313,7 @@ function grade(id, q) {
 const learned = ids => ids.filter(id => S.cards[id] && S.cards[id].b >= 2).length;
 const seen = ids => ids.filter(id => S.cards[id]).length;
 function dueIds() { const t = today(); return Object.keys(S.cards).filter(id => S.cards[id].d <= t && card(id)).sort((a, b) => S.cards[a].d - S.cards[b].d); }
-function newAllowance() { const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; return Math.max(0, S.settings.newP + S.settings.newW + S.settings.newG + (S.settings.newF || 0) + (S.settings.newD ?? 2) - S.newDay.n); }
+function newAllowance() { const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; return Math.max(0, S.settings.newP + S.settings.newW + S.settings.newG + (S.settings.newF || 0) + (S.settings.newD ?? 2) + (S.settings.newM ?? 3) - S.newDay.n); }
 function pickNew() {
   let left = newAllowance(); const out = [];
   const take = (order, max) => { let n = Math.min(max, left); for (const id of order) { if (n <= 0) break; if (!S.cards[id] && !out.includes(id) && card(id)) { out.push(id); n--; left--; } } };
@@ -318,6 +321,7 @@ function pickNew() {
   take(S.custom.map(c => c.id), 3);
   take(focused('f', F_UNITS, F_ORDER), S.settings.newF || 0);
   take(D_ORDER, S.settings.newD ?? 2);
+  take(focused('m', M_UNITS, M_ORDER), S.settings.newM ?? 3);
   take(focused('g', GRAM_UNITS, GRAM_ORDER), S.settings.newG);
   take(focused('u', UNITS, PHRASE_ORDER).concat(E_ORDER), S.settings.newP);
   take(focused('k', WORD_UNITS, W.map((_, i) => 'w' + i)), S.settings.newW);
@@ -560,7 +564,10 @@ VIEWS.home = function () {
   ${hasPack() ? `<section class="panel"><div class="row spread"><h2>Phrases</h2><span class="muted small tnum">${learned(PHRASE_ORDER)} of ${PHRASE_ORDER.length} learned</span></div>
     <p class="muted small" style="margin:0">Tap Focus to pull a unit's phrases to the front.</p><div>${UNITS.map((u, i) => unitRow(u, 'u' + i)).join('')}</div></section>
   <section class="panel"><details><summary>Common words <span class="muted small tnum">· ${learned(W.map((_, i) => 'w' + i))} of ${W.length} learned</span></summary>
-    <div style="margin-top:8px">${WORD_UNITS.map((u, i) => unitRow(u, 'k' + i)).join('')}</div></details></section>` : ''}
+    <div style="margin-top:8px">${WORD_UNITS.map((u, i) => unitRow(u, 'k' + i)).join('')}</div></details></section>
+  <section class="panel"><details><summary>Mega-deck topics <span class="muted small tnum">· ${learned(M_ORDER)} of ${M_ORDER.length} learned</span></summary>
+    <p class="muted small" style="margin:8px 0 0">From the Cebuano Mega-Deck: Peace Corps phrases, everyday sayings, numbers, family, food, body, home and more. Tap Focus to study a topic first.</p>
+    <div style="margin-top:8px">${M_UNITS.map((u, i) => unitRow(u, 'm' + i)).join('')}</div></details></section>` : ''}
   <section class="panel"><div class="row spread"><h2>Sync across devices</h2><button class="btn sm ${Sync.user ? 'ghost' : 'primary'} syncbtn" id="synchome">${Sync.user ? 'Sign out' : 'Sign in with Google'}</button></div>
     <p class="small syncline" style="margin:0">${syncLine()}</p><p class="muted small" style="margin:0">Sign in with the same Google account on your phone and PC and your progress follows you.</p></section>
   <section class="panel"><div class="row spread"><h2>Settings</h2><button class="btn sm ghost" data-go="settings">Open</button></div>
@@ -591,7 +598,7 @@ VIEWS.settings = function () {
     <p class="small" style="margin:0">Binko uses this when he announces your finished lessons in the family Discord.</p>
     <div class="keybox"><input class="field" id="myname" placeholder="${esc(displayName())}" value="${esc(S.settings.name || '')}"><button class="btn primary" id="savename">Save</button></div></section>
   <section class="panel"><h2>Daily cards</h2>
-    ${[['newF', 'New building blocks per day', [0, 1, 2, 3, 4]], ['newD', 'New conversation lines per day', [0, 1, 2, 3, 4]], ['newP', 'New phrases per day', [0, 2, 4, 6, 8]], ['newW', 'New words per day', [0, 2, 4, 6, 10]], ['newG', 'New grammar cards per day', [0, 1, 2, 3]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}</section>
+    ${[['newF', 'New building blocks per day', [0, 1, 2, 3, 4]], ['newD', 'New conversation lines per day', [0, 1, 2, 3, 4]], ['newM', 'New Mega-deck cards per day', [0, 2, 3, 5, 8]], ['newP', 'New phrases per day', [0, 2, 4, 6, 8]], ['newW', 'New words per day', [0, 2, 4, 6, 10]], ['newG', 'New grammar cards per day', [0, 1, 2, 3]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}</section>
   <section class="panel"><h2>Content pack</h2><p class="small" style="margin:0">${hasPack() ? `Loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Not loaded yet.'}</p><div class="row"><button class="btn ${hasPack() ? 'ghost' : 'primary'}" id="pack3">${hasPack() ? 'Download again' : 'Download now'}</button><button class="btn ghost" id="pack2">Load from a file</button></div></section>
   <section class="panel"><h2>Sync across devices</h2>
     <p class="small syncline" style="margin:0">${syncLine()}</p>
@@ -682,7 +689,7 @@ function simScore(c, d) {
   b.forEach(t => { if (a.has(t)) sc += 3; });
   const fa = lowTok(tokens(c.ceb)[0] || ''), fb = lowTok(tokens(d.ceb)[0] || '');
   if (fa && fa === fb) sc += 2; else if (fa.slice(0, 2) === fb.slice(0, 2)) sc += 1;
-  if (UNIT_OF[c.id] && UNIT_OF[c.id] === UNIT_OF[d.id]) sc += 2.5;
+  if (UNIT_OF[c.id] && UNIT_OF[c.id] === UNIT_OF[d.id]) sc += 4;
   if (confOf[c.id] && confOf[c.id].includes(d.id)) sc += 8;
   const ea = enWords(c.en), eb = enWords(d.en);
   if (ea[0] && ea[0] === eb[0]) sc += 1.5;
@@ -709,7 +716,7 @@ function swapVariants(c) {
 }
 function distract(c, n, field) {
   const pool = c.kind === 'w' ? W.map((_, i) => 'w' + i).concat(PHRASE_ORDER.filter(id => tokens(P[+id.slice(1)][0]).length === 1))
-    : c.kind === 'p' ? PHRASE_ORDER : c.kind === 'g' ? GRAM_ORDER.concat(F_ORDER) : c.kind === 'f' ? F_ORDER.concat(GRAM_ORDER) : c.kind === 'd' ? D_ORDER : GRAM_ORDER.concat(PHRASE_ORDER, S.custom.map(x => x.id));
+    : c.kind === 'p' ? PHRASE_ORDER : c.kind === 'g' ? GRAM_ORDER.concat(F_ORDER) : c.kind === 'f' ? F_ORDER.concat(GRAM_ORDER) : c.kind === 'd' ? D_ORDER : c.kind === 'm' ? M_ORDER : GRAM_ORDER.concat(PHRASE_ORDER, S.custom.map(x => x.id));
   const ranked = pool.filter(id => id !== c.id).map(card).filter(Boolean).map(d => [simScore(c, d), d]).sort((x, y) => y[0] - x[0]);
   const out = [], used = new Set([norm(c[field])]);
   const ok = d => { const v = norm(d[field]); if (!v || used.has(v) || sameMeaning(c.en, d.en)) return false; used.add(v); return true; };
