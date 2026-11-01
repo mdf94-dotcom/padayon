@@ -1089,7 +1089,8 @@ function realItems() {
   const kw = knownWords(), { stats, cur } = pathState();
   const tw = REAL_TWEETS.map((t, i) => { const left = tweetWords(t).filter(w => !knowsWord(kw, w)); return { key: realKey('t', i), kind: 't', i, t, left, open: !left.length }; });
   const cl = REAL_CLIPS.map((c, i) => ({ key: realKey('c', i), kind: 'c', i, c, open: cur > c.stage || (cur === c.stage && stats[c.stage].frac >= 0.5) }));
-  return tw.concat(cl);
+  const sg = REAL_SONGS.map((g, i) => { const left = g.words.filter(w => !knowsWord(kw, w)); return { key: realKey('s', i), kind: 's', i, g, left, open: !left.length && g.decoys.every(w => knowsWord(kw, w)) }; });
+  return tw.concat(cl, sg);
 }
 function realToday() {
   const p = planDay(), items = realItems();
@@ -1097,7 +1098,7 @@ function realToday() {
   const done = S.realDone || {}, open = items.filter(x => x.open);
   if (!open.length) return null;
   // least-done first; alternate tweets and clips day to day
-  const pref = today() % 2 ? 'c' : 't';
+  const pref = ['t', 'c', 's'][today() % 3];
   open.sort((a, b) => (done[a.key] || 0) - (done[b.key] || 0) || (a.kind === pref ? -1 : 0) - (b.kind === pref ? -1 : 0) || a.i - b.i);
   p.realKey = open[0].key; return open[0];
 }
@@ -1107,7 +1108,7 @@ function realLockHint() {
 }
 function realLockItem() {
   const it = realToday();
-  return it ? { k: 'real', name: 'Real Bisaya', d: it.kind === 't' ? `A real post by ${it.t[1]}. Translate it, then reply in Bisaya.` : `A clip from ${it.c.show}. Watch, catch the gist, then answer in Bisaya.`, run: () => go('real') }
+  return it ? { k: 'real', name: 'Real Bisaya', d: it.kind === 't' ? `A real post by ${it.t[1]}. Translate it, then reply in Bisaya.` : it.kind === 's' ? `A bit of "${it.g.song}" by ${it.g.artist}. Catch the words you know, then the meaning.` : `A clip from ${it.c.show}. Watch, catch the gist, then answer in Bisaya.`, run: () => go('real') }
     : { k: 'real', locked: true, name: 'Real Bisaya', d: 'Locked for now, so it counts as done. ' + realLockHint() };
 }
 let RB = null, twLoaded = false;
@@ -1117,7 +1118,7 @@ VIEWS.real = function () {
   const top = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Real Bisaya</h2></div>`;
   if (!it) { $('#app').innerHTML = `${top}${binkoSays('Real Bisaya is still locked! Binko only shows you real posts once you know every word in them. ' + esc(realLockHint()) + ' Keep doing your daily sessions!')}`; $('#quit').onclick = () => go('home'); return; }
   if (!RB || RB.it !== it) RB = { it, step: 'see' };
-  const done = () => { tick('real'); S.realDone = S.realDone || {}; S.realDone[it.key] = (S.realDone[it.key] || 0) + 1; addXP(12); save(); const was = it; RB = null; view = 'done'; sectionDone('Real Bisaya done', '+12 XP · ' + esc(was.kind === 't' ? 'post by ' + was.t[1] : was.c.show)); };
+  const done = () => { tick('real'); S.realDone = S.realDone || {}; S.realDone[it.key] = (S.realDone[it.key] || 0) + 1; addXP(12); save(); const was = it; RB = null; view = 'done'; sectionDone('Real Bisaya done', '+12 XP · ' + esc(was.kind === 't' ? 'post by ' + was.t[1] : was.kind === 's' ? '"' + was.g.song + '" by ' + was.g.artist : was.c.show)); };
   const respond = (prompt, ex) => {
     $('#step').innerHTML = `<div class="panel"><div class="label">Now answer in Bisaya</div><div class="prompt">${esc(prompt)}</div><input class="field" id="rep" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type or say it out loud"><div id="exr"></div></div>`;
     foot(`<button class="btn primary block" id="sh">Show an example</button>`);
@@ -1137,6 +1138,30 @@ VIEWS.real = function () {
       foot(`<div class="grades"><button class="btn" data-g="1">I got the gist</button><button class="btn" data-g="0">I missed it</button></div>`);
       document.querySelectorAll('[data-g]').forEach(b => b.onclick = () => respond(t[5], t[6]));
     };
+  } else if (it.kind === 's') {
+    const g = it.g, list = shuffle(g.words.concat(g.decoys)), picked = new Set();
+    $('#app').innerHTML = `${top}<div class="ex"><div class="label">Song · ${esc(g.song)} · ${esc(g.artist)}</div>
+      <div class="vid"><iframe src="https://www.youtube-nocookie.com/embed/${g.yt}?start=${g.from}&end=${g.to}&rel=0&playsinline=1&modestbranding=1&cc_load_policy=0" title="${esc(g.song)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+      <p class="muted small" style="margin:0">Sound on. It stops by itself after ${g.to - g.from} seconds. Replay it as often as you like.</p><div id="step"></div></div><div class="foot" id="foot"></div>`;
+    const words = () => {
+      $('#step').innerHTML = `<div class="panel"><div class="label">Tap every word you hear sung</div><div class="bank">${list.map(w => `<button class="tile" data-w="${esc(w)}">${esc(w)}</button>`).join('')}</div><div id="key"></div></div>`;
+      document.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { const w = b.dataset.w; picked.has(w) ? picked.delete(w) : picked.add(w); b.classList.toggle('sel', picked.has(w)); });
+      foot(`<button class="btn primary block" id="chk">Check</button>`);
+      $('#chk').onclick = () => {
+        const real = new Set(g.words); let hit = 0;
+        document.querySelectorAll('[data-w]').forEach(b => { const w = b.dataset.w; b.disabled = true; if (real.has(w)) { b.classList.add('right'); if (picked.has(w)) hit++; } else if (picked.has(w)) b.classList.add('wrong'); });
+        const wrong = [...picked].filter(w => !real.has(w)).length;
+        $('#key').innerHTML = `<div class="small" style="margin-top:8px"><b>${hit} of ${g.words.length}</b> sung words caught${wrong ? `, ${wrong} decoy${wrong === 1 ? '' : 's'} picked` : ''}. Green ones are in the song.</div><div class="small muted">${g.words.map(w => `<b>${esc(w)}</b> = ${esc(glossOf(w) || '')}`).join(' · ')}</div>`;
+        foot(`<button class="btn primary block" id="nx">Next: what does it mean?</button>`); $('#nx').onclick = meaning;
+      };
+    };
+    const meaning = () => {
+      const opts = shuffle(g.a.map((x, j) => ({ x, ok: j === 0 })));
+      $('#step').innerHTML = `<div class="panel"><div class="label">${esc(g.q)}</div><div class="opts">${opts.map((o, j) => `<button class="opt" data-o="${j}">${esc(o.x)}</button>`).join('')}</div></div>`;
+      foot('<div class="small muted">Use the words you caught.</div>');
+      document.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { const j = +b.dataset.o; document.querySelectorAll('[data-o]').forEach((x, k) => { x.disabled = true; if (opts[k].ok) x.classList.add('right'); else if (k === j) x.classList.add('wrong'); }); foot(`<button class="btn primary block" id="nx">Next: answer in Bisaya</button>`); $('#nx').onclick = () => respond(g.say, g.ex); });
+    };
+    words();
   } else {
     const c = it.c;
     $('#app').innerHTML = `${top}<div class="ex"><div class="label">${esc(c.show)}</div>

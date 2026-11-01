@@ -83,3 +83,18 @@ const REAL_CLIPS = [
     q: 'What does she want to vlog about?', a: ['Cooking, eating and travel', 'Makeup and fashion', 'Games and music'],
     say: 'Say what you like to do: "I like to cook."', ex: 'Ganahan ko magluto.' }
 ];
+
+/* Song clips. No lyrics are stored or shown: only single words you've learned that are sung in the clip,
+   a few decoys, and the meaning in our own words. Words were checked against the official lyric captions or lyric video.
+   {yt, from, to, song, artist, words (sung, all must be learned), decoys, q, a: [right, wrong, wrong], say, ex} */
+const REAL_SONGS = [
+  { yt: 'PVgH0K9J6eg', from: 15, to: 44, song: 'Kasing Kasing', artist: 'juan karlos ft. Kyle Echarri', words: ['nalipay', 'ko', 'akong', 'sa', 'ikaw'], decoys: ['gutom', 'ugma', 'balay'],
+    q: 'How does the singer feel at the start of the song?', a: ['Happy, and full of hope for their future together', 'Angry about being lied to', 'Bored and ready to leave'],
+    say: 'Say: "I\'m really happy."', ex: 'Nalipay gyud ko.' },
+  { yt: 'PVgH0K9J6eg', from: 59, to: 100, song: 'Kasing Kasing', artist: 'juan karlos ft. Kyle Echarri', words: ['akong', 'nimo', 'unsaon', 'nahadlok', 'usab'], decoys: ['nalipay', 'gutom', 'asa'],
+    q: "What happened to the singer's heart, and what are they scared of now?", a: ["It was broken, and now they're scared to love again", "It's full, and they're scared of getting married", "It's fine; they're scared of the dark"],
+    say: 'Say: "I\'m scared."', ex: 'Nahadlok ko.' },
+  { yt: 'aq8dqIKnvQs', from: 14, to: 42, song: 'Duyog', artist: 'David DiMuzio & Jewel Villaflores', words: ['dugay', 'ko', 'ikaw', 'ang', 'akong'], decoys: ['gutom', 'wala', 'balay'],
+    q: 'How does the singer see the person they are singing to?', a: ['As the light they have hoped for for a long time', 'As an old friend who moved away', 'As someone they are angry with'],
+    say: 'Tell someone: "It\'s really only you."', ex: 'Ikaw ra gyud.' }
+];
