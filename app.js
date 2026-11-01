@@ -170,6 +170,7 @@ function mergeState(a, b) {
   out.newDay = a.newDay.d === b.newDay.d ? { d: a.newDay.d, n: Math.max(a.newDay.n, b.newDay.n) } : (a.newDay.d > b.newDay.d ? a.newDay : b.newDay);
   out.mistakes = {}; new Set(Object.keys(a.mistakes).concat(Object.keys(b.mistakes))).forEach(k => { const x = a.mistakes[k], y = b.mistakes[k]; out.mistakes[k] = !x ? y : !y ? x : { n: Math.max(x.n, y.n), fix: (newer === b ? y.fix : x.fix) || x.fix || y.fix, last: Math.max(x.last || 0, y.last || 0) }; });
   out.tips = Object.assign({}, a.tips, b.tips);
+  out.announced = Math.max(a.announced || 0, b.announced || 0);
   out.updated = Math.max(a.updated || 0, b.updated || 0);
   return out;
 }
@@ -245,7 +246,31 @@ function planItems() {
   ].filter(Boolean);
 }
 const planNext = () => { const p = planDay(); return planItems().find(i => !p[i.k]) || null; };
-function tick(k) { const p = planDay(); if (!p[k]) { p[k] = true; if (k === 'session') bumpStreak(); save(); } }
+function tick(k) { const p = planDay(); if (!p[k]) { p[k] = true; if (k === 'session') { bumpStreak(); announceLesson(); } save(); } }
+/* ---------- Discord: Binko posts in #🔥streaks when someone finishes the daily lesson ----------
+   The webhook link lives in Firestore (config/discord, field "webhook"), readable only by signed-in users,
+   so it never sits in this public code. */
+const displayName = () => (S.settings.name || (Sync.user && Sync.user.displayName) || '').trim().split(/\s+/)[0] || 'Someone';
+let hookCache = null;
+async function discordHook() {
+  if (hookCache !== null) return hookCache;
+  if (!Sync.user || !window.firebase) return '';
+  try { const d = await firebase.firestore().collection('config').doc('discord').get(); hookCache = (d.exists && d.data().webhook) || ''; } catch (e) { hookCache = ''; }
+  return hookCache;
+}
+async function announceLesson() {
+  const t = today(); if (S.announced === t) return;
+  const url = await discordHook(); if (!url) return;
+  S.announced = t; save();
+  const n = streakNow(), who = displayName();
+  const lines = ['BINKO REPORTING!', 'Log entry from Binko!', 'Binko binks this is worth announcing!', 'Ding ding ding! Binko has news!'];
+  const fd = new FormData();
+  fd.append('payload_json', JSON.stringify({
+    username: 'Binko-SR157', avatar_url: new URL('icon-512.png', location.href).href,
+    embeds: [{ color: 0x34b8a3, description: `${lines[Math.floor(Math.random() * lines.length)]} **${who}** finished today's Bisaya lesson!\n🔥 Streak: **${n} day${n === 1 ? '' : 's'}**${n >= 7 && n % 7 === 0 ? ' · a whole week! SUPER DUPER!' : ''}` }]
+  }));
+  try { await fetch(url, { method: 'POST', body: fd, mode: 'no-cors' }); } catch (e) { }
+}
 function nextBtnHtml(id = 'nextup') {
   const n = planNext();
   return n ? (n.manual ? `<div class="small muted">Next on today's plan: <b>${esc(n.name)}</b>. ${esc(n.d)}</div><button class="btn primary block" id="${id}">Back to today's plan</button>`
@@ -555,6 +580,9 @@ VIEWS.settings = function () {
     <div class="seg" id="voices">${['Kore', 'Aoede', 'Puck', 'Charon', 'Zephyr', 'Fenrir'].map(v => `<button class="${st.voice === v ? 'on' : ''}" data-v="${v}">${v}</button>`).join('')}</div>
     <label class="row small"><input type="checkbox" id="ttson" ${st.ttsOn ? 'checked' : ''}> Read Tutor replies out loud</label>
     <button class="btn sm ghost" id="trytts" ${k ? '' : 'disabled'}>Hear a sample</button></section>
+  <section class="panel"><h2>Your name</h2>
+    <p class="small" style="margin:0">Binko uses this when he announces your finished lessons in the family Discord.</p>
+    <div class="keybox"><input class="field" id="myname" placeholder="${esc(displayName())}" value="${esc(S.settings.name || '')}"><button class="btn primary" id="savename">Save</button></div></section>
   <section class="panel"><h2>Daily cards</h2>
     ${[['newF', 'New building blocks per day', [0, 1, 2, 3, 4]], ['newP', 'New phrases per day', [0, 2, 4, 6, 8]], ['newW', 'New words per day', [0, 2, 4, 6, 10]], ['newG', 'New grammar cards per day', [0, 1, 2, 3]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}</section>
   <section class="panel"><h2>Content pack</h2><p class="small" style="margin:0">${hasPack() ? `Loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Not loaded yet.'}</p><div class="row"><button class="btn ${hasPack() ? 'ghost' : 'primary'}" id="pack3">${hasPack() ? 'Download again' : 'Download now'}</button><button class="btn ghost" id="pack2">Load from a file</button></div></section>
@@ -575,6 +603,7 @@ VIEWS.settings = function () {
   $('#testkey').onclick = async () => { $('#keymsg').textContent = 'Testing…'; try { const r = await gemJSON([{ text: 'Reply with JSON {"ok": true, "ceb": "Maayong adlaw"}' }]); $('#keymsg').textContent = r && r.ok ? 'Works. Gemini is connected.' : 'Connected, but the reply looked odd.'; } catch (e) { $('#keymsg').textContent = gemErr(e); } };
   document.querySelectorAll('#voices button').forEach(b => b.onclick = () => { S.settings.voice = b.dataset.v; Object.keys(ttsCache).forEach(k2 => delete ttsCache[k2]); save(); render(); });
   $('#ttson').onchange = e => { S.settings.ttsOn = e.target.checked; save(); };
+  $('#savename').onclick = () => { S.settings.name = $('#myname').value.trim(); save(); toast('Saved'); };
   $('#trytts').onclick = async e => { const b = e.currentTarget; b.textContent = 'Loading…'; const u = await tts('Maayong buntag! Kumusta ka karon? Unsa imong gikaon ganina?'); b.textContent = 'Hear a sample'; if (u) playUrl(u, 1); else toast('No audio came back. Check the voice model name.'); };
   document.querySelectorAll('[data-set]').forEach(g => g.querySelectorAll('button').forEach(b => b.onclick = () => { S.settings[g.dataset.set] = +b.dataset.v; save(); render(); }));
   $('#pack2').onclick = importPack; $('#pack3').onclick = () => { go('home'); autoPack(); };
