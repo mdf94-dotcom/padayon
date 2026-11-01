@@ -136,7 +136,7 @@ function importPack() {
 /* ---------- state ---------- */
 const LS = 'padayon-app-v1';
 function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newPerDay: 8, newP: 4, newW: 4, newG: 2, newF: 3, newD: 2, newM: 3, learner: 'all', goal: 60 }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
-function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.tips = s.tips || {}; if (s.planResetV !== 2) { s.planResetV = 2; s.plan = {}; }
+function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.rules = s.rules || {}; s.tips = s.tips || {}; if (s.planResetV !== 2) { s.planResetV = 2; s.plan = {}; }
   if (!s.started) { const days = Object.keys(s.xp || {}).map(Number).filter(Boolean); s.started = days.length ? Math.min(...days) : (s.streak && s.streak.last) || 0; }
   if (!s.settings.pathV) { s.settings.pathV = 1; s.settings.newPerDay = 8; }
   if (s.settings.learner !== 'all') { s.settings.learner = 'all'; s.settings.newF = Math.max(3, s.settings.newF || 0); } return s; }
@@ -180,6 +180,7 @@ function mergeState(a, b) {
   out.announced = Math.max(a.announced || 0, b.announced || 0);
   out.convoDone = {}; [a.convoDone || {}, b.convoDone || {}].forEach(x => Object.keys(x).forEach(k => out.convoDone[k] = Math.max(out.convoDone[k] || 0, x[k])));
   out.started = Math.min(...[a.started, b.started].filter(Boolean).concat([out.started || Infinity])) || 0; if (!isFinite(out.started)) out.started = 0;
+  out.rules = Object.assign({}, b.rules || {}, a.rules || {}); out.ruleDay = Math.max(a.ruleDay || 0, b.ruleDay || 0);
   out.realDone = {}; [a.realDone || {}, b.realDone || {}].forEach(x => Object.keys(x).forEach(k => out.realDone[k] = Math.max(out.realDone[k] || 0, x[k])));
   out.updated = Math.max(a.updated || 0, b.updated || 0);
   return out;
@@ -243,7 +244,7 @@ function planItems() {
   return [
     { k: 'session', name: 'Daily session', d: 'Reviews, new words, and building blocks.', run: () => startSession() },
     pickDialog() || planDay().convo ? { k: 'convo', name: "Today's conversation", d: 'New words first, then read it and say your part out loud.', run: () => go('convos') } : (() => { const n = nextConvo(); return { k: 'convo', locked: true, name: "Today's conversation", d: `Locked for now, so it counts as done. "${n.d.title}" opens after you learn ${n.left.length} more word${n.left.length === 1 ? '' : 's'} in your daily sessions.` }; })(),
-    buildLock() ? { k: 'build', locked: true, name: 'Build sentences', d: 'Locked for now, so it counts as done. ' + buildLock() } : { k: 'build', name: 'Build sentences', d: 'Make your own sentences from words you know, using the sentence rules.', run: () => startBuild() },
+    buildLock() ? { k: 'build', locked: true, name: 'Build sentences', d: 'Locked for now, so it counts as done. ' + buildLock() } : { k: 'build', name: 'Build sentences', d: buildDesc(), run: () => startBuild() },
     realLockItem(),
     { k: 'speed', name: 'Speed round', d: 'Fast listening that speeds up as you get it right.', run: () => go('speed') },
     { k: 'dict', name: 'Dictation', d: 'Type what you hear, every little word.', run: () => startDictation() },
@@ -577,7 +578,7 @@ function result(c, item, ok, extra) {
   const f = $('#foot'); f.className = 'foot ' + (q > 0 ? 'good' : 'bad');
   const bxKind = q > 0 && sess.run >= 3 ? 'streak' : q > 0 ? 'right' : 'wrong';
   f.innerHTML = `<div class="row spread" style="gap:12px;align-items:flex-start"><div class="bx ${bxKind}"><img src="img/binko-face.webp" alt="Binko">${bxKind === 'streak' ? `<span class="run">${sess.run}🔥</span>` : ''}</div><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
-  <div class="ans"><span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && ruleFor(c.ceb) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
+  <div class="ans"><span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && ruleFor(c.ceb) && ruleLearned(ruleFor(c.ceb).id) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
   ${c.audio ? `<button class="play sm" id="fplay" aria-label="Play">${I.play}</button>` : ''}</div>
   ${cameoKind ? cameoHtml(cameoKind) : ''}<button class="btn primary block" id="cont">Continue</button>`;
   if (c.audio) { $('#fplay').onclick = e => play(c.id, 1, e.currentTarget); if (!['listen', 'tiles', 'dict', 'pron', 'say'].includes(item.type)) play(c.id, 1); }
@@ -978,23 +979,35 @@ function ruleFor(ceb) {
 }
 function ruleChip(ceb) {
   const r = ruleFor(ceb); if (!r) return '';
+  if (!ruleLearned(r.id)) return `<div class="panel rulechip"><div class="label">How it's built</div><div class="small">This uses <b>${esc(r.title.toLowerCase())}</b>. Binko will teach you that rule step by step in Build sentences.</div></div>`;
   return `<div class="panel rulechip"><div class="label">How it's built · rule ${r.n}</div><b>${esc(r.title)}</b><div class="small">${esc(r.short)}</div><button class="linkbtn" data-rule="${r.id}">See the rule</button></div>`;
 }
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-rule]'); if (!b) return; ruleOpen = b.dataset.rule; ruleBack = view; go('rules'); });
 let ruleOpen = null, ruleBack = 'home';
 VIEWS.rules = function () {
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Sentence rules</h2></div>
-    ${binkoSays('Binko took a Bisaya sentence apart like an engine! These are the parts. Learn the rules once, and every word you know can go into a sentence of your own.')}
-    ${RULES.map(r => `<details class="panel rule" id="r-${r.id}" ${ruleOpen === r.id ? 'open' : ''}><summary><b>${r.n}. ${esc(r.title)}</b><div class="small muted">${esc(r.short)}</div></summary>
-      <p class="small">${esc(r.body)}</p>
-      ${r.ex.map(x => `<div class="small" style="margin:4px 0"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span><div class="muted" style="font-size:.85em">${esc(x[2])}</div></div>`).join('')}</details>`).join('')}
-    <button class="btn primary block" id="tryb">Practice: build sentences</button>`;
+    ${binkoSays('Binko took a Bisaya sentence apart like an engine! You learn one part at a time in Build sentences: Binko explains it, you drill it, then you build with it. Rules you\'ve passed are open here to look back at.')}
+    ${RULES.map(r => { const ok = ruleLearned(r.id); return `<details class="panel rule ${ok ? '' : 'later'}" id="r-${r.id}" ${ruleOpen === r.id ? 'open' : ''}><summary><b>${r.n}. ${esc(r.title)}${ok ? ' ✓' : ''}</b><div class="small muted">${ok ? esc(r.short) : 'Not learned yet. It comes up in Build sentences.'}</div></summary>
+      ${r.steps.map(st => `<p class="small" style="margin:8px 0 4px">${esc(st[0])}</p>${st[1].map(x => `<div class="small" style="margin:2px 0 2px 10px"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span><div class="muted" style="font-size:.85em">${esc(x[2])}</div></div>`).join('')}`).join('')}</details>`; }).join('')}
+    <button class="btn primary block" id="tryb">Build sentences</button>`;
   $('#quit').onclick = () => { const b = ruleBack; ruleOpen = null; ruleBack = 'home'; go(b === 'rules' ? 'home' : b); };
   $('#tryb').onclick = startBuild;
   if (ruleOpen) { const el = $('#r-' + ruleOpen); if (el) setTimeout(() => el.scrollIntoView({ block: 'start' }), 30); }
 };
-
-/* ---------- build sentences: real sentences from the learner's own words ---------- */
+/* ---------- rule lessons: explain, drill, then build ---------- */
+const ruleLearned = id => !!(S.rules && S.rules[id] && S.rules[id].ok);
+function knownRoots() { const kw = knownWords(), r = new Set(kw); kw.forEach(t => { if (t.length > 4) r.add(t.replace(RE_AFFIX, '')); }); return r; }
+const ruleQuiz = (r, roots) => r.quiz.filter(q => q.w.every(w => roots.has(w)));
+function nextRule() {
+  if (S.ruleDay === today()) return null; // one new rule a day
+  const roots = knownRoots();
+  return RULES.find(r => !ruleLearned(r.id) && ruleQuiz(r, roots).length >= Math.min(3, r.quiz.length)) || null;
+}
+function ruleWaitHint() {
+  const roots = knownRoots(), r = RULES.find(x => !ruleLearned(x.id)); if (!r) return '';
+  const miss = [...new Set(r.quiz.flatMap(q => q.w))].filter(w => !roots.has(w)).slice(0, 4);
+  return `Rule ${r.n}, "${r.title}", opens after you learn ${miss.join(', ')} in your daily sessions.`;
+}
 function buildPool() {
   const kw = knownWords(), has = w => kw.has(w.toLowerCase());
   const verbs = VERBS.filter(v => has(v[0]) || has(v[1]) || has(v[2]) || has('nag' + v[0]));
@@ -1002,33 +1015,89 @@ function buildPool() {
   const prons = PRONS.filter(p => has(p[0]));
   const out = [];
   PATTERNS.forEach(pt => {
-    if (!pt.need.every(has)) return;
+    if (!pt.need.every(has) || !pt.rules.every(ruleLearned)) return;
     const ps = prons.filter(p => !pt.pron || pt.pron.includes(p[0])); if (!ps.length) return;
     (pt.uses === 'v' ? verbs : states).forEach(w => ps.forEach(p => out.push({ pt, w, p })));
   });
   return { out, verbs, states, prons };
 }
 function buildLock() {
-  const { out, verbs, states, prons } = buildPool();
-  const kinds = new Set(out.map(x => x.pt.id)).size;
-  if (out.length >= 4 && kinds >= 2) return null;
-  const miss = [!prons.length && 'ko (I)', !verbs.length && !states.length && 'an action word like kaon or a feeling like gutom'].filter(Boolean);
-  return `Opens once you've learned ${miss.length ? miss.join(' and ') : 'a few more words to build with'} in your daily sessions.`;
+  if (nextRule()) return null;
+  if (buildPool().out.length >= 3) return null;
+  if (S.ruleDay === today()) return 'You learned a new rule today. Sentence practice with it opens once you know a few more words to build with. The next rule comes tomorrow.';
+  return 'Opens soon. ' + ruleWaitHint();
 }
+function buildDesc() { const nr = nextRule(); return nr ? `New rule today: "${nr.title}". Binko explains it, you drill it, then you build sentences with it.` : 'Build your own sentences with the rules you know.'; }
 let BD = null;
+function pickSentences(n, favor) {
+  const { out } = buildPool();
+  const byPt = {}; shuffle(out).forEach(x => (byPt[x.pt.id] = byPt[x.pt.id] || []).push(x));
+  const lists = Object.values(byPt).sort((a, b) => (b[0].pt.rules.includes(favor) ? 1 : 0) - (a[0].pt.rules.includes(favor) ? 1 : 0));
+  const qs = []; let round = 0;
+  while (qs.length < n && round < n) { lists.forEach(l => { if (qs.length < n && l[round]) qs.push(l[round]); }); round++; }
+  return shuffle(qs);
+}
 function startBuild() {
   const L = buildLock();
-  if (L) { view = 'locked'; $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Build sentences</h2></div>${binkoSays('Build sentences is still locked! Binko only builds with parts you already have. ' + esc(L))}<button class="btn ghost block" data-rule="first">Read the sentence rules meanwhile</button>`; $('#quit').onclick = () => go('home'); return; }
-  const { out } = buildPool();
-  // spread across patterns so one session touches several rules
-  const byPt = {}; shuffle(out).forEach(x => (byPt[x.pt.id] = byPt[x.pt.id] || []).push(x));
-  const qs = []; let round = 0;
-  while (qs.length < 8 && round < 8) { Object.values(byPt).forEach(l => { if (qs.length < 8 && l[round]) qs.push(l[round]); }); round++; }
-  BD = { qs: shuffle(qs), i: 0, right: 0, mode: 'tiles' }; sess = newSess('build'); go('build');
+  if (L) { view = 'locked'; $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Build sentences</h2></div>${binkoSays('Build sentences is still locked! Binko only builds with parts you already have. ' + esc(L))}`; $('#quit').onclick = () => go('home'); return; }
+  const nr = nextRule(), roots = knownRoots();
+  // a new rule: explain it, then drill it. No new rule: a quick review drill of rules already learned.
+  const learned = RULES.filter(r => ruleLearned(r.id));
+  const quiz = nr ? shuffle(ruleQuiz(nr, roots)).slice(0, 5) : shuffle(learned.flatMap(r => ruleQuiz(r, roots).map(q => Object.assign({ r }, q)))).slice(0, 3);
+  BD = { nr, phase: nr ? 'teach' : (quiz.length ? 'drill' : 'tiles'), step: 0, quiz, qi: 0, qRight: 0, qs: [], i: 0, right: 0 };
+  if (!nr) BD.qs = pickSentences(7);
+  sess = newSess('build'); go('build');
+}
+function buildHead() {
+  const total = (BD.nr ? BD.nr.steps.length : 0) + BD.quiz.length + Math.max(BD.qs.length, 6) + 1;
+  const done = (BD.phase === 'teach' ? BD.step : (BD.nr ? BD.nr.steps.length : 0) + (BD.phase === 'drill' ? BD.qi : BD.quiz.length + BD.i));
+  return `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><div class="prog"><i style="width:${Math.min(100, done / total * 100)}%"></i></div><span class="muted small">${BD.phase === 'teach' ? 'New rule' : BD.phase === 'drill' ? 'Drill' : 'Build'}</span></div>`;
 }
 VIEWS.build = function () {
-  const head = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><div class="prog"><i style="width:${BD.i / (BD.qs.length + 1) * 100}%"></i></div><span class="muted small">Build</span></div>`;
-  if (BD.i >= BD.qs.length) return buildOwn(head);
+  const head = buildHead();
+  if (BD.phase === 'teach') {
+    const r = BD.nr, st = r.steps[BD.step];
+    $('#app').innerHTML = `${head}<div class="ex"><div class="label">New rule ${r.n} · ${esc(r.title)}</div>
+      ${BD.step === 0 ? binkoSays('New part for the engine! Binko will show you how it works, one step at a time.') : ''}
+      <div class="panel"><div style="font-size:1.05rem">${esc(st[0])}</div>
+      ${st[1].map(x => `<div style="margin-top:10px"><div class="ceb" style="font-size:1.4rem">${esc(x[0])}</div><div>${esc(x[1])}</div><div class="small muted">${esc(x[2])}</div></div>`).join('')}</div>
+      <p class="muted small" style="margin:0">Step ${BD.step + 1} of ${r.steps.length}. Say the examples out loud.</p></div><div class="foot" id="foot"></div>`;
+    foot(`<button class="btn primary block" id="nx">${BD.step < r.steps.length - 1 ? 'Next' : 'Drill it'}</button>`);
+    $('#nx').onclick = () => { if (BD.step < r.steps.length - 1) BD.step++; else BD.phase = 'drill'; render(); };
+  } else if (BD.phase === 'drill') {
+    if (BD.qi >= BD.quiz.length) return drillDone(head);
+    const q = BD.quiz[BD.qi], r = q.r || BD.nr, opts = shuffle(q.a.map((x, j) => ({ x, ok: j === 0 })));
+    $('#app').innerHTML = `${head}<div class="ex"><div class="label">${BD.nr ? 'Drill' : 'Quick review'} · rule ${r.n}, ${esc(r.title)}</div><div class="prompt">${esc(q.q)}</div><div class="opts">${opts.map((o, j) => `<button class="opt cebopt" data-o="${j}">${esc(o.x)}</button>`).join('')}</div></div><div class="foot" id="foot"></div>`;
+    foot('<div class="small muted">Pick the one that sounds right.</div>');
+    document.querySelectorAll('[data-o]').forEach(b => b.onclick = () => {
+      const j = +b.dataset.o, ok = opts[j].ok; if (ok) { BD.qRight++; addXP(4); }
+      document.querySelectorAll('[data-o]').forEach((x, k) => { x.disabled = true; if (opts[k].ok) x.classList.add('right'); else if (k === j) x.classList.add('wrong'); });
+      const f = $('#foot'); f.className = 'foot ' + (ok ? 'good' : 'bad');
+      f.innerHTML = `<div class="verdict">${ok ? 'Tama!' : 'Dili pa.'}</div><div class="small">${esc(q.why)}</div><button class="btn primary block" id="cont">Continue</button>`;
+      $('#cont').onclick = () => { BD.qi++; render(); };
+    });
+  } else {
+    if (BD.i >= BD.qs.length) return buildOwn(head);
+    return buildTiles(head);
+  }
+  $('#quit').onclick = () => go('home');
+};
+function drillDone(head) {
+  const n = BD.quiz.length, pass = BD.qRight >= Math.ceil(n * 0.75);
+  if (BD.nr) {
+    if (pass) { S.rules = S.rules || {}; S.rules[BD.nr.id] = { ok: 1, d: today() }; S.ruleDay = today(); save(); }
+    BD.qs = pickSentences(6, BD.nr.id);
+  }
+  const msg = !BD.nr ? `Review done: ${BD.qRight} of ${n}. Now let's build!`
+    : pass ? `Rule ${BD.nr.n} unlocked! ${BD.qRight} of ${n} right. ${BD.qs.length ? 'Now build real sentences with it.' : 'Sentences with it open once you know a few more words.'}`
+    : `${BD.qRight} of ${n}. Close! Binko will go over this rule with you again tomorrow. ${BD.qs.length ? 'Now some practice with the rules you already know.' : ''}`;
+  $('#app').innerHTML = `${head}<div class="ex">${binkoSays(esc(msg), true)}${BD.nr ? `<div class="panel"><b>${esc(BD.nr.title)}</b><div class="small">${esc(BD.nr.short)}</div></div>` : ''}</div><div class="foot" id="foot"></div>`;
+  foot(`<button class="btn primary block" id="nx">${BD.qs.length ? 'Build sentences' : 'Finish'}</button>`);
+  $('#nx').onclick = () => { BD.phase = 'tiles'; if (!BD.qs.length) return finishBuild(); render(); };
+  $('#quit').onclick = () => go('home');
+}
+function finishBuild() { tick('build'); addXP(10); save(); view = 'done'; sectionDone('Build sentences', BD.nr && ruleLearned(BD.nr.id) ? 'New rule learned: ' + esc(BD.nr.title) : BD.right + ' of ' + BD.qs.length + ' sentences right'); }
+function buildTiles(head) {
   const q = BD.qs[BD.i], [toks, en] = q.pt.make(q.p, q.w), r = RULE[q.pt.rule];
   const ans = toks.map(t => t.replace(/[?]/g, '')), decoys = q.pt.decoy(q.p, q.w).filter(d => !ans.map(a => a.toLowerCase()).includes(d.toLowerCase()));
   const kw = knownWords(); const extra = decoys.filter(d => kw.has(d.toLowerCase())).slice(0, 2);
@@ -1053,24 +1122,24 @@ VIEWS.build = function () {
     $('#cont').onclick = () => { BD.i++; render(); };
   };
   $('#quit').onclick = () => go('home');
-};
+}
 // the last step: the learner makes a sentence of their own and checks it against the pattern
 function buildOwn(head) {
   const { verbs, states, prons } = buildPool();
   const p = prons.find(x => x[0] === 'ko') || prons[0];
   const kw = knownWords(), has = w => kw.has(w);
-  const opts = [verbs.length && has('dili') && { pat: `Dili ${p[0]} mo___`, tip: 'Something you won\'t do. Remember: ' + p[0] + ' goes right after dili.', re: new RegExp(`^dili ${p[0]} mo\\S+`), words: verbs.map(v => v[1]) },
-    verbs.length && has('gusto') && { pat: `Gusto ${p[0]} mo___`, tip: 'Something you want to do.', re: new RegExp(`^gusto ${p[0]} mo\\S+`), words: verbs.map(v => v[1]) },
-    verbs.length && { pat: `Ni___ ${p[0]}`, tip: 'Something you did today.', re: new RegExp(`^(ni|mi)\\S+ ${p[0]}\\b`), words: verbs.map(v => v[2]) },
-    states.length && { pat: `___ ${p[0]}`, tip: 'How you feel right now.', re: new RegExp(`^\\S+ ${p[0]}$`), words: states.map(x => x[0]) }].filter(Boolean);
-  const o = opts[Math.floor(Math.random() * opts.length)];
+  const opts = [verbs.length && has('dili') && ruleLearned('neg') && { pat: `Dili ${p[0]} mo___`, tip: 'Something you won\'t do. Remember: ' + p[0] + ' goes right after dili.', re: new RegExp(`^dili ${p[0]} mo\\S+`), words: verbs.map(v => v[1]) },
+    verbs.length && has('gusto') && ruleLearned('want') && { pat: `Gusto ${p[0]} mo___`, tip: 'Something you want to do.', re: new RegExp(`^gusto ${p[0]} mo\\S+`), words: verbs.map(v => v[1]) },
+    verbs.length && ruleLearned('time') && { pat: `Ni___ ${p[0]}`, tip: 'Something you did today.', re: new RegExp(`^(ni|mi)\\S+ ${p[0]}\\b`), words: verbs.map(v => v[2]) },
+    states.length && ruleLearned('first') && { pat: `___ ${p[0]}`, tip: 'How you feel right now.', re: new RegExp(`^\\S+ ${p[0]}$`), words: states.map(x => x[0]) }].filter(Boolean);
+  const o = opts[Math.floor(Math.random() * opts.length)]; if (!o) return finishBuild();
   $('#app').innerHTML = `${head}<div class="ex">${binkoSays('Your turn to be the creator! Make your own sentence. Any word you know can go in the blank.')}
     <div class="panel"><div class="label">Pattern</div><div class="ceb">${esc(o.pat)}</div><div class="small">${esc(o.tip)}</div>
     <div class="small muted" style="margin-top:6px">Words you know that fit: ${o.words.slice(0, 12).map(esc).join(', ')}</div></div>
     <input class="field" id="own" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type your sentence in Bisaya"><div id="res"></div></div><div class="foot" id="foot"></div>`;
   foot(`<button class="btn primary block" id="chk" disabled>Check my sentence</button>`);
   const inp = $('#own'); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
-  const finish = () => { tick('build'); addXP(10); save(); view = 'done'; sectionDone('Sentences built', BD.right + ' of ' + BD.qs.length + ' right, plus one of your own'); };
+  const finish = finishBuild;
   const check = () => {
     const v = norm(inp.value), okShape = o.re.test(v), fill = o.words.some(w => v.split(' ').includes(w));
     $('#res').innerHTML = okShape ? `<div class="panel good-note"><b>${fill ? 'Tama! That follows the pattern.' : 'The order is right.'}</b>${fill ? '' : '<div class="small">Check the action word is one you know: ' + esc(o.words.slice(0, 6).join(', ')) + '…</div>'}<div class="small muted">Say it out loud twice.</div></div>`
