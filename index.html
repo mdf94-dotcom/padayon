@@ -243,6 +243,14 @@ body{background:radial-gradient(120% 55% at 50% -8%,rgba(232,223,122,.16),transp
 .summary .cameo,.summary .guide{text-align:left;width:100%}
 @keyframes pop{0%{transform:translateY(6px);opacity:0}100%{transform:none;opacity:1}}
 .foot{background:var(--bg)}
+.stage-row{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
+.stage-row:first-child{border-top:0}
+.stage-dot{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;background:var(--chip);color:var(--muted);border:2px solid var(--line)}
+.stage-dot svg{width:16px;height:16px}
+.stage-row.done .stage-dot{background:var(--good);color:#0a1f1c;border-color:var(--good)}
+.stage-row.now .stage-dot{background:var(--iri);color:#1a1a12;border-color:#e8df7a}
+.stage-row.later{opacity:.6}
+details>summary{cursor:pointer}
 </style>
 </head>
 <body>
@@ -254,6 +262,7 @@ body{background:radial-gradient(120% 55% at 50% -8%,rgba(232,223,122,.16),transp
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="learn.js"></script>
 <script src="mega.js"></script>
+<script src="path.js"></script>
 <script src="cast.js"></script>
 <script src="app.js"></script>
 </body>

@@ -59,6 +59,7 @@ const SPR = { p: null, w: null };
 function setPack(h, pbuf, wbuf) {
   P = h.P; W = h.W; UNITS = h.UNITS; IDX = h.IDX; SPR.p = pbuf; SPR.w = wbuf;
   PHRASE_ORDER = UNITS.flatMap(u => u.ids);
+  try { buildPath(); } catch (e) { }
   UNITS.forEach((u, i) => u.ids.forEach(id => UNIT_OF[id] = 'u' + i));
   WORD_UNITS = [];
   for (let i = 0; i < W.length; i += 25) {
@@ -134,8 +135,9 @@ function importPack() {
 
 /* ---------- state ---------- */
 const LS = 'padayon-app-v1';
-function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newP: 4, newW: 4, newG: 2, newF: 3, newD: 2, newM: 3, learner: 'all', goal: 60, voice: 'Kore', model: 'gemini-3.8-flash', tts: 'gemini-3.8-flash-tts', ttsOn: true }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
-function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.tips = s.tips || {}; if (s.settings.learner !== 'all') { s.settings.learner = 'all'; s.settings.newF = Math.max(3, s.settings.newF || 0); } return s; }
+function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newPerDay: 8, newP: 4, newW: 4, newG: 2, newF: 3, newD: 2, newM: 3, learner: 'all', goal: 60, voice: 'Kore', model: 'gemini-3.8-flash', tts: 'gemini-3.8-flash-tts', ttsOn: true }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
+function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.tips = s.tips || {}; if (!s.settings.pathV) { s.settings.pathV = 1; s.settings.newPerDay = 8; }
+  if (s.settings.learner !== 'all') { s.settings.learner = 'all'; s.settings.newF = Math.max(3, s.settings.newF || 0); } return s; }
 let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && r.v === 1) return migrate(r); } catch (e) { } return fresh(); })();
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
 function save() { S.updated = Date.now(); localSave(); schedulePush(); }
@@ -313,18 +315,68 @@ function grade(id, q) {
 const learned = ids => ids.filter(id => S.cards[id] && S.cards[id].b >= 2).length;
 const seen = ids => ids.filter(id => S.cards[id]).length;
 function dueIds() { const t = today(); return Object.keys(S.cards).filter(id => S.cards[id].d <= t && card(id)).sort((a, b) => S.cards[a].d - S.cards[b].d); }
-function newAllowance() { const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; return Math.max(0, S.settings.newP + S.settings.newW + S.settings.newG + (S.settings.newF || 0) + (S.settings.newD ?? 2) + (S.settings.newM ?? 3) - S.newDay.n); }
+function newAllowance() { const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; return Math.max(0, (S.settings.newPerDay || 8) - S.newDay.n); }
+/* ---------- the learning path ---------- */
+let PATH = [];
+function buildPath() {
+  const used = new Set();
+  const mUnit = sel => { // 'Name', 'Name 3', 'Name 1-10'
+    const m = sel.match(/^(.*?)(?: (\d+)(?:-(\d+))?)?$/), base = m[1], a = m[2] ? +m[2] : null, b = m[3] ? +m[3] : a;
+    return M_UNITS.filter(u => { if (u.ceb === base) return a === null || a === 1; const mm = u.ceb.match(/^(.*) (\d+)$/); return mm && mm[1] === base && (a === null || (+mm[2] >= a && +mm[2] <= b)); });
+  };
+  PATH = STAGES.map(st => {
+    const lists = [];
+    const add = (ids, front) => { ids = ids.filter(id => !used.has(id)); ids.forEach(id => used.add(id)); if (ids.length) lists.push({ ids, front }); };
+    // [start, span] within the stage: building blocks and set phrases open it, frequency words start a little later,
+    // conversation lines come once some of their words are in
+    add(st.f.flatMap(i => (F_UNITS[i] || { ids: [] }).ids), [0, 0.6]);
+    add(st.p.flatMap(i => (UNITS[i] || { ids: [] }).ids).concat(st.e.map(i => 'e' + i)), [0, 0.85]);
+    add(st.g.flatMap(i => (GRAM_UNITS[i] || { ids: [] }).ids), [0.05, 0.8]);
+    add(st.m[0] === '*' ? M_ORDER.slice() : st.m.flatMap(mUnit).flatMap(u => u.ids), [0.04, 0.96]);
+    add(st.d.flatMap(i => (DIALOGS[i] ? DIALOGS[i].lines.map((_, j) => 'd' + i + '_' + j) : [])), [0.3, 0.7]);
+    add(W.slice(st.w[0], st.w[1]).map((_, j) => 'w' + (st.w[0] + j)), [0.12, 0.88]);
+    // spread each source evenly through the stage
+    const keyed = lists.flatMap(l => l.ids.map((id, i) => [l.front[0] + ((i + 0.5) / l.ids.length) * l.front[1], id]));
+    keyed.sort((x, y) => x[0] - y[0]);
+    return Object.assign({}, st, { ids: keyed.map(x => x[1]) });
+  });
+  // anything not placed yet goes into the last stage, so nothing is ever left out
+  const rest = [...F_ORDER, ...GRAM_ORDER, ...D_ORDER, ...PHRASE_ORDER, ...E_ORDER, ...W.map((_, i) => 'w' + i), ...M_ORDER].filter(id => !used.has(id));
+  PATH[PATH.length - 1].ids.push(...rest);
+}
+buildPath();
+const stageStats = st => { const ids = st.ids.filter(id => card(id)); const l = learned(ids), sn = seen(ids); return { total: ids.length, learned: l, seen: sn, frac: ids.length ? l / ids.length : 1 }; };
+function pathState() {
+  const stats = PATH.map(stageStats);
+  let cur = stats.findIndex(x => x.frac < PATH_GATE); if (cur < 0) cur = PATH.length - 1;
+  return { stats, cur };
+}
+function pathTimeline() {
+  const { stats, cur } = pathState(), per = S.settings.newPerDay || 8, out = []; let days = 0;
+  stats.forEach((x, i) => { if (i < cur) { out.push(null); return; } days += Math.ceil((x.total - x.seen) / per) + PATH_LAG_DAYS; out.push(days); });
+  return out;
+}
+const dateIn = d => { const t = new Date(Date.now() + d * 864e5); return t.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }); };
+function pathPanel() {
+  const { stats, cur } = pathState(), tl = pathTimeline(), per = S.settings.newPerDay || 8, x = stats[cur];
+  const gated = x.seen >= x.total && x.frac < PATH_GATE;
+  return `<section class="panel"><div class="row spread"><h2>Your path</h2><span class="muted small">${per} new cards a day</span></div>
+    ${binkoSays(gated ? `You've met every card in <b>${esc(PATH[cur].name)}</b>! Now we polish them. Stage ${cur + 2} opens when ${Math.round(PATH_GATE * 100)}% are learned (${Math.ceil(PATH_GATE * x.total) - x.learned} to go). Just reviews until then!`
+      : `Stage ${cur + 1}: <b>${esc(PATH[cur].name)}</b>. ${esc(PATH[cur].can)}`)}
+    <div>${PATH.map((st, i) => { const y = stats[i], st8 = i < cur ? 'done' : i === cur ? 'now' : 'later';
+      return `<div class="stage-row ${st8}"><div class="stage-dot">${i < cur ? I.check : i + 1}</div><div style="min-width:0;flex:1"><div class="row spread" style="gap:6px"><b>${esc(st.ceb)} · ${esc(st.name)}</b><span class="muted small">${esc(st.level)}</span></div>
+        <div class="bar" style="margin:6px 0 4px"><i style="width:${y.frac * 100}%"></i></div>
+        <div class="muted small">${y.learned} of ${y.total} learned · ${i < cur ? 'done' : i === cur ? (tl[i] ? 'expected around ' + dateIn(tl[i]) : '') : 'opens around ' + dateIn(tl[i - 1] || 0)}</div></div></div>`; }).join('')}</div>
+    <p class="muted small" style="margin:0">Dates assume you finish the daily session every day. A stage opens once ${Math.round(PATH_GATE * 100)}% of the one before it is learned, so you never move on before you've got it.</p></section>`;
+}
 function pickNew() {
   let left = newAllowance(); const out = [];
   const take = (order, max) => { let n = Math.min(max, left); for (const id of order) { if (n <= 0) break; if (!S.cards[id] && !out.includes(id) && card(id)) { out.push(id); n--; left--; } } };
-  const focused = (pre, units, order) => (S.focus && S.focus[0] === pre && units[+S.focus.slice(1)]) ? units[+S.focus.slice(1)].ids.concat(order) : order;
   take(S.custom.map(c => c.id), 3);
-  take(focused('f', F_UNITS, F_ORDER), S.settings.newF || 0);
-  take(D_ORDER, S.settings.newD ?? 2);
-  take(focused('m', M_UNITS, M_ORDER), S.settings.newM ?? 3);
-  take(focused('g', GRAM_UNITS, GRAM_ORDER), S.settings.newG);
-  take(focused('u', UNITS, PHRASE_ORDER).concat(E_ORDER), S.settings.newP);
-  take(focused('k', WORD_UNITS, W.map((_, i) => 'w' + i)), S.settings.newW);
+  // a unit the learner chose to focus on comes first, as long as its stage is open
+  const { cur } = pathState(), open = PATH.slice(0, cur + 1).flatMap(st => st.ids), openSet = new Set(open);
+  if (S.focus) { const map = { f: F_UNITS, g: GRAM_UNITS, u: UNITS, k: WORD_UNITS, m: M_UNITS }, u = (map[S.focus[0]] || [])[+S.focus.slice(1)]; if (u) take(u.ids.filter(id => openSet.has(id)), left); }
+  take(open, left);
   return out;
 }
 function exType(id, isNew) {
@@ -541,6 +593,7 @@ VIEWS.home = function () {
     <div class="ringwrap plandone">${ringSvg(doneN, items.length)}<span class="ringtxt tnum">${doneN}<small>of ${items.length}</small></span></div>
     <div class="hero-actions">${nextUp ? (nextUp.manual ? `<button class="btn" id="start">I did it</button>` : `<button class="btn" id="start">Start ${esc(nextUp.name.toLowerCase())}</button>`) : `<button class="btn" id="start">Do another session</button>`}</div>
   </section>
+  ${pathPanel()}
   <section class="drills">
     <button class="drill" data-go="tutor"><span class="label">Speaking</span><span class="big">Tutor</span><b>Talk out loud</b><span class="muted small">A voice conversation in Bisaya that corrects you as you go.</span></button>
     <button class="drill" data-go="pron"><span class="label">Pronunciation</span><span class="big">Sulti</span><b>Repeat and get scored</b><span class="muted small">Copy a native speaker, see what to fix.</span></button>
@@ -555,19 +608,21 @@ VIEWS.home = function () {
   <section class="panel"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${doneN} of ${items.length}</span></div>
     <div class="bar" style="grid-column:auto"><i style="width:${doneN / items.length * 100}%"></i></div>
     <div>${items.map(it => `<div class="check"><button class="box ${isDone(it, plan) ? 'on' : ''}" data-plan="${it.k}" ${it.manual ? '' : 'disabled title="Ticks itself when you finish"'} aria-label="${esc(it.name)}">${isDone(it, plan) ? I.check : ''}</button><div style="flex:1;min-width:0"><b>${esc(it.name)}${it.locked ? ' 🔒' : ''}</b><span class="muted small">${esc(it.d)}</span></div>${!isDone(it, plan) && !it.manual ? `<button class="btn sm ghost" data-run="${it.k}">Go</button>` : ''}</div>`).join('')}</div></section>
-  <section class="panel"><div class="row spread"><h2>Foundations</h2><span class="muted small tnum">${learned(F_ORDER)} of ${F.length} learned</span></div>
+  <section class="panel"><details><summary><b>Browse every unit</b> <span class="muted small">· jump ahead with Focus</span></summary><div style="display:grid;gap:12px;margin-top:10px">
+  <div class="panel"><div class="row spread"><h2>Foundations</h2><span class="muted small tnum">${learned(F_ORDER)} of ${F.length} learned</span></div>
     <p class="muted small" style="margin:0">How words fit together: who, whose, have, like, questions, and when. Each block comes with sentences you build yourself.</p>
-    <div>${F_UNITS.map((u, i) => unitRow(u, 'f' + i)).join('')}</div></section>
-  <section class="panel"><div class="row spread"><h2>How Bisaya really works</h2><span class="muted small tnum">${learned(GRAM_ORDER)} of ${G.length} learned</span></div>
+    <div>${F_UNITS.map((u, i) => unitRow(u, 'f' + i)).join('')}</div></div>
+  <div class="panel"><div class="row spread"><h2>How Bisaya really works</h2><span class="muted small tnum">${learned(GRAM_ORDER)} of ${G.length} learned</span></div>
     <p class="muted small" style="margin:0">Shortcuts, little words, and verb endings that make fast speech hard to follow.</p>
-    <div>${GRAM_UNITS.map((u, i) => unitRow(u, 'g' + i)).join('')}</div></section>
-  ${hasPack() ? `<section class="panel"><div class="row spread"><h2>Phrases</h2><span class="muted small tnum">${learned(PHRASE_ORDER)} of ${PHRASE_ORDER.length} learned</span></div>
-    <p class="muted small" style="margin:0">Tap Focus to pull a unit's phrases to the front.</p><div>${UNITS.map((u, i) => unitRow(u, 'u' + i)).join('')}</div></section>
-  <section class="panel"><details><summary>Common words <span class="muted small tnum">· ${learned(W.map((_, i) => 'w' + i))} of ${W.length} learned</span></summary>
-    <div style="margin-top:8px">${WORD_UNITS.map((u, i) => unitRow(u, 'k' + i)).join('')}</div></details></section>
-  <section class="panel"><details><summary>Mega-deck topics <span class="muted small tnum">· ${learned(M_ORDER)} of ${M_ORDER.length} learned</span></summary>
+    <div>${GRAM_UNITS.map((u, i) => unitRow(u, 'g' + i)).join('')}</div></div>
+  ${hasPack() ? `<div class="panel"><div class="row spread"><h2>Phrases</h2><span class="muted small tnum">${learned(PHRASE_ORDER)} of ${PHRASE_ORDER.length} learned</span></div>
+    <p class="muted small" style="margin:0">Tap Focus to pull a unit's phrases to the front.</p><div>${UNITS.map((u, i) => unitRow(u, 'u' + i)).join('')}</div></div>
+  <div class="panel"><details><summary>Common words <span class="muted small tnum">· ${learned(W.map((_, i) => 'w' + i))} of ${W.length} learned</span></summary>
+    <div style="margin-top:8px">${WORD_UNITS.map((u, i) => unitRow(u, 'k' + i)).join('')}</div></details></div>
+  <div class="panel"><details><summary>Mega-deck topics <span class="muted small tnum">· ${learned(M_ORDER)} of ${M_ORDER.length} learned</span></summary>
     <p class="muted small" style="margin:8px 0 0">From the Cebuano Mega-Deck: Peace Corps phrases, everyday sayings, numbers, family, food, body, home and more. Tap Focus to study a topic first.</p>
-    <div style="margin-top:8px">${M_UNITS.map((u, i) => unitRow(u, 'm' + i)).join('')}</div></details></section>` : ''}
+    <div style="margin-top:8px">${M_UNITS.map((u, i) => unitRow(u, 'm' + i)).join('')}</div></details></div>` : ''}
+  </div></details></section>
   <section class="panel"><div class="row spread"><h2>Sync across devices</h2><button class="btn sm ${Sync.user ? 'ghost' : 'primary'} syncbtn" id="synchome">${Sync.user ? 'Sign out' : 'Sign in with Google'}</button></div>
     <p class="small syncline" style="margin:0">${syncLine()}</p><p class="muted small" style="margin:0">Sign in with the same Google account on your phone and PC and your progress follows you.</p></section>
   <section class="panel"><div class="row spread"><h2>Settings</h2><button class="btn sm ghost" data-go="settings">Open</button></div>
@@ -598,7 +653,8 @@ VIEWS.settings = function () {
     <p class="small" style="margin:0">Binko uses this when he announces your finished lessons in the family Discord.</p>
     <div class="keybox"><input class="field" id="myname" placeholder="${esc(displayName())}" value="${esc(S.settings.name || '')}"><button class="btn primary" id="savename">Save</button></div></section>
   <section class="panel"><h2>Daily cards</h2>
-    ${[['newF', 'New building blocks per day', [0, 1, 2, 3, 4]], ['newD', 'New conversation lines per day', [0, 1, 2, 3, 4]], ['newM', 'New Mega-deck cards per day', [0, 2, 3, 5, 8]], ['newP', 'New phrases per day', [0, 2, 4, 6, 8]], ['newW', 'New words per day', [0, 2, 4, 6, 10]], ['newG', 'New grammar cards per day', [0, 1, 2, 3]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}</section>
+    ${[['newPerDay', 'New cards per day', [5, 8, 10, 15]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}
+    <p class="muted small" style="margin:0">8 a day is about 15 to 20 minutes with reviews. More moves you along the path faster but makes reviews pile up.</p></section>
   <section class="panel"><h2>Content pack</h2><p class="small" style="margin:0">${hasPack() ? `Loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Not loaded yet.'}</p><div class="row"><button class="btn ${hasPack() ? 'ghost' : 'primary'}" id="pack3">${hasPack() ? 'Download again' : 'Download now'}</button><button class="btn ghost" id="pack2">Load from a file</button></div></section>
   <section class="panel"><h2>Sync across devices</h2>
     <p class="small syncline" style="margin:0">${syncLine()}</p>
