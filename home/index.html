@@ -16,7 +16,7 @@
 /* Layout: the app fills the screen; a bottom tab bar switches between the Today page and each app, and each app stays loaded in its own frame. */
 :root{
   --bg:#F0F1F2; --surface:#FFFFFF; --ink:#171B1E; --muted:#596168; --line:#D7DBDF; --chip:#E4E7EA;
-  --sea:#0B6B66; --sea-soft:#D3E9E6; --ind:#3340A0; --ind-soft:#DEE1F5; --moss:#4A7A3D; --moss-soft:#E3EDDC; --ember:#B4583C; --ember-soft:#F4E0D8;
+  --sea:#0B6B66; --sea-soft:#D3E9E6; --ind:#3340A0; --ind-soft:#DEE1F5; --moss:#4A7A3D; --moss-soft:#E3EDDC; --ember:#B4583C; --ember-soft:#F4E0D8; --plum:#7A3E8C; --plum-soft:#EEDFF2;
   --good:#1F7D49; --good-bg:#DCF0E3; --bad:#B8354A; --bad-bg:#F8DEE2;
   --f-display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
   --f-body:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;
@@ -24,7 +24,7 @@
 }
 @media (prefers-color-scheme: dark){:root{
   --bg:#101315; --surface:#181D20; --ink:#E5E9EC; --muted:#9AA3AA; --line:#2A3136; --chip:#20272B;
-  --sea:#43B9AF; --sea-soft:#163834; --ind:#9AA4FF; --ind-soft:#252B55; --moss:#8FC27C; --moss-soft:#1F2E1C; --ember:#E59272; --ember-soft:#3A241B;
+  --sea:#43B9AF; --sea-soft:#163834; --ind:#9AA4FF; --ind-soft:#252B55; --moss:#8FC27C; --moss-soft:#1F2E1C; --ember:#E59272; --ember-soft:#3A241B; --plum:#D29BE3; --plum-soft:#33213A;
   --good:#52CB87; --good-bg:#11301F; --bad:#F27B8E; --bad-bg:#3B1820; color-scheme:dark}}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -67,7 +67,8 @@ nav button .dot{position:absolute;top:10px;left:calc(50% + 9px);width:9px;height
 .list{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
 .item{--c:var(--ink);--cs:var(--chip);display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:2px 14px;align-items:center;padding:14px 16px;border-top:1px solid var(--line)}
 .item:first-child{border-top:0}
-.item.sea{--c:var(--sea);--cs:var(--sea-soft)}.item.ind{--c:var(--ind);--cs:var(--ind-soft)}.item.moss{--c:var(--moss);--cs:var(--moss-soft)}.item.ember{--c:var(--ember);--cs:var(--ember-soft)}
+.item.sea{--c:var(--sea);--cs:var(--sea-soft)}.item.ind{--c:var(--ind);--cs:var(--ind-soft)}.item.moss{--c:var(--moss);--cs:var(--moss-soft)}.item.ember{--c:var(--ember);--cs:var(--ember-soft)}.item.plum{--c:var(--plum);--cs:var(--plum-soft)}
+a.go{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 .ico{width:44px;height:44px;border-radius:12px;background:var(--cs);color:var(--c);display:grid;place-items:center;grid-row:span 2;position:relative}
 .ico svg{width:24px;height:24px}
 .ico .ok{position:absolute;right:-5px;bottom:-5px;width:20px;height:20px;border-radius:50%;background:var(--good);color:var(--surface);display:grid;place-items:center;border:2px solid var(--surface)}
@@ -139,6 +140,7 @@ const I = {
   bisaya:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/><path d="M9 10h6M9 14h4"/></svg>',
   words:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Z"/><path d="M4 19a2 2 0 0 1 2-2h13"/></svg>',
   chess:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h1.5v1.5H12V3h1.5v1.5H15V3h1.5v4l-1.5 1.5V14l1.5 2v1H7.5v-1L9 14V8.5L7.5 7V3H9Zm-2.5 15.5h11V21h-11v-2.5Z"/></svg>',
+  hanger:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7.5a2 2 0 1 1 2-2"/><path d="M12 7.5v1.2L3.6 15a1.6 1.6 0 0 0 1 2.9h14.8a1.6 1.6 0 0 0 1-2.9L12 8.7"/></svg>',
   lift:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/></svg>',
   check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>'
 };
@@ -195,6 +197,17 @@ const workoutsOn = off => (H.cache?.workouts || []).filter(w => w.start && local
 const isRest = off => H.rest.includes(dayAt(off).getDay());
 function weekCount(){ const now = dayAt(0), dow = (now.getDay() + 6) % 7; let n = 0; for (let i = 0; i <= dow; i++) if (workoutsOn(-i).length) n++; return n; }
 
+/* ---------- Outfit Inspo (a page inside Claude; it can't be embedded, so it opens in a new tab) ---------- */
+const OUTFIT = {url: 'https://claude.ai/artifact/526ztr6SRrbUUpy9ZTgJ9g', at: [18, 41]}; // new picks arrive daily at 6:41 PM
+const outfitDays = () => { const a = ls.get('practice.outfitDays') || {}, b = (window.Cloud && Cloud.get('outfitDays')) || {}; return Object.assign({}, b, a); };
+const outfitSeen = off => !!outfitDays()[ymd(dayAt(off))];
+function markOutfit(){ const d = outfitDays(); d[ymd()] = 1; Object.keys(d).sort().slice(0, -60).forEach(k => delete d[k]); ls.set('practice.outfitDays', d); if (window.Cloud && Cloud.user) Cloud.save('outfitDays', d); }
+function outfitLine(){
+  const now = new Date(), mins = now.getHours() * 60 + now.getMinutes(), drop = OUTFIT.at[0] * 60 + OUTFIT.at[1];
+  if (outfitSeen(0)) return `<b>Checked today</b> · new picks daily at 6:41 PM`;
+  return mins >= drop ? `<b>Today’s picks are in</b> · swipe through pants, shoes, and tops` : `<b>New picks at 6:41 PM</b> · yesterday’s are still there to swipe`;
+}
+
 /* ---------- views ---------- */
 const TABS = [{k:'today', label:'Today', color:'--ink'}].concat(APPS.map(a => ({k:a.k, label:a.tab, color:a.color})));
 let tab = 'today';
@@ -227,7 +240,10 @@ function renderToday(){
   const date = new Date().toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric'});
   const done = APPS.filter(a => a.did(0)).length;
   const wToday = workoutsOn(0), restToday = isRest(0), wDone = wToday.length > 0 || restToday;
-  const total = APPS.length + (H.key ? 1 : 0), got = done + (H.key && wDone ? 1 : 0);
+  const total = APPS.length + (H.key ? 1 : 0) + 1, got = done + (H.key && wDone ? 1 : 0) + (outfitSeen(0) ? 1 : 0);
+  const fit = `<div class="item plum ${outfitSeen(0) ? 'done' : ''}"><div class="ico" aria-hidden="true">${I.hanger}${outfitSeen(0) ? `<span class="ok">${I.check}</span>` : ''}</div>
+    <h2>Outfit picks</h2><a class="go" href="${OUTFIT.url}" target="_blank" rel="noopener" data-a="outfit">Open</a>
+    <div class="st">${outfitLine()}</div></div>`;
   const rows = APPS.map(a => { const d = a.did(0);
     return `<div class="item ${a.cls} ${d ? 'done' : ''}"><div class="ico" aria-hidden="true">${I[a.k]}${d ? `<span class="ok">${I.check}</span>` : ''}</div>
       <h2>${a.name}</h2><button class="go" ${d ? `data-tab="${a.k}"` : `data-start="${a.k}"`}>${d ? 'Open' : 'Start'}</button>
@@ -246,14 +262,14 @@ function renderToday(){
   const days = Array.from({length:14}, (_, i) => i - 13);
   const grow = (label, color, fn, rest) => `<span class="rl">${label}</span>` + days.map(o => `<i style="--c:var(${color})" class="${fn(o) ? 'on' : rest && rest(o) ? 'rest' : ''} ${o === 0 ? 't' : ''}" title="${rest && rest(o) && !fn(o) ? 'Rest day' : ''}"></i>`).join('');
   const grid = `<span></span>` + days.map(o => `<span class="dl">${o === 0 || o === -7 || o === -13 ? dayAt(o).getDate() : ''}</span>`).join('')
-    + APPS.map(a => grow(a.tab, a.color, o => a.did(o))).join('') + (H.key && H.cache ? grow('Workout', '--ember', o => workoutsOn(o).length, isRest) : '');
+    + APPS.map(a => grow(a.tab, a.color, o => a.did(o))).join('') + (H.key && H.cache ? grow('Workout', '--ember', o => workoutsOn(o).length, isRest) : '') + grow('Outfits', '--plum', outfitSeen);
   const signed = window.Cloud && Cloud.user;
   $('#page').innerHTML = `
   <header class="top"><div><div class="label">${date}</div><h1>${got === total ? 'All done today' : 'Daily Practice'}</h1></div>
     <span class="count tnum">${got} of ${total} done</span></header>
   <div class="meter" aria-hidden="true">${Array.from({length: total}, (_, i) => `<i class="${i < got ? 'on' : ''}"></i>`).join('')}</div>
   ${FL.next ? nextCard() : ''}
-  <div class="list">${rows}${lift}</div>
+  <div class="list">${rows}${lift}${fit}</div>
   ${H.err ? `<div class="note bad" role="alert">${H.err}</div>` : ''}
   ${!signed && window.Cloud && Cloud.ready ? `<div class="note">Sign in with Google (the same account as Padayon) so every app syncs between your phone and PC. <button class="btn primary" data-a="signin" style="margin-top:8px;display:block">Sign in with Google</button></div>` : ''}
   <section class="panel"><div class="top"><h2 style="font-size:1.1rem">Last 14 days</h2><span class="small muted">Today is outlined${H.key && H.cache ? ' · striped = rest day' : ''}</span></div><div class="grid">${grid}</div></section>
@@ -333,6 +349,7 @@ document.addEventListener('click', async e => {
     case 'hsetup': ui.open = true; renderToday(); $('#hkey').focus(); $('#hevyset').scrollIntoView({behavior:'smooth', block:'center'}); break;
     case 'hsave': { const v = $('#hkey').value.trim(); if (!v){ toast('Paste your Hevy API key first.'); return; } ui.open = true; await setHevyKey(v, true); break; }
     case 'hremove': H.key = ''; H.cache = null; H.err = ''; try{ localStorage.removeItem('practice.hevyKey'); localStorage.removeItem('practice.hevyCache'); }catch(_){ } if (window.Cloud && Cloud.user) Cloud.save('hevy', {key: ''}); renderToday(); break;
+    case 'outfit': markOutfit(); setTimeout(renderToday, 300); break;
     case 'hrefresh': hevyFetch(true); break;
     case 'flowgo': backHome(); break;
     case 'flowstay': stopFlow(); FL.pending = null; FL.cur = null; $('#flow').hidden = true; break;
