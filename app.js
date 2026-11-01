@@ -183,7 +183,7 @@ function mergeState(a, b) {
 function schedulePush() { if (!Sync.user) return; clearTimeout(Sync.timer); Sync.timer = setTimeout(pushNow, 2000); }
 async function pushNow() {
   if (!Sync.user) return;
-  try { await userDoc().set({ s: JSON.stringify(S), updated: S.updated || Date.now() }); Sync.state = 'on'; Sync.last = Date.now(); Sync.err = ''; }
+  try { await userDoc().set({ s: JSON.stringify(S), updated: S.updated || Date.now() }, { merge: true }); /* merge keeps Word Hoard and chess progress in the same doc */ Sync.state = 'on'; Sync.last = Date.now(); Sync.err = ''; }
   catch (e) { Sync.state = 'error'; Sync.err = e.message || String(e); }
   refreshSyncUI();
 }
