@@ -1,7 +1,7 @@
 {
   "name": "Padayon Bisaya",
   "short_name": "Padayon",
-  "description": "Daily Bisaya (Cebuano) practice with an AI speaking tutor.",
+  "description": "Daily Bisaya (Cebuano) practice with Binko and the Lucky Clovers.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
