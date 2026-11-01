@@ -136,7 +136,8 @@ function importPack() {
 /* ---------- state ---------- */
 const LS = 'padayon-app-v1';
 function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newPerDay: 8, newP: 4, newW: 4, newG: 2, newF: 3, newD: 2, newM: 3, learner: 'all', goal: 60 }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
-function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.tips = s.tips || {}; if (!s.settings.pathV) { s.settings.pathV = 1; s.settings.newPerDay = 8; }
+function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.tips = s.tips || {}; if (s.planResetV !== 2) { s.planResetV = 2; s.plan = {}; }
+  if (!s.settings.pathV) { s.settings.pathV = 1; s.settings.newPerDay = 8; }
   if (s.settings.learner !== 'all') { s.settings.learner = 'all'; s.settings.newF = Math.max(3, s.settings.newF || 0); } return s; }
 let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && r.v === 1) return migrate(r); } catch (e) { } return fresh(); })();
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
@@ -244,8 +245,9 @@ function planItems() {
     { k: 'shadow', name: 'Shadowing', d: 'Speak along with one unit. Hands-free.', run: () => go('shadow') },
     { k: 'talk', name: 'Talk out loud', d: 'A call or chat with family in Bisaya. Tick it when done.', manual: true },
     { k: 'input', name: '10 minutes of real Bisaya', d: "A vlog, radio, or teleserye. Follow the gist. Tick it when done.", manual: true }
-  ].filter(Boolean);
+  ].filter(Boolean).map(lockDrill);
 }
+const lockDrill = it => { if (!it || !DRILL_MIN[it.k]) return it; const L = drillLock(it.k); return L && !planDay()[it.k] ? Object.assign({}, it, { locked: true, d: `Locked for now, so it counts as done. Opens after you learn ${L.need} more ${L.what}${L.need === 1 ? '' : 's'} with a recording.` }) : it; };
 const planNext = () => { const p = planDay(); return planItems().find(i => !p[i.k] && !i.locked) || null; };
 const isDone = (it, p) => !!(p[it.k] || it.locked);
 function tick(k) { const p = planDay(); if (!p[k]) { p[k] = true; if (k === 'session') { bumpStreak(); announceLesson(); } save(); } }
@@ -414,7 +416,7 @@ async function playUrl(u, rate, btn) {
   if (!u) return;
   const tok = ++playToken;
   document.querySelectorAll('.playing').forEach(b => b.classList.remove('playing'));
-  player.pause(); player.src = u; player.playbackRate = rate || 1; player.preservesPitch = true;
+  player.pause(); if (player.src !== u) player.src = u; try { player.currentTime = 0; } catch (e) { } player.playbackRate = rate || 1; player.preservesPitch = true;
   if (btn) btn.classList.add('playing');
   await new Promise(res => { player.onended = res; player.onerror = res; player.onpause = res; player.play().then(() => { player.playbackRate = rate || 1; }).catch(res); });
   if (btn && tok === playToken) btn.classList.remove('playing');
@@ -527,9 +529,8 @@ function startSession() { Q = buildSession(); qi = 0; sess = newSess('daily'); g
 window.startFromHome = () => { try { if (P && P.length && view !== 'session') startSession(); } catch (e) { } };
 function startDictation() {
   if (!hasPack()) return toast('Load the content pack first. Dictation uses its recordings.');
-  let pool = Object.keys(S.cards).filter(id => IDX[id]);
-  if (pool.length < 10) pool = [...new Set(pool.concat(PHRASE_ORDER.slice(0, 30)))];
-  Q = shuffle(pool).slice(0, 12).map(id => ({ id, type: 'dict' })); qi = 0; sess = newSess('dict'); go('session');
+  if (drillLock('dict')) { view = 'locked'; return lockedScreen('Dictation', 'dict'); }
+  Q = shuffle(heardIds()).slice(0, 12).map(id => ({ id, type: 'dict' })); qi = 0; sess = newSess('dict'); go('session');
 }
 VIEWS.session = function () {
   if (qi >= Q.length) return finishSession();
@@ -609,14 +610,16 @@ function swapVariants(c) {
   });
   return shuffle([...out]);
 }
+const taughtIds = () => Object.keys(S.cards).filter(id => card(id));
 function distract(c, n, field) {
-  const pool = c.kind === 'w' ? W.map((_, i) => 'w' + i).concat(PHRASE_ORDER.filter(id => tokens(P[+id.slice(1)][0]).length === 1))
-    : c.kind === 'p' ? PHRASE_ORDER : c.kind === 'g' ? GRAM_ORDER.concat(F_ORDER) : c.kind === 'f' ? F_ORDER.concat(GRAM_ORDER) : c.kind === 'd' ? D_ORDER : c.kind === 'm' ? M_ORDER : GRAM_ORDER.concat(PHRASE_ORDER, S.custom.map(x => x.id));
-  const ranked = pool.filter(id => id !== c.id).map(card).filter(Boolean).map(d => [simScore(c, d), d]).sort((x, y) => y[0] - x[0]);
+  // only cards this person has already been taught, so every option is something they've seen
+  const pool = taughtIds();
+  const ranked = pool.filter(id => id !== c.id).map(card).filter(Boolean).map(d => [simScore(c, d) + (d.kind === c.kind ? 3 : 0), d]).sort((x, y) => y[0] - x[0]);
   const out = [], used = new Set([norm(c[field])]);
   const ok = d => { const v = norm(d[field]); if (!v || used.has(v) || sameMeaning(c.en, d.en)) return false; used.add(v); return true; };
   // minimal-change fakes only make sense when the options are in Bisaya
-  if (field === 'ceb') for (const v of swapVariants(c).slice(0, n >= 3 ? 2 : 1)) { const d = { id: 'x' + out.length, ceb: v, en: '' }; if (ok(d)) out.push(d); }
+  const kw = knownWords();
+  if (field === 'ceb') for (const v of swapVariants(c).filter(v => tokens(v).every(t => kw.has(lowTok(t)))).slice(0, n >= 3 ? 2 : 1)) { const d = { id: 'x' + out.length, ceb: v, en: '' }; if (ok(d)) out.push(d); }
   const top = ranked.slice(0, Math.max(8, n * 3)); shuffle(top);
   for (const [, d] of top.sort((x, y) => y[0] - x[0] + (Math.random() - 0.5) * 3)) { if (out.length >= n) break; if (ok(d)) out.push(d); }
   for (const [, d] of ranked) { if (out.length >= n) break; if (ok(d)) out.push(d); }
@@ -641,7 +644,7 @@ function breakdown(ceb) {
 function usedIn(c) {
   if (c.kind !== 'w' && !(c.kind === 'p' && tokens(c.ceb).length === 1)) return '';
   const t = norm(firstAlt(c.ceb)); if (!t) return '';
-  const hits = P.map((x, i) => [x, i]).filter(([x, i]) => 'p' + i !== c.id && tokens(x[0]).length > 1 && tokens(x[0]).map(lowTok).includes(t)).slice(0, 2);
+  const hits = P.map((x, i) => [x, i]).filter(([x, i]) => 'p' + i !== c.id && S.cards['p' + i] && tokens(x[0]).length > 1 && tokens(x[0]).map(lowTok).includes(t)).slice(0, 2);
   return hits.length ? `<div><div class="label">You'll hear it in</div>${hits.map(([x]) => `<div class="small"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span></div>`).join('')}</div>` : '';
 }
 const tipFor = c => c.trick ? { trick: c.trick } : (S.tips || {})[c.id] || null;
@@ -695,14 +698,15 @@ const EX = {
     sess.xp += 2; addXP(2);
     foot(`<button class="btn primary block" id="cont">Got it</button>`); $('#cont').onclick = next;
   },
-  listen(c, item) { $('#ex').innerHTML = `<h2>What did you hear?</h2>${playBlock(S.speed)}<div class="opts"></div>`; wirePlay(c, S.speed); choiceEx(c, item, shuffle([c, ...distract(c, 3, 'en')]), 'en'); },
-  mc(c, item) { $('#ex').innerHTML = `<div class="label">How do you say</div><div class="prompt">${esc(c.en)}</div><div class="opts"></div>`; choiceEx(c, item, shuffle([c, ...distract(c, 3, 'ceb')]), 'ceb', 'cebopt'); },
+  listen(c, item) { const d = distract(c, 3, 'en'); if (d.length < 2) return EX.dict(c, item); $('#ex').innerHTML = `<h2>What did you hear?</h2>${playBlock(S.speed)}<div class="opts"></div>`; wirePlay(c, S.speed); choiceEx(c, item, shuffle([c, ...d]), 'en'); },
+  mc(c, item) { const d = distract(c, 3, 'ceb'); if (d.length < 2) return c.kind === 'f' || c.kind === 'd' ? EX.build(c, item) : EX.type(c, item); $('#ex').innerHTML = `<div class="label">How do you say</div><div class="prompt">${esc(c.en)}</div><div class="opts"></div>`; choiceEx(c, item, shuffle([c, ...d]), 'ceb', 'cebopt'); },
   build(c, item) {
     const combo = c.combos ? pick([[c.ceb, c.en]].concat(c.combos)) : [c.ceb, c.en];
     const cc = Object.assign({}, c, { ceb: combo[0], en: combo[1] });
     const ans = tokens(cc.ceb).map(t => t.replace(/[.,!?…]/g, '')), low = ans.map(a => a.toLowerCase());
-    const swaps = [...new Set(swapVariants(cc).flatMap(v => tokens(v).map(t => t.replace(/[.,!?…]/g, ''))))].filter(t => !low.includes(t.toLowerCase()));
-    const others = (c.combos || []).concat(F.flatMap(f => f.combos)).flatMap(x => tokens(x[0]).map(t => t.replace(/[.,!?…]/g, ''))).filter(t => !low.includes(t.toLowerCase()));
+    const kw = knownWords(), known = t => kw.has(lowTok(t)) || (c.combos || []).some(x => tokens(x[0]).map(lowTok).includes(lowTok(t)));
+    const swaps = [...new Set(swapVariants(cc).flatMap(v => tokens(v).map(t => t.replace(/[.,!?…]/g, ''))))].filter(t => !low.includes(t.toLowerCase()) && known(t));
+    const others = (c.combos || []).map(x => x[0]).concat(taughtIds().filter(id => id !== c.id).map(id => card(id).ceb)).flatMap(x => tokens(x).map(t => t.replace(/[.,!?…]/g, ''))).filter(t => !low.includes(t.toLowerCase()) && known(t));
     const extra = [...new Set(shuffle(swaps).slice(0, 2).concat(shuffle(others)))].slice(0, Math.max(3, Math.ceil(ans.length * 0.8)));
     const bank = shuffle(ans.map((t, i) => ({ t, k: 'a' + i })).concat(extra.map((t, i) => ({ t, k: 'x' + i })))); const chosen = [];
     $('#ex').innerHTML = `<div class="label">Build it in Bisaya</div><div class="prompt">${esc(cc.en)}</div><div class="tray" id="tray"></div><div class="bank" id="bank">${bank.map(b => `<button class="tile" data-k="${b.k}">${esc(b.t)}</button>`).join('')}</div><p class="muted small" style="margin:0">Some tiles are look-alikes. Watch ko / ka, koy / kay, mo- / ni-.</p>`;
@@ -718,8 +722,9 @@ const EX = {
   },
   tiles(c, item) {
     const ans = tokens(c.ceb), low = ans.map(a => a.toLowerCase());
-    const swapT = [...new Set(swapVariants(c).flatMap(v => tokens(v)))].filter(t => !low.includes(t.toLowerCase()));
-    const extra = [...new Set(shuffle(swapT).slice(0, 2).concat(shuffle(PHRASE_ORDER.filter(id => id !== c.id)).flatMap(id => tokens(P[+id.slice(1)][0])).filter(t => !low.includes(t.toLowerCase()))))].slice(0, Math.min(4, Math.max(2, Math.ceil(ans.length / 2))));
+    const kw = knownWords(), known = t => kw.has(lowTok(t));
+    const swapT = [...new Set(swapVariants(c).flatMap(v => tokens(v)))].filter(t => !low.includes(t.toLowerCase()) && known(t));
+    const extra = [...new Set(shuffle(swapT).slice(0, 2).concat(shuffle(taughtIds().filter(id => id !== c.id)).flatMap(id => tokens(card(id).ceb)).filter(t => !low.includes(t.toLowerCase()) && known(t))))].slice(0, Math.min(4, Math.max(2, Math.ceil(ans.length / 2))));
     const bank = shuffle(ans.map((t, i) => ({ t, k: 'a' + i })).concat(extra.map((t, i) => ({ t, k: 'x' + i })))); const chosen = [];
     $('#ex').innerHTML = `<h2>Tap what you hear</h2>${playBlock(S.speed)}<div class="tray" id="tray"></div><div class="bank" id="bank">${bank.map(b => `<button class="tile" data-k="${b.k}">${esc(b.t)}</button>`).join('')}</div>`;
     wirePlay(c, S.speed); foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
@@ -800,10 +805,21 @@ VIEWS.speed = function () {
   $('#quit').onclick = () => go('home'); $('#go').onclick = startSpeed;
 };
 let SP = null;
+const heardIds = () => Object.keys(S.cards).filter(id => IDX[id] && card(id));
+const DRILL_MIN = { speed: 8, dict: 6, shadow: 3 };
+function drillLock(k) {
+  const have = k === 'shadow' ? heardIds().filter(id => id[0] === 'p').length : heardIds().length, need = DRILL_MIN[k];
+  return have >= need ? null : { need: need - have, what: k === 'shadow' ? 'phrase' : 'card' };
+}
+function lockedScreen(title, k) {
+  const L = drillLock(k);
+  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">${esc(title)}</h2></div>
+    ${binkoSays(`${esc(title)} is still locked! Binko only uses things you've already learned. Learn ${L.need} more ${L.what}${L.need === 1 ? '' : 's'} with a recording in your daily session and it opens up.`)}`;
+  $('#quit').onclick = () => go('home');
+}
 function startSpeed() {
-  let pool = Object.keys(S.cards).filter(id => IDX[id]);
-  if (pool.length < 12) pool = [...new Set(pool.concat(PHRASE_ORDER.slice(0, 30)))];
-  pool = shuffle(pool).slice(0, 20); while (pool.length < 20) pool.push(pick(PHRASE_ORDER));
+  if (drillLock('speed')) return lockedScreen('Speed round', 'speed');
+  let pool = shuffle(heardIds()).slice(0, 20);
   SP = { list: pool, i: 0, rate: S.speed, run: 0 }; sess = newSess('speed'); speedQ();
 }
 function endSpeed() { S.speed = Math.max(1, Math.round(SP.rate * 10) / 10); S.bestSpeed = Math.max(S.bestSpeed, sess.peak); if (SP.i >= SP.list.length - 1) tick('speed'); save(); view = 'summary'; VIEWS.summary(); }
@@ -929,11 +945,13 @@ VIEWS.convo = function () {
 let SH = null;
 VIEWS.shadow = function () {
   if (!hasPack()) { toast('Load the content pack first. Shadowing uses its recordings.'); return go('home'); }
+  if (drillLock('shadow')) return lockedScreen('Shadowing', 'shadow');
+  const mine = UNITS.map(u => Object.assign({}, u, { ids: u.ids.filter(id => S.cards[id]) })).filter(u => u.ids.length);
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Shadowing</h2></div>
   <section class="panel"><p style="margin:0">Each phrase plays three times: once to listen, then twice to speak along, the last at ${Math.max(1.1, S.speed).toFixed(1)}×. Hands-free, so it works with headphones on a walk.</p></section>
-  <section class="panel">${UNITS.map((u, i) => `<div class="unit"><div class="nm"><b>${esc(u.ceb)}</b> <span class="muted small">${esc(u.name)} · ${u.ids.length}</span></div><button class="btn sm primary" data-u="${i}">Start</button></div>`).join('')}</section>`;
+  <section class="panel"><p class="muted small" style="margin:0">Only phrases you've already learned.</p>${mine.map((u, i) => `<div class="unit"><div class="nm"><b>${esc(u.ceb)}</b> <span class="muted small">${esc(u.name)} · ${u.ids.length}</span></div><button class="btn sm primary" data-u="${i}">Start</button></div>`).join('')}</section>`;
   $('#quit').onclick = () => go('home');
-  document.querySelectorAll('[data-u]').forEach(b => b.onclick = () => runShadow(UNITS[+b.dataset.u]));
+  document.querySelectorAll('[data-u]').forEach(b => b.onclick = () => runShadow(mine[+b.dataset.u]));
 };
 function runShadow(u) {
   view = 'shadowrun'; SH = { u, i: 0, paused: false, tok: 0, showEn: true };
