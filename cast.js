@@ -45,7 +45,9 @@ const CHEERS = {
     ['triton', 'Band practice over. Good show, Clover.'], ['ollie', 'Look at you, Wonderchild.'], ['cat', 'Mehh! (Cat is proud.)']
   ]
 };
-const castImg = (k, cls = '') => { const c = CAST[k]; return `<img class="art ${c.cut ? 'cut' : 'framed'} ${cls}" src="${c.img}" alt="${c.name}" loading="lazy">`; };
+const castImg = (k, cls = '') => { const c = CAST[k]; return `<img class="art ${c.cut ? 'cut' : 'framed'} ${cls}" src="${c.img}" alt="${c.name}">`; };
+// cameos use a face-and-shoulders crop so the character is easy to see at small sizes
+const castFace = k => `<img class="face" src="img/${k}-face.webp" alt="${CAST[k].name}" width="72" height="72">`;
 const pickLine = kind => CHEERS[kind][Math.floor(Math.random() * CHEERS[kind].length)];
-function cameoHtml(kind) { const [k, line] = pickLine(kind); return `<div class="cameo">${castImg(k)}<div><div class="who">${CAST[k].name}</div><div class="line">${line}</div></div></div>`; }
+function cameoHtml(kind) { const [k, line] = pickLine(kind); return `<div class="cameo">${castFace(k)}<div><div class="who">${CAST[k].name}</div><div class="line">${line}</div></div></div>`; }
 function binkoSays(text, big) { return `<div class="guide ${big ? 'big' : ''}">${castImg('binko')}<div class="bubble"><span class="who">⍢ Binko-SR157 🔧</span>${text}</div></div>`; }
