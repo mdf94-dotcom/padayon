@@ -46,6 +46,11 @@ mark{background:linear-gradient(transparent 52%,var(--mark) 52%);color:inherit;p
 .muted{color:var(--muted)}
 .small{font-size:.86rem}
 .label{font-size:.74rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.pron{display:block;font-size:1rem;color:var(--muted);letter-spacing:.02em;margin-top:2px;font-family:var(--f-body)}
+.sayb{border:1px solid var(--line);background:var(--surface);color:var(--indigo);border-radius:50%;width:40px;height:40px;display:inline-grid;place-items:center;vertical-align:middle;padding:0;flex:none}
+.sayb svg{width:22px;height:22px}
+.sayb.sm{width:32px;height:32px}.sayb.sm svg{width:18px;height:18px}
+.hwrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .pos{font-style:italic;color:var(--muted);font-family:var(--f-body);font-weight:400}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -392,6 +397,8 @@ const RAW = [
 "y'all|colloquialism|you, when talking to more than one person|Are {y'all} coming to the cookout?|you all, you guys|Common in the American South and in African American English.",
 "binge-watch|colloquialism|to watch many episodes of a show in one sitting|We {binge-watched} the whole season in one weekend.|marathon|"
 ]];
+/* How to say it: capitals mark the stressed syllable. */
+const PRON = {"candid": "KAN-did", "meticulous": "muh-TIK-yuh-luhs", "ambiguous": "am-BIG-yoo-uhs", "concise": "kuhn-SYSE", "diligent": "DIL-uh-juhnt", "pragmatic": "prag-MAT-ik", "resilient": "rih-ZIL-yuhnt", "skeptical": "SKEP-tih-kuhl", "tedious": "TEE-dee-uhs", "verbose": "ver-BOHS", "lucid": "LOO-sid", "frugal": "FROO-guhl", "novice": "NOV-is", "mundane": "muhn-DAYN", "obsolete": "ob-suh-LEET", "prudent": "PROO-duhnt", "reluctant": "rih-LUHK-tuhnt", "tenacious": "tuh-NAY-shuhs", "versatile": "VER-suh-tuhl", "adept": "uh-DEPT", "benevolent": "buh-NEV-uh-luhnt", "cordial": "KOR-juhl", "deter": "dih-TER", "elated": "ih-LAY-tid", "feasible": "FEE-zuh-buhl", "hinder": "HIN-der", "impartial": "im-PAR-shuhl", "lenient": "LEE-nee-uhnt", "mitigate": "MIT-ih-gayt", "nuance": "NOO-ahns", "obscure": "uhb-SKYOOR", "plausible": "PLAW-zuh-buhl", "redundant": "rih-DUHN-duhnt", "scrutinize": "SKROO-tuh-nyze", "trivial": "TRIV-ee-uhl", "vivid": "VIV-id", "wary": "WAIR-ee", "zeal": "ZEEL", "sincere": "sin-SEER", "inevitable": "in-EV-ih-tuh-buhl", "alleviate": "uh-LEE-vee-ayt", "ameliorate": "uh-MEEL-yuh-rayt", "bolster": "BOHL-ster", "cohesive": "koh-HEE-siv", "compelling": "kuhm-PEL-ing", "corroborate": "kuh-ROB-uh-rayt", "cultivate": "KUHL-tuh-vayt", "delineate": "dih-LIN-ee-ayt", "discern": "dih-SERN", "disparity": "dih-SPAIR-ih-tee", "elucidate": "ih-LOO-sih-dayt", "embody": "em-BOD-ee", "endeavor": "en-DEV-er", "equitable": "EK-wih-tuh-buhl", "exemplify": "ig-ZEM-pluh-fye", "facilitate": "fuh-SIL-ih-tayt", "foster": "FOS-ter", "galvanize": "GAL-vuh-nyze", "impetus": "IM-puh-tuhs", "inherent": "in-HEER-uhnt or in-HAIR-uhnt", "integral": "IN-tuh-gruhl", "juxtapose": "JUHK-stuh-pohz", "marginalized": "MAR-juh-nuh-lyzd", "multifaceted": "muhl-tee-FAS-ih-tid", "paradigm": "PAIR-uh-dyme", "pivotal": "PIV-uh-tuhl", "poignant": "POYN-yuhnt", "proactive": "proh-AK-tiv", "reciprocal": "rih-SIP-ruh-kuhl", "salient": "SAY-lee-uhnt", "substantiate": "suhb-STAN-shee-ayt", "underscore": "uhn-der-SKOR", "unwavering": "uhn-WAY-ver-ing", "venerable": "VEN-er-uh-buhl", "holistic": "hoh-LIS-tik", "intrinsic": "in-TRIN-zik", "transient": "TRAN-zee-uhnt or TRAN-shuhnt", "advocate": "AD-vuh-kayt", "articulate": "ar-TIK-yuh-layt", "conducive": "kuhn-DOO-siv", "ubiquitous": "yoo-BIK-wih-tuhs", "ephemeral": "ih-FEM-er-uhl", "laconic": "luh-KON-ik", "magnanimous": "mag-NAN-uh-muhs", "obsequious": "uhb-SEE-kwee-uhs", "perfunctory": "per-FUHNGK-tuh-ree", "pernicious": "per-NISH-uhs", "quixotic": "kwik-SOT-ik", "recalcitrant": "rih-KAL-sih-truhnt", "sanguine": "SANG-gwin", "sycophant": "SIK-uh-fuhnt", "taciturn": "TAS-ih-tern", "vacillate": "VAS-uh-layt", "vicarious": "vye-KAIR-ee-uhs", "esoteric": "es-uh-TAIR-ik", "fastidious": "fa-STID-ee-uhs", "garrulous": "GAIR-uh-luhs", "insidious": "in-SID-ee-uhs", "intransigent": "in-TRAN-sih-juhnt", "loquacious": "loh-KWAY-shuhs", "ostensible": "oh-STEN-suh-buhl", "paucity": "PAW-sih-tee", "perspicacious": "per-spih-KAY-shuhs", "proclivity": "proh-KLIV-ih-tee", "reticent": "RET-ih-suhnt", "serendipity": "ser-uhn-DIP-ih-tee", "surreptitious": "ser-uhp-TISH-uhs", "tenuous": "TEN-yoo-uhs", "equivocate": "ih-KWIV-uh-kayt", "abate": "uh-BAYT", "acrimony": "AK-ruh-moh-nee", "alacrity": "uh-LAK-rih-tee", "anachronism": "uh-NAK-ruh-niz-uhm", "capricious": "kuh-PRISH-uhs", "cogent": "KOH-juhnt", "deleterious": "del-ih-TEER-ee-uhs", "didactic": "dye-DAK-tik", "erudite": "AIR-yuh-dyte", "obdurate": "OB-duh-ruht", "bombastic": "bom-BAS-tik", "downsizing": "DOWN-syze-ing", "restroom": "REST-room", "ghosting": "GOHST-ing", "hangry": "HANG-gree", "lowkey": "LOH-kee", "salty": "SAWL-tee", "FOMO": "FOH-moh", "bail": "BAYL", "flex": "FLEKS", "y'all": "YAWL", "binge-watch": "BINJ-wahch"};
 const LEVELS = ['Sharp everyday','Essay & professional','Advanced','Idioms & expressions'];
 const DECK_INFO = ['Clear, common words that sharpen everyday writing','Words for essays, applications, and work writing','Rarer words you’ll meet in reading and tests','Idioms, proverbs, similes and metaphors, clichés, euphemisms, and slang'];
 /* The kinds of figurative language in the Idioms & expressions deck */
@@ -408,7 +415,7 @@ const KINDS = {
 const BASE = [];
 RAW.forEach((arr, li) => arr.forEach(s => {
   const [w,p,d,e,y,r] = s.split('|');
-  BASE.push({id:w, w, p, d, e, syn: y ? y.split(', ') : [], r: r || '', lv: li + 1});
+  BASE.push({id:w, w, p, d, e, syn: y ? y.split(', ') : [], r: r || '', lv: li + 1, pr: PRON[w] || ''});
 }));
 
 /* ---------- storage ---------- */
@@ -446,6 +453,14 @@ function lev(a, b){ const m = a.length, n = b.length; const d = Array.from({leng
   for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1)); return d[m][n]; }
 function toast(t){ const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 2200); }
 
+/* Read a word aloud with the device's built-in English voice. */
+const canSpeak = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+let VOICE = null;
+function pickVoice(){ if (!canSpeak) return; const vs = speechSynthesis.getVoices(); VOICE = vs.find(v => /en-US/i.test(v.lang) && /natural|google|samantha|aria|jenny/i.test(v.name)) || vs.find(v => /en-US/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null; }
+if (canSpeak){ pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function say(text, slow){ if (!canSpeak || !text) return; try{ speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = 'en-US'; if (VOICE) u.voice = VOICE; u.rate = slow ? 0.6 : 0.9; speechSynthesis.speak(u); }catch(e){} }
+const sayBtn = (w, cls) => canSpeak ? `<button class="sayb ${cls || ''}" data-a="say" data-t="${esc(w.w)}" aria-label="Hear ${esc(w.w)}" title="Hear it (tap twice for slow)">${IC.speaker}</button>` : '';
+const pronHTML = w => w.pr ? `<span class="pron" title="Capitals mark the stressed syllable">${esc(w.pr)}</span>` : '';
 function allWords(){ return BASE.concat(S.custom.map(c => Object.assign({lv:0}, c))); }
 let BY = {};
 function reindex(){ BY = {}; allWords().forEach(w => BY[w.id] = w); }
@@ -554,7 +569,8 @@ function finish(){
 const IC = {
   flame:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c1 3.5-1.5 5.5-1.5 8 0 1.4 1 2.5 2.3 2.5 1.6 0 2.4-1.3 2.2-3.2C17.5 11 19 13.6 19 16a7 7 0 1 1-14 0c0-4.2 3.6-6.4 4.6-9.6C10.2 4.6 11 3 12 2Z"/></svg>',
   book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Z"/><path d="M4 19a2 2 0 0 1 2-2h13"/></svg>',
-  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>'
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  speaker:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>'
 };
 
 /* ---------- views ---------- */
@@ -600,7 +616,7 @@ function lvRow(name, ws, on){
   <span class="small muted tnum">${m + l} / ${ws.length}</span><div class="bar"><i class="m" style="width:${pm}%"></i><i class="l" style="width:${pl}%"></i></div></div>`;
 }
 function entryHTML(w){
-  return `<div class="entry"><div><span class="headword">${esc(w.w)}</span> <i class="pos">${esc(w.p)}</i></div>
+  return `<div class="entry"><div class="hwrow"><div><span class="headword">${esc(w.w)}</span> <i class="pos">${esc(w.p)}</i>${pronHTML(w)}</div>${sayBtn(w)}</div>
   <div class="def">${esc(w.d)}</div>
   ${w.e ? `<div class="exs">${markEx(w)}</div>` : ''}
   ${w.syn.length ? `<div class="syns">${w.syn.map(s => `<span class="syn">${esc(s)}</span>`).join('')}</div>` : ''}
@@ -617,13 +633,13 @@ function renderSession(){
   if (it.t === 'intro'){
     body = `<div class="kind">New word</div>${entryHTML(w)}`;
   } else if (it.t === 'def'){
-    body = `<div class="kind">What does it mean?</div><div><span class="headword">${esc(w.w)}</span> <i class="pos">${esc(w.p)}</i></div>${optBtns('')}`;
+    body = `<div class="kind">What does it mean?</div><div class="hwrow"><div><span class="headword">${esc(w.w)}</span> <i class="pos">${esc(w.p)}</i>${pronHTML(w)}</div>${sayBtn(w)}</div>${optBtns('')}`;
   } else if (it.t === 'word'){
     body = `<div class="kind">Which word fits?</div><div class="prompt">${esc(w.d)}</div>${optBtns('w')}`;
   } else if (it.t === 'blank'){
     body = `<div class="kind">Fill the blank</div><div class="sentence">${blankEx(w)}</div>${optBtns('w')}`;
   } else if (it.t === 'syn'){
-    body = `<div class="kind">Closest in meaning</div><div><span class="headword">${esc(w.w)}</span> <i class="pos">${esc(w.p)}</i></div>${optBtns('')}`;
+    body = `<div class="kind">Closest in meaning</div><div class="hwrow"><div><span class="headword">${esc(w.w)}</span> <i class="pos">${esc(w.p)}</i>${pronHTML(w)}</div>${sayBtn(w)}</div>${optBtns('')}`;
   } else if (it.t === 'kind'){
     body = `<div class="kind">What kind of expression is this?</div><div class="sentence">${markEx(w)}</div>${optBtns('')}`;
   } else if (it.t === 'type'){
@@ -640,7 +656,7 @@ function renderSession(){
     const spell = a.ok && a.typed && norm(a.typed) !== norm(w.w) && norm(a.typed) !== norm(inflected(w));
     foot = `<div class="foot ${a.ok ? 'good' : 'bad'}" role="status">
       <div class="verdict">${a.ok ? (spell ? 'Close enough' : pick(['Nice.','Correct.','That’s it.','Right.'])) : 'Not quite'}</div>
-      <div><span class="fw">${esc(w.w)}</span> <i class="pos">${esc(w.p)}</i> · ${esc(w.d)}</div>
+      <div class="hwrow" style="gap:8px">${sayBtn(w, 'sm')}<div style="flex:1;min-width:0"><span class="fw">${esc(w.w)}</span> <i class="pos">${esc(w.p)}</i>${w.pr ? ` <span class="muted small">${esc(w.pr)}</span>` : ''} · ${esc(w.d)}</div></div>
       ${spell ? `<div class="small">Watch the spelling: <b>${esc(w.w)}</b></div>` : ''}
       ${it.t === 'kind' && KINDS[w.p] ? `<div class="small"><b>${KINDS[w.p].name}:</b> ${esc(KINDS[w.p].what)}</div>` : !a.ok && w.e ? `<div class="small">${markEx(w)}</div>` : ''}
       <button class="btn primary block" data-a="next" id="go">Continue</button></div>`;
@@ -649,6 +665,7 @@ function renderSession(){
     <div class="prog" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
     <span class="cnt">${s.i + 1}/${s.q.length}</span></div>
     <div class="ex">${body}</div>${foot}`;
+  if (it.t === 'intro' && !a && S.set.speak !== false && sess.spoke !== sess.i){ sess.spoke = sess.i; setTimeout(() => say(w.w), 250); }
   const ti = $('#typein'); if (ti && !a) ti.focus();
   const go = $('#go'); if (go && (a || it.t === 'intro')) go.focus({preventScroll:true});
 }
@@ -724,6 +741,7 @@ function wordsHTML(){
     <div class="fgrid"><div class="two"><label>Word<input id="aw-w" maxlength="40"></label>
       <label>Type<select id="aw-p"><option>noun</option><option>verb</option><option selected>adj.</option><option>adv.</option><option>phrase</option></select></label></div>
     <label>Definition<input id="aw-d" maxlength="200" placeholder="What it means, in your own words"></label>
+    <label>Pronunciation (optional)<input id="aw-pr" maxlength="60" placeholder="Like KAN-did, with the stressed part in capitals"></label>
     <label>Example sentence (optional)<input id="aw-e" maxlength="200" placeholder="Use the word in a sentence"></label>
     <label>Synonyms (optional)<input id="aw-s" maxlength="100" placeholder="Separate with commas"></label>
     <div class="row"><button class="btn primary" data-a="addword">Add word</button><span class="msg" id="aw-msg" role="status"></span></div></div></details></section>
@@ -742,6 +760,7 @@ function settingsHTML(){
   return `<section class="panel"><h2>New words per day</h2>
     <div class="seg" role="group" aria-label="New words per day">${[3,5,8,10].map(n => `<button data-a="per" data-n="${n}" class="${S.set.per === n ? 'on' : ''}">${n}</button>`).join('')}</div>
     <p class="small muted" style="margin:0">Reviews of words you’ve already met always come first. Each new word adds about a minute.</p></section>
+  ${canSpeak ? `<section class="panel"><h2>Pronunciation</h2><label class="toggle"><input type="checkbox" id="speakset" data-a="speakset" ${S.set.speak !== false ? 'checked' : ''}><span><b>Read new words aloud</b><br><span class="small muted">Uses your device’s voice. Tap the speaker on any word to hear it again; tap twice for a slower version.</span></span></label></section>` : ''}
   <section class="panel"><h2>Decks</h2>
     ${LEVELS.map((n, i) => `<label class="toggle"><input type="checkbox" id="lv${i + 1}" data-a="lvtoggle" data-n="${i + 1}" ${S.set.lv.includes(i + 1) ? 'checked' : ''}>
       <span><b>${n}</b><br><span class="small muted">${DECK_INFO[i]} · ${BASE.filter(w => w.lv === i + 1).length} ${i === 3 ? 'expressions' : 'words'}</span></span></label>`).join('')}
@@ -766,10 +785,11 @@ function render(){
 app.addEventListener('click', e => {
   const b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
   const a = b.dataset.a;
-  if (a === 'lvtoggle') return; // handled on change
+  if (a === 'lvtoggle' || a === 'speakset') return; // handled on change
   if (a !== 'reset') ui.resetArm = false;
   if (a !== 'delword') ui.delArm = null;
   switch (a){
+    case 'say': { const t = b.dataset.t; const now = Date.now(); say(t, ui.lastSay === t && now - ui.lastSayAt < 2500); ui.lastSay = t; ui.lastSayAt = now; return; }
     case 'tab': view = b.dataset.v; spd = view === 'speed' ? spd : null; render(); window.scrollTo(0, 0); break;
     case 'start': startSession('daily'); break;
     case 'tricky': startSession('tricky'); break;
@@ -799,6 +819,7 @@ app.addEventListener('click', e => {
 });
 app.addEventListener('change', e => {
   const t = e.target;
+  if (t.dataset.a === 'speakset'){ S.set.speak = t.checked; save(); return; }
   if (t.dataset.a === 'lvtoggle'){ const n = +t.dataset.n; S.set.lv = t.checked ? [...new Set(S.set.lv.concat(n))].sort() : S.set.lv.filter(x => x !== n);
     if (!S.set.lv.length){ S.set.lv = [n]; t.checked = true; toast('Keep at least one deck on.'); } save(); }
 });
@@ -827,8 +848,8 @@ function addWord(){
   if (allWords().some(x => norm(x.w) === norm(w))){ msg.className = 'msg no'; msg.textContent = `“${w}” is already in your list.`; return; }
   if (ex){ const stem = w.toLowerCase().replace(/(e|y)$/, ''); const re = new RegExp('\\b(' + stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[a-z]*)', 'i');
     ex = ex.replace(/[{}]/g, ''); ex = re.test(ex) ? ex.replace(re, '{$1}') : ex; }
-  S.custom.push({id:'c:' + norm(w), w, p:$('#aw-p').value, d, e:ex, syn, r:''}); save(); reindex();
-  ['aw-w','aw-d','aw-e','aw-s'].forEach(id => $('#' + id).value = '');
+  S.custom.push({id:'c:' + norm(w), w, p:$('#aw-p').value, d, e:ex, syn, r:'', pr:$('#aw-pr').value.trim()}); save(); reindex();
+  ['aw-w','aw-d','aw-e','aw-s','aw-pr'].forEach(id => $('#' + id).value = '');
   msg.className = 'msg ok'; msg.textContent = `Added “${w}”. It’ll come up in your next session.`;
   $('#wlist').innerHTML = wordRows();
 }
