@@ -777,7 +777,7 @@ const EX = {
     if (qi === tok) document.querySelectorAll('.stage span').forEach(s => s.className = 'done');
   }
 };
-function finishSession() { stopAudio(); const full = qi >= Q.length; if (full && sess.mode === 'daily') tick('session'); if (full && sess.mode === 'dict') tick('dict'); if (sess.mode === 'daily' && !full) bumpStreak(); save(); go('summary'); }
+function finishSession() { stopAudio(); const full = qi >= Q.length; if (full && sess.mode === 'daily') { tick('session'); try{ if (window.parent !== window) window.parent.postMessage({practice:'done', app:'bisaya'}, location.origin); }catch(e){} } if (full && sess.mode === 'dict') tick('dict'); if (sess.mode === 'daily' && !full) bumpStreak(); save(); go('summary'); }
 VIEWS.summary = function () {
   const acc = sess.total ? Math.round(sess.right / sess.total * 100) : 0;
   $('#app').innerHTML = `<section class="panel summary"><div class="label">${sess.mode === 'speed' ? 'Speed round done' : sess.mode === 'dict' ? 'Dictation done' : 'Session done'}</div>

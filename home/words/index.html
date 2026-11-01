@@ -544,6 +544,7 @@ function nextItem(){
 function finish(){
   const t = today(); const d = S.days[t] || {n:0};
   d.done = true; d.n += sess.right + sess.wrong; S.days[t] = d; save();
+  if (sess.mode === 'daily') try{ if (window.parent !== window) window.parent.postMessage({practice:'done', app:'words'}, location.origin); }catch(e){}
   done = {right: sess.right, wrong: sess.wrong, news: sess.news, revs: sess.revs.length,
     useId: sess.news[0] || pick(sess.revs), saved:false};
   sess = null; view = 'done'; render();

@@ -474,7 +474,7 @@ function vSession(v){
   }});
 }
 function sessionSummary(v){
- const s=SESS;const acc=s.total?Math.round(s.right/s.total*100):0;const t=today();t.session=true;Store.save();renderBar();
+ const s=SESS;const acc=s.total?Math.round(s.right/s.total*100):0;const t=today();t.session=true;Store.save();renderBar();try{ if (window.parent !== window) window.parent.postMessage({practice:'done', app:'chess'}, location.origin); }catch(e){}
  v.innerHTML=`<div class="sess"><div class="panel summary"><div class="eyebrow">Session done</div><h2 style="font-size:32px">${xpToday()>=settings().goal?"Goal reached. Brick by brick.":"Nice work."}</h2>
   <div class="sumgrid"><div><b>${s.xp}</b><span>XP earned</span></div><div><b>${acc}%</b><span>Correct</span></div><div><b>${s.ups}</b><span>Leveled up</span></div></div>
   <p class="muted">Missed puzzles come back tomorrow. Next on today's plan: a practice game from today's opening.</p>
