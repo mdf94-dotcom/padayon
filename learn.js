@@ -106,7 +106,7 @@ const NOTES = {
   p47: 'Na here means "that, near you". The same sound also means "already", so context decides.'
 };
 
-/* ---------- memory tricks for deck cards (by id); the rest come from Gemini on request ---------- */
+/* ---------- memory tricks for deck cards (by id); written for the app ---------- */
 const TRICKS = {
   p42: 'Buntag sounds like "boon-tag": the morning is a boon, tag it before 11.',
   p0: 'Udto sounds like "noon-to": noon to 1 pm.',
@@ -265,7 +265,7 @@ const DIALOGS = [
   ] }
 ];
 
-/* ---------- extra phrases from the "Let's talk in Bisaya with loved ones" deck that the content pack doesn't have (no recording; read aloud by Gemini when a key is set) ---------- */
+/* ---------- extra phrases from the "Let's talk in Bisaya with loved ones" deck that the content pack doesn't have (no recording) ---------- */
 const EXTRA = [
   ['Pagpahalipay sa imong kasal', 'Congratulations on your wedding', 'Pagpahalipay = congratulations. Sa imong = on your. Kasal = wedding.']
 ];

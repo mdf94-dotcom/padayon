@@ -1,5 +1,5 @@
 'use strict';
-/* Padayon: daily Bisaya practice with a Gemini-powered speaking tutor.
+/* Padayon: daily Bisaya practice, guided by Binko-SR157.
    Deck content (phrases, words, recordings) is imported from a local content pack and kept in IndexedDB.
    Grammar cards below are built in. */
 
@@ -135,7 +135,7 @@ function importPack() {
 
 /* ---------- state ---------- */
 const LS = 'padayon-app-v1';
-function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newPerDay: 8, newP: 4, newW: 4, newG: 2, newF: 3, newD: 2, newM: 3, learner: 'all', goal: 60, voice: 'Kore', model: 'gemini-3.8-flash', tts: 'gemini-3.8-flash-tts', ttsOn: true }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
+function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newPerDay: 8, newP: 4, newW: 4, newG: 2, newF: 3, newD: 2, newM: 3, learner: 'all', goal: 60 }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
 function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.tips = s.tips || {}; if (!s.settings.pathV) { s.settings.pathV = 1; s.settings.newPerDay = 8; }
   if (s.settings.learner !== 'all') { s.settings.learner = 'all'; s.settings.newF = Math.max(3, s.settings.newF || 0); } return s; }
 let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && r.v === 1) return migrate(r); } catch (e) { } return fresh(); })();
@@ -230,23 +230,18 @@ function syncLine() {
   return `Signed in as ${who}. Progress syncs automatically.`;
 }
 function refreshSyncUI() { document.querySelectorAll('.syncline').forEach(el => el.innerHTML = syncLine()); document.querySelectorAll('.syncbtn').forEach(el => { el.textContent = Sync.user ? 'Sign out' : 'Sign in with Google'; }); const b = $('#syncbanner'); if (b) b.hidden = !!Sync.user || !window.firebase; }
-const KEYK = 'padayon-gemini-key';
-const getKey = () => { try { return localStorage.getItem(KEYK) || ''; } catch (e) { return ''; } };
-const hasAI = () => !!getKey();
 function addXP(n) { const t = today(); S.xp[t] = (S.xp[t] || 0) + n; }
 function bumpStreak() { const t = today(); const s = S.streak; if (s.last === t) return; s.count = s.last === t - 1 ? s.count + 1 : 1; s.last = t; s.best = Math.max(s.best, s.count); }
 function streakNow() { const s = S.streak, t = today(); return (s.last === t || s.last === t - 1) ? s.count : 0; }
 function planDay() { const t = today(); if (!S.plan[t]) S.plan = { [t]: {} }; return S.plan[t]; }
 /* Today's plan is every activity, in order. The hero ring fills as they tick, and finishing one offers the next. */
 function planItems() {
-  const ai = hasAI();
   return [
     { k: 'session', name: 'Daily session', d: 'Reviews, new words, and building blocks.', run: () => startSession() },
     pickDialog() || planDay().convo ? { k: 'convo', name: "Today's conversation", d: 'New words first, then read it and say your part out loud.', run: () => go('convos') } : (() => { const n = nextConvo(); return { k: 'convo', locked: true, name: "Today's conversation", d: `Locked for now, so it counts as done. "${n.d.title}" opens after you learn ${n.left.length} more word${n.left.length === 1 ? '' : 's'} in your daily sessions.` }; })(),
     { k: 'speed', name: 'Speed round', d: 'Fast listening that speeds up as you get it right.', run: () => go('speed') },
     { k: 'dict', name: 'Dictation', d: 'Type what you hear, every little word.', run: () => startDictation() },
     { k: 'shadow', name: 'Shadowing', d: 'Speak along with one unit. Hands-free.', run: () => go('shadow') },
-    ai ? { k: 'pron', name: 'Pronunciation', d: 'Repeat 10 phrases and get scored.', run: () => { PR = null; go('pron'); } } : null,
     { k: 'talk', name: 'Talk out loud', d: 'A call or chat with family in Bisaya. Tick it when done.', manual: true },
     { k: 'input', name: '10 minutes of real Bisaya', d: "A vlog, radio, or teleserye. Follow the gist. Tick it when done.", manual: true }
   ].filter(Boolean);
@@ -381,14 +376,14 @@ function pickNew() {
 }
 function exType(id, isNew) {
   const c = card(id), b = isNew ? 0 : (S.cards[id] ? S.cards[id].b : 0);
-  const n = tokens(c.ceb).length, multi = n >= 2 && n <= 9, ai = hasAI();
-  if (c.kind === 'd') return isNew || b < 1 ? 'build' : pick(['build', 'mc', ai ? 'say' : 'type']);
-  if (c.kind === 'f') return isNew || b < 1 ? 'build' : b < 2 ? pick(['build', 'mc']) : pick(ai ? ['say', 'build', 'type'] : ['build', 'type', 'speak']);
-  if (!c.audio) return isNew || b < 1 ? 'mc' : b < 2 ? pick(['mc', 'type']) : pick(ai ? ['say', 'say', 'type'] : ['speak', 'type']);
+  const n = tokens(c.ceb).length, multi = n >= 2 && n <= 9;
+  if (c.kind === 'd') return isNew || b < 1 ? 'build' : pick(['build', 'mc', 'type']);
+  if (c.kind === 'f') return isNew || b < 1 ? 'build' : b < 2 ? pick(['build', 'mc']) : pick(['build', 'type', 'speak']);
+  if (!c.audio) return isNew || b < 1 ? 'mc' : b < 2 ? pick(['mc', 'type']) : pick(['speak', 'type']);
   if (isNew || b <= 0) return pick(['listen', 'mc']);
-  if (b === 1) return pick(multi ? ['listen', 'tiles', 'mc', 'dict'].concat(ai ? ['pron'] : []) : ['listen', 'mc', 'type']);
-  if (b === 2) return pick(multi ? ['tiles', 'dict', 'listen'].concat(ai ? ['say', 'pron'] : ['speak']) : ['type', 'listen', 'dict', ai ? 'say' : 'speak']);
-  return pick(multi ? ['dict', 'tiles', 'type', 'listen'].concat(ai ? ['say', 'say', 'pron'] : ['speak', 'speak']) : ['type', 'dict', 'listen', ai ? 'say' : 'speak']);
+  if (b === 1) return pick(multi ? ['listen', 'tiles', 'mc', 'dict'] : ['listen', 'mc', 'type']);
+  if (b === 2) return pick(multi ? ['tiles', 'dict', 'listen', 'speak'] : ['type', 'listen', 'dict', 'speak']);
+  return pick(multi ? ['dict', 'tiles', 'type', 'listen', 'speak', 'speak'] : ['type', 'dict', 'listen', 'speak']);
 }
 function buildSession() {
   const q = dueIds().slice(0, 16).map(id => ({ id, type: exType(id) }));
@@ -403,8 +398,7 @@ function buildSession() {
   sh.forEach((id, i) => q.splice(Math.floor(q.length * (0.45 + i * 0.4)), 0, { id, type: 'shadow' }));
   if (q.filter(x => x.type !== 'shadow').length < 4) shuffle(Object.keys(S.cards).filter(card)).slice(0, 10).forEach(id => q.push({ id, type: exType(id) }));
   if (!q.length) GRAM_ORDER.slice(0, 4).forEach(id => q.push({ id, type: 'teach' }, { id, type: 'mc' }));
-  // keep AI-graded items to about five per session so it stays quick
-  let ai = 0; q.forEach(x => { if (x.type === 'say' || x.type === 'pron') { ai++; if (ai > 5) x.type = card(x.id).audio ? 'listen' : 'type'; } });
+  q.forEach(x => { if (x.type === 'say' || x.type === 'pron') x.type = 'speak'; });
   return q;
 }
 
@@ -428,146 +422,11 @@ async function playUrl(u, rate, btn) {
 const play = (id, rate, btn) => playUrl(clipUrl(id), rate, btn);
 function stopAudio() { playToken++; player.pause(); }
 
-/* ---------- microphone recorder (16 kHz mono WAV) ---------- */
-const Rec = {
-  on: false,
-  async start(onLevel) {
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
-    this.ctx = new (window.AudioContext || window.webkitAudioContext)(); await this.ctx.resume();
-    const src = this.ctx.createMediaStreamSource(this.stream);
-    this.node = this.ctx.createScriptProcessor(4096, 1, 1); this.chunks = []; this.rate = this.ctx.sampleRate;
-    this.node.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0); this.chunks.push(new Float32Array(d)); if (onLevel) { let s = 0; for (let i = 0; i < d.length; i += 8) s += d[i] * d[i]; onLevel(Math.min(1, Math.sqrt(s / (d.length / 8)) * 6)); } };
-    src.connect(this.node); this.node.connect(this.ctx.destination); this.on = true; this.t0 = Date.now();
-  },
-  async stop() {
-    if (!this.on) return null; this.on = false;
-    try { this.node.disconnect(); } catch (e) { }
-    this.stream.getTracks().forEach(t => t.stop()); await this.ctx.close();
-    let len = 0; this.chunks.forEach(c => len += c.length);
-    const all = new Float32Array(len); let o = 0; this.chunks.forEach(c => { all.set(c, o); o += c.length; });
-    const ratio = this.rate / 16000, outLen = Math.floor(all.length / ratio), out = new Int16Array(outLen);
-    for (let i = 0; i < outLen; i++) { const a = Math.floor(i * ratio), b2 = Math.min(all.length, Math.floor((i + 1) * ratio)); let s = 0; for (let j = a; j < b2; j++) s += all[j]; const v = s / Math.max(1, b2 - a); out[i] = Math.max(-1, Math.min(1, v)) * 0x7fff; }
-    const buf = new ArrayBuffer(44 + out.length * 2), dv = new DataView(buf);
-    const ws = (p, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(p + i, s.charCodeAt(i)); };
-    ws(0, 'RIFF'); dv.setUint32(4, 36 + out.length * 2, true); ws(8, 'WAVE'); ws(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
-    dv.setUint32(24, 16000, true); dv.setUint32(28, 32000, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); ws(36, 'data'); dv.setUint32(40, out.length * 2, true);
-    new Int16Array(buf, 44).set(out);
-    return { buf, url: URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })), dur: out.length / 16000 };
-  },
-  cancel() { if (this.on) { this.on = false; try { this.node.disconnect(); this.stream.getTracks().forEach(t => t.stop()); this.ctx.close(); } catch (e) { } } }
-};
-/* A mic button: tap to start, tap to stop (auto-stops at maxSec). Calls done(rec). */
-function micWidget(el, done, maxSec = 25) {
-  el.innerHTML = `<div class="microw"><button class="mic" id="micb" aria-label="Start recording">${I.mic}</button><div style="flex:1;min-width:0"><div class="lvl"><i id="lvl"></i></div><div class="small muted" id="micst" style="margin-top:6px">Tap the mic, speak, tap again to stop. Space bar works too.</div></div></div>`;
-  const btn = $('#micb'); let timer = null, busy = false;
-  const stop = async () => {
-    clearTimeout(timer); btn.classList.remove('rec'); btn.innerHTML = I.mic; btn.classList.add('busy'); busy = true;
-    const r = await Rec.stop(); $('#lvl').style.width = '0';
-    if (!r || r.dur < 0.4) { $('#micst').textContent = 'That was too short. Try again.'; btn.classList.remove('busy'); busy = false; return; }
-    $('#micst').textContent = 'Listening to you…';
-    await done(r);
-    if (btn.isConnected) { btn.classList.remove('busy'); busy = false; const st = $('#micst'); if (st && st.textContent === 'Listening to you…') st.textContent = 'Tap the mic to try again.'; }
-  };
-  btn.onclick = async () => {
-    if (busy) return;
-    if (Rec.on) return stop();
-    stopAudio();
-    try {
-      await Rec.start(l => { const lv = $('#lvl'); if (lv) lv.style.width = (l * 100) + '%'; });
-      btn.classList.add('rec'); btn.innerHTML = I.stop; btn.setAttribute('aria-label', 'Stop recording'); $('#micst').textContent = 'Recording… tap to stop';
-      timer = setTimeout(stop, maxSec * 1000);
-    } catch (e) { $('#micst').textContent = 'Microphone blocked. Allow mic access for this site in your browser settings, then try again.'; }
-  };
-  micWidget.current = btn;
-}
-
-/* ---------- Gemini ---------- */
-const GEM = 'https://generativelanguage.googleapis.com/v1beta/';
-async function gemJSON(parts, system) {
-  const key = getKey(); if (!key) throw { code: 'nokey' };
-  const body = { contents: [{ role: 'user', parts }], generationConfig: { response_mime_type: 'application/json', temperature: 0.4 } };
-  if (system) body.system_instruction = { parts: [{ text: system }] };
-  const r = await fetch(GEM + 'models/' + encodeURIComponent(S.settings.model) + ':generateContent', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body) });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw { code: r.status, message: (j.error && j.error.message) || ('HTTP ' + r.status) };
-  const txt = ((((j.candidates || [])[0] || {}).content || {}).parts || []).map(p => p.text || '').join('');
-  try { return JSON.parse(txt.replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch (e) { throw { code: 'badjson', message: 'The tutor gave an unreadable answer. Try again.' }; }
-}
-function gemErr(e) {
-  if (e && e.code === 'nokey') return 'Add your Gemini API key in Settings first.';
-  if (e && (e.code === 429)) return 'Gemini rate limit hit. Wait a minute and try again.';
-  if (e && (e.code === 400 || e.code === 403)) return 'Gemini refused the request: ' + (e.message || '') + ' Check your key and model in Settings.';
-  if (e && e.code === 404) return 'Model not found. Check the model name in Settings.';
-  return (e && e.message) || 'Could not reach Gemini. Check your connection.';
-}
-const ttsCache = {};
-async function tts(text) {
-  if (!S.settings.ttsOn || !hasAI() || !text) return null;
-  if (ttsCache[text]) return ttsCache[text];
-  const key = getKey();
-  const style = 'Native Cebuano (Bisaya) speaker from Cebu, warm and conversational, relaxed natural pace';
-  try {
-    const r = await fetch(GEM + 'interactions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify({ model: S.settings.tts, input: [{ type: 'user_input', content: [{ type: 'text', text, annotations: [{ type: 'speech_metadata', style }] }] }], response_format: { type: 'audio' }, generation_config: { speech_config: [{ voice: S.settings.voice }] } }) });
-    if (r.ok) {
-      const j = await r.json(); let data = null, mime = 'audio/wav';
-      (j.steps || []).forEach(s => (s.content || []).forEach(c => { if (c.type === 'audio' && c.data) { data = c.data; mime = c.mime_type || mime; } }));
-      if (!data && j.output_audio) data = j.output_audio.data;
-      if (data) return (ttsCache[text] = URL.createObjectURL(new Blob([unb64(data)], { type: mime.includes('l16') ? 'audio/wav' : mime })));
-    }
-  } catch (e) { }
-  try { // fallback: generateContent speech output (raw 24 kHz PCM)
-    const r = await fetch(GEM + 'models/' + encodeURIComponent(S.settings.tts) + ':generateContent', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify({ contents: [{ parts: [{ text }] }], generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: S.settings.voice } } } } }) });
-    if (!r.ok) return null;
-    const j = await r.json(); const part = ((((j.candidates || [])[0] || {}).content || {}).parts || []).find(p => p.inlineData || p.inline_data);
-    if (!part) return null; const id = part.inlineData || part.inline_data; const pcm = unb64(id.data);
-    if ((id.mimeType || id.mime_type || '').includes('wav')) return (ttsCache[text] = URL.createObjectURL(new Blob([pcm], { type: 'audio/wav' })));
-    const h = new ArrayBuffer(44), dv = new DataView(h); const ws = (p, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(p + i, s.charCodeAt(i)); };
-    ws(0, 'RIFF'); dv.setUint32(4, 36 + pcm.length, true); ws(8, 'WAVE'); ws(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, 24000, true); dv.setUint32(28, 48000, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); ws(36, 'data'); dv.setUint32(40, pcm.length, true);
-    return (ttsCache[text] = URL.createObjectURL(new Blob([h, pcm], { type: 'audio/wav' })));
-  } catch (e) { return null; }
-}
-const isNewLearner = () => true;
-const learnerText = () => 'The learner is an English-speaking adult learning Cebuano (Bisaya) to talk with family. They may be a heritage speaker who understands some Bisaya but loses track of fast speech and falls back on English, or a beginner. Keep explanations simple, tie Bisaya to English where you can, and be encouraging but honest.';
-function weakList(n = 6) { return Object.entries(S.mistakes).sort((a, b) => b[1].n - a[1].n).slice(0, n); }
-function mistakeRules() {
-  const labels = Object.keys(S.mistakes);
-  return `"mistakes": a list of the learner's real errors in this answer as {"label": short reusable name for the error type, "fix": one-line fix with a Bisaya example}. [] if none.${labels.length ? ' If an error matches one of these existing labels, reuse that exact label: ' + JSON.stringify(labels.slice(0, 30)) + '.' : ''}`;
-}
-function absorb(r) {
-  (r.english_words || []).forEach(x => x && x.en && x.ceb && addGap(x.en, x.ceb, '', '', true));
-  (r.mistakes || []).forEach(m => { if (!m || !m.label) return; const k = String(m.label).slice(0, 80); const e = S.mistakes[k] || (S.mistakes[k] = { n: 0, fix: '' }); e.n++; e.fix = m.fix || e.fix; e.last = today(); });
-  save();
-}
-const nativePart = id => { const ix = IDX[id], buf = SPR[id && id[0]]; return ix && buf ? { inline_data: { mime_type: 'audio/mp3', data: b64(buf.slice(ix[0], ix[0] + ix[1])) } } : null; };
-const recPart = rec => ({ inline_data: { mime_type: 'audio/wav', data: b64(rec.buf) } });
-
-async function gradeSay(c, rec) {
-  const parts = [{ text: `${learnerText()}\nThe learner was asked to SAY this in Bisaya: "${c.en}". One correct answer is "${c.ceb}"; other natural wordings are equally correct.\nTheir recording follows.` }, recPart(rec)];
-  const np = c.audio ? nativePart(c.id) : null;
-  if (np) parts.push({ text: 'Native speaker recording of the reference answer, for comparing pronunciation:' }, np);
-  parts.push({ text: `Return JSON only:
-{"heard": "exactly what the learner said, word for word, including any English",
- "verdict": "correct" | "close" | "wrong",
- "score": 0-100 for meaning and grammar,
- "pronunciation": 0-100,
- "pron_notes": ["up to 3 short notes on specific sounds, stress or rhythm, e.g. which syllable to stress or a glottal stop they dropped"],
- "corrected": "the most natural way a Cebuano in Cebu would say it",
- "english_words": [{"en": "English word they used", "ceb": "Bisaya equivalent"}],
- ${mistakeRules()},
- "feedback": "1-2 short plain-English sentences: what worked, then the single most useful fix"}
-"correct" = all Bisaya (loanwords Cebuanos really use are fine), meaning right, no real grammar slip. "close" = meaning right but one English word, a wrong affix or tense, or a missing particle. "wrong" = meaning off, mostly English, silent, or unintelligible.` });
-  return gemJSON(parts);
-}
-async function gradePron(c, rec) {
-  const parts = [{ text: `${learnerText()}\nThe learner is practicing pronunciation by repeating this Bisaya phrase: "${c.ceb}" ("${c.en}").\nNative speaker recording:` }, nativePart(c.id), { text: 'Their attempt:' }, recPart(rec), { text: `Compare their attempt with the native recording. Focus on sounds Cebuano learners get wrong: the vowels (Cebuano vowels are short and pure; i/e and u/o are close), stress placement, glottal stops (including in words like "bata" vs "bata'" and between vowels), the "ng" sound at the start of words, tapped r, and keeping an even, quick rhythm instead of English-style vowel reduction. Be specific and honest; don't praise what wasn't good.
-Return JSON only: {"heard": "what the learner said, word for word", "same_words": true or false, "score": 0-100, "pron_notes": ["up to 3 specific notes, each naming the word and what to change"], "tip": "one sentence on what to focus on next time"}` }];
-  return gemJSON(parts);
-}
-
+function weakList(n = 6) { return Object.entries(S.mistakes || {}).sort((a, b) => b[1].n - a[1].n).slice(0, n); }
 /* ---------- views ---------- */
 let view = 'home';
 const VIEWS = {};
-function render() { stopAudio(); Rec.cancel(); clearInterval(timerH); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); }
+function render() { stopAudio(); clearInterval(timerH); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); }
 function go(v) { view = v; render(); }
 function ringSvg(v, goal) { const r = 36, c = 2 * Math.PI * r, f = Math.min(1, v / goal); return `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - f)}" transform="rotate(-90 42 42)"/></svg>`; }
 function unitRow(u, key) {
@@ -593,9 +452,11 @@ VIEWS.home = function () {
     <div class="ringwrap plandone">${ringSvg(doneN, items.length)}<span class="ringtxt tnum">${doneN}<small>of ${items.length}</small></span></div>
     <div class="hero-actions">${nextUp ? (nextUp.manual ? `<button class="btn" id="start">I did it</button>` : `<button class="btn" id="start">Start ${esc(nextUp.name.toLowerCase())}</button>`) : `<button class="btn" id="start">Do another session</button>`}</div>
   </section>
+  <section class="panel"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${doneN} of ${items.length}</span></div>
+    <div class="bar" style="grid-column:auto"><i style="width:${doneN / items.length * 100}%"></i></div>
+    <div>${items.map(it => `<div class="check"><button class="box ${isDone(it, plan) ? 'on' : ''}" data-plan="${it.k}" ${it.manual ? '' : 'disabled title="Ticks itself when you finish"'} aria-label="${esc(it.name)}">${isDone(it, plan) ? I.check : ''}</button><div style="flex:1;min-width:0"><b>${esc(it.name)}${it.locked ? ' 🔒' : ''}</b><span class="muted small">${esc(it.d)}</span></div>${!isDone(it, plan) && !it.manual ? `<button class="btn sm ghost" data-run="${it.k}">Go</button>` : ''}</div>`).join('')}</div></section>
   ${pathPanel()}
   <section class="drills">
-    ${hasAI() ? `<button class="drill" data-go="pron"><span class="label">Pronunciation</span><span class="big">Sulti</span><b>Repeat and get scored</b><span class="muted small">Copy a native speaker, see what to fix.</span></button>` : ''}
     <button class="drill" data-go="speed"><span class="label">Listening</span><span class="big tnum">${S.speed.toFixed(1)}×</span><b>Speed round</b><span class="muted small">Clips get faster as you get them right.</span></button>
     <button class="drill" id="dictgo"><span class="label">Fast speech</span><span class="big">Dictation</span><b>Type what you hear</b><span class="muted small">Catch every little word.</span></button>
     <button class="drill" data-go="shadow"><span class="label">Fluency</span><span class="big">Shadow</span><b>Speak along</b><span class="muted small">Hands-free. Repeat with the speaker.</span></button>
@@ -603,9 +464,6 @@ VIEWS.home = function () {
     <button class="drill" data-go="gaps"><span class="label">Your words</span><span class="big tnum">${S.custom.length}</span><b>Gap words</b><span class="muted small">English you keep reaching for.</span></button>
   </section>
   ${weak.length ? `<section class="panel"><h2>Your weak spots</h2><div>${weak.map(([k, v]) => `<div class="weak"><span class="n tnum">${v.n}×</span><div style="min-width:0"><b>${esc(k)}</b><div class="small muted">${esc(v.fix)}</div></div></div>`).join('')}</div></section>` : ''}
-  <section class="panel"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${doneN} of ${items.length}</span></div>
-    <div class="bar" style="grid-column:auto"><i style="width:${doneN / items.length * 100}%"></i></div>
-    <div>${items.map(it => `<div class="check"><button class="box ${isDone(it, plan) ? 'on' : ''}" data-plan="${it.k}" ${it.manual ? '' : 'disabled title="Ticks itself when you finish"'} aria-label="${esc(it.name)}">${isDone(it, plan) ? I.check : ''}</button><div style="flex:1;min-width:0"><b>${esc(it.name)}${it.locked ? ' 🔒' : ''}</b><span class="muted small">${esc(it.d)}</span></div>${!isDone(it, plan) && !it.manual ? `<button class="btn sm ghost" data-run="${it.k}">Go</button>` : ''}</div>`).join('')}</div></section>
   <section class="panel"><details><summary><b>Browse every unit</b> <span class="muted small">· jump ahead with Focus</span></summary><div style="display:grid;gap:12px;margin-top:10px">
   <div class="panel"><div class="row spread"><h2>Foundations</h2><span class="muted small tnum">${learned(F_ORDER)} of ${F.length} learned</span></div>
     <p class="muted small" style="margin:0">How words fit together: who, whose, have, like, questions, and when. Each block comes with sentences you build yourself.</p>
@@ -635,7 +493,7 @@ VIEWS.home = function () {
   document.querySelectorAll('[data-focus]').forEach(b => b.onclick = () => { S.focus = S.focus === b.dataset.focus ? null : b.dataset.focus; save(); render(); toast(S.focus ? 'New cards will come from this unit first' : 'Back to the normal order'); });
 };
 VIEWS.settings = function () {
-  const k = getKey(), st = S.settings;
+  const st = S.settings;
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Settings</h2></div>
   <section class="panel"><h2>Your name</h2>
     <p class="small" style="margin:0">Binko uses this when he announces your finished lessons in the family Discord.</p>
@@ -647,38 +505,18 @@ VIEWS.settings = function () {
   <section class="panel"><h2>Sync across devices</h2>
     <p class="small syncline" style="margin:0">${syncLine()}</p>
     <div class="row"><button class="btn ${Sync.user ? 'ghost' : 'primary'} syncbtn" id="syncset">${Sync.user ? 'Sign out' : 'Sign in with Google'}</button></div>
-    <p class="muted small" style="margin:0">Your Gemini key never syncs. Add it on each device.</p></section>
+</section>
   <section class="panel"><h2>Backup file</h2>
     <p class="small" style="margin:0">A manual copy of your progress, if you ever want one.</p>
     <div class="row"><button class="btn" id="exp">Save backup file</button><button class="btn ghost" id="imp">Load backup</button></div></section>
-  <section class="panel"><details><summary><b>Optional: Gemini voice and grading</b></summary><div style="display:grid;gap:14px;margin-top:10px">
-  <div style="display:grid;gap:10px"><h3>Gemini API key</h3>
-    <p class="small" style="margin:0">Not needed. With a free Gemini key, cards without a recording get a voice, speaking answers get graded, and you get extra memory tricks. Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>, then paste it here. It stays on this device only.</p>
-    <div class="keybox"><input class="field" id="key" type="password" autocomplete="off" placeholder="Paste your key" value="${esc(k)}"><button class="btn primary" id="savekey">Save</button></div>
-    <div class="row"><button class="btn sm ghost" id="testkey" ${k ? '' : 'disabled'}>Test it</button><span class="small muted" id="keymsg">${k ? 'Key saved.' : 'No key yet.'}</span></div>
-    <p class="muted small" style="margin:0">On Google's free tier, Google may use what you send to improve its products. Turning on billing in AI Studio stops that.</p></div>
-  <div style="display:grid;gap:10px"><h3>Voice</h3>
-    <div class="seg" id="voices">${['Kore', 'Aoede', 'Puck', 'Charon', 'Zephyr', 'Fenrir'].map(v => `<button class="${st.voice === v ? 'on' : ''}" data-v="${v}">${v}</button>`).join('')}</div>
-    <label class="row small"><input type="checkbox" id="ttson" ${st.ttsOn ? 'checked' : ''}> Read cards without a recording out loud</label>
-    <button class="btn sm ghost" id="trytts" ${k ? '' : 'disabled'}>Hear a sample</button></div>
-  </div></details></section>
-  <section class="panel"><details><summary>Advanced: model names</summary>
-    <div style="display:grid;gap:8px;margin-top:10px"><label class="label" for="mdl">Listening and grading model</label><input class="field" id="mdl" value="${esc(st.model)}">
-    <label class="label" for="tmdl">Voice model</label><input class="field" id="tmdl" value="${esc(st.tts)}">
-    <button class="btn sm" id="savem">Save model names</button><p class="muted small" style="margin:0">Only change these if Google renames its models.</p></div></details></section>`;
+`;
   $('#quit').onclick = () => go('home');
   $('#syncset').onclick = () => Sync.user ? signOutSync() : signIn();
-  $('#savekey').onclick = () => { try { localStorage.setItem(KEYK, $('#key').value.trim()); } catch (e) { } render(); toast('Key saved'); };
-  $('#testkey').onclick = async () => { $('#keymsg').textContent = 'Testing…'; try { const r = await gemJSON([{ text: 'Reply with JSON {"ok": true, "ceb": "Maayong adlaw"}' }]); $('#keymsg').textContent = r && r.ok ? 'Works. Gemini is connected.' : 'Connected, but the reply looked odd.'; } catch (e) { $('#keymsg').textContent = gemErr(e); } };
-  document.querySelectorAll('#voices button').forEach(b => b.onclick = () => { S.settings.voice = b.dataset.v; Object.keys(ttsCache).forEach(k2 => delete ttsCache[k2]); save(); render(); });
-  $('#ttson').onchange = e => { S.settings.ttsOn = e.target.checked; save(); };
   $('#savename').onclick = () => { S.settings.name = $('#myname').value.trim(); save(); toast('Saved'); };
-  $('#trytts').onclick = async e => { const b = e.currentTarget; b.textContent = 'Loading…'; const u = await tts('Maayong buntag! Kumusta ka karon? Unsa imong gikaon ganina?'); b.textContent = 'Hear a sample'; if (u) playUrl(u, 1); else toast('No audio came back. Check the voice model name.'); };
   document.querySelectorAll('[data-set]').forEach(g => g.querySelectorAll('button').forEach(b => b.onclick = () => { S.settings[g.dataset.set] = +b.dataset.v; save(); render(); }));
   $('#pack2').onclick = importPack; $('#pack3').onclick = () => { go('home'); autoPack(); };
   $('#exp').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' })); a.download = 'padayon-progress-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); };
   $('#imp').onclick = () => { const fi = $('#filein'); fi.accept = '.json,application/json'; fi.value = ''; fi.onchange = async () => { try { const s = JSON.parse(await fi.files[0].text()); if (s.v !== 1) throw 0; S = migrate(s); save(); toast('Progress loaded'); go('home'); } catch (e) { toast('That is not a Padayon backup file.'); } }; fi.click(); };
-  $('#savem').onclick = () => { S.settings.model = $('#mdl').value.trim() || fresh().settings.model; S.settings.tts = $('#tmdl').value.trim() || fresh().settings.tts; save(); toast('Saved'); };
 };
 
 /* ---------- session engine ---------- */
@@ -809,26 +647,12 @@ function tipHtml(t, c) {
   if (!t) return '';
   return `<div class="panel tip"><div class="label">Binko's memory trick</div><div>${esc(t.trick || '')}</div>${t.english ? `<div class="small"><b>English link:</b> ${esc(t.english)}</div>` : ''}${t.when && !(c && c.note) ? `<div class="small"><b>When to use it:</b> ${esc(t.when)}</div>` : ''}${t.example ? `<div class="small"><b>${esc(t.example)}</b> <span class="muted">· ${esc(t.example_en || '')}</span></div>` : ''}</div>`;
 }
-async function fetchTip(c) {
-  const r = await gemJSON([{ text: `${learnerText()}
-Make a memory aid for this Bisaya (Cebuano) item: "${c.ceb}" = "${c.en}".
-Return JSON only: {"trick": "one short, vivid memory trick that links the SOUND of the Bisaya to an English word or image (1-2 sentences)",
-"english": "a real English, Spanish or Tagalog connection if one exists (cognate or loanword), else \\"\\"",
-"when": "when Cebuanos actually use it vs. similar words, in one sentence",
-"example": "one short everyday Bisaya sentence that uses it, as people in Cebu talk", "example_en": "its English"}` }]);
-  if (r && r.trick) { S.tips[c.id] = { trick: String(r.trick), english: String(r.english || ''), when: String(r.when || ''), example: String(r.example || ''), example_en: String(r.example_en || '') }; save(); }
-  return S.tips[c.id];
-}
 function wireTip(c, slot, auto) {
   const el = $(slot); if (!el) return;
   const have = tipFor(c);
   if (have) { el.innerHTML = tipHtml(have, c); return; }
-  if (!hasAI()) return;
-  const runIt = async () => { el.innerHTML = '<p class="muted small" style="margin:0">Making a memory trick…</p>'; try { el.innerHTML = tipHtml(await fetchTip(c), c); } catch (e) { el.innerHTML = `<p class="muted small" style="margin:0">${esc(gemErr(e))}</p>`; } };
-  if (auto) runIt(); else { el.innerHTML = '<button class="linkbtn" id="tipbtn">Show a memory trick</button>'; $('#tipbtn').onclick = runIt; }
+
 }
-function sayBtn(c) { return !c.audio && hasAI() && S.settings.ttsOn ? `<button class="miniplay" id="ttsb">${I.play} Hear it</button>` : ''; }
-function wireSay(c, text) { const b = $('#ttsb'); if (b) b.onclick = async () => { b.disabled = true; const u = await tts(text || firstAlt(c.ceb)); b.disabled = false; if (u) playUrl(u, 1); else toast('No audio came back.'); }; }
 
 const playBlock = rate => `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">Playing at ${rate.toFixed(1)}×.<br>Turtle plays it at 0.8×.</span></div>`;
 function wirePlay(c, rate) { $('#pl').onclick = e => play(c.id, rate, e.currentTarget); $('#pls').onclick = e => play(c.id, 0.8, e.currentTarget); play(c.id, rate, $('#pl')); }
@@ -851,18 +675,6 @@ function typedCheck(c, item, inp, tolFrac, dictMode) {
   if (dictMode) return result(c, item, best <= tol ? 1 : false, missed.length ? 'Missed or misheard: <b>' + esc(missed.join(', ')) + '</b>' : 'You wrote "' + said + '"');
   return result(c, item, best <= tol ? true : false, best <= tol ? 'Watch the spelling: you wrote "' + said + '"' : 'You wrote "' + said + '"');
 }
-function aiFeedback(r, rec, c) {
-  const sc = Math.max(0, Math.min(100, +(r.score) || 0));
-  const col = (r.verdict || (sc >= 80 ? 'correct' : sc >= 55 ? 'close' : 'wrong')) === 'correct' ? 'var(--good)' : (r.verdict === 'close' || (sc >= 55 && sc < 80)) ? 'var(--mango)' : 'var(--bad)';
-  return `<div class="panel grade">
-    <div class="row"><span class="score tnum" style="color:${col}">${sc}</span><div style="min-width:0;flex:1">${r.pronunciation != null ? `<div class="small">Pronunciation <b class="tnum">${Math.round(+r.pronunciation || 0)}</b></div>` : ''}${r.feedback || r.tip ? `<div class="small">${esc(r.feedback || r.tip)}</div>` : ''}</div></div>
-    ${r.heard ? `<div class="heard"><span class="label">Heard</span><br><b>${esc(r.heard)}</b></div>` : ''}
-    ${r.corrected ? `<div><div class="label">A Cebuano would say</div><div class="corr">${esc(r.corrected)}</div></div>` : ''}
-    ${r.pron_notes && r.pron_notes.length ? `<div><div class="label">Sounds to work on</div><ul class="notes small">${r.pron_notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul></div>` : ''}
-    ${r.english_words && r.english_words.length ? `<div class="small"><b>English you used:</b> ${r.english_words.map(x => esc(x.en) + ' → <b>' + esc(x.ceb) + '</b>').join(' · ')} <span class="muted">(added to Gap words)</span></div>` : ''}
-    <div class="row"><button class="miniplay" id="mine">${I.play} You</button>${c && c.audio ? `<button class="miniplay" id="nat">${I.play} Native</button>` : ''}</div></div>`;
-}
-function wireCompare(rec, c) { if ($('#mine')) $('#mine').onclick = () => playUrl(rec.url, 1); if ($('#nat')) $('#nat').onclick = () => play(c.id, 1); }
 const EX = {
   teach(c, item) {
     sess.newIds.add(c.id);
@@ -875,9 +687,9 @@ const EX = {
       ${usedIn(c)}
       <div id="tipslot"></div>
       ${c.ex ? `<div class="panel"><b>${esc(c.ex)}</b><span class="muted small">${esc(c.exEn || '')}</span></div>` : ''}
-      ${c.audio ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">Say it out loud with the recording.</span></div>` : `<div class="row">${sayBtn(c)}<span class="muted small">Say it out loud twice.</span></div>`}`;
-    if (c.audio) wirePlay(c, 1); else wireSay(c);
-    wireTip(c, '#tipslot', isNewLearner());
+      ${c.audio ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">Say it out loud with the recording.</span></div>` : `<p class="muted small">Say it out loud twice.</p>`}`;
+    if (c.audio) wirePlay(c, 1);
+    wireTip(c, '#tipslot');
     sess.xp += 2; addXP(2);
     foot(`<button class="btn primary block" id="cont">Got it</button>`); $('#cont').onclick = next;
   },
@@ -934,7 +746,7 @@ const EX = {
   },
   speak(c, item) {
     const secs = Math.round(Math.min(10, 3 + tokens(c.ceb).length * 0.8));
-    $('#ex').innerHTML = `<div class="label">Say it out loud in Bisaya</div><div class="prompt">${esc(c.en)}</div><div class="timer"><i id="tb"></i></div><p class="muted small" style="margin:0">${secs} seconds. The whole thing, no English. Add a Gemini key in Settings to get graded automatically.</p><div id="rev"></div>`;
+    $('#ex').innerHTML = `<div class="label">Say it out loud in Bisaya</div><div class="prompt">${esc(c.en)}</div><div class="timer"><i id="tb"></i></div><p class="muted small" style="margin:0">${secs} seconds. The whole thing, no English. Then compare with the answer.</p><div id="rev"></div>`;
     foot(`<button class="btn primary block" id="show">Show answer</button>`);
     const t0 = Date.now();
     const reveal = () => {
@@ -946,33 +758,6 @@ const EX = {
     };
     timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / (secs * 1000); $('#tb').style.width = Math.max(0, f * 100) + '%'; if (f <= 0) reveal(); }, 100);
     $('#show').onclick = reveal;
-  },
-  say(c, item) {
-    if (!hasAI()) return EX.speak(c, item);
-    $('#ex').innerHTML = `<div class="label">Say it out loud in Bisaya</div><div class="prompt">${esc(c.en)}</div><div id="micw"></div><div id="res"></div>`;
-    foot(`<button class="btn ghost block" id="skip">I don't know it yet</button>`);
-    $('#skip').onclick = () => { Rec.cancel(); result(c, item, false); };
-    micWidget($('#micw'), async rec => {
-      try {
-        const r = await gradeSay(c, rec); absorb(r);
-        $('#res').innerHTML = aiFeedback(r, rec, c); wireCompare(rec, c);
-        result(c, item, r.verdict === 'correct' ? 2 : r.verdict === 'close' ? 1 : 0, '');
-      } catch (e) { $('#micst').textContent = gemErr(e); }
-    });
-  },
-  pron(c, item) {
-    if (!hasAI()) return EX.shadow(c, item);
-    $('#ex').innerHTML = `<div class="label">Repeat after the speaker</div><div class="ceb">${esc(c.ceb)}</div><div class="muted">${esc(c.en)}</div>
-      <div class="playrow"><button class="play sm" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">Listen, then record yourself saying it the same way.</span></div><div id="micw"></div><div id="res"></div>`;
-    wirePlay(c, 1);
-    foot(`<button class="btn ghost block" id="skip">Skip</button>`); $('#skip').onclick = () => { Rec.cancel(); next(); };
-    micWidget($('#micw'), async rec => {
-      try {
-        const r = await gradePron(c, rec);
-        $('#res').innerHTML = aiFeedback(r, rec, c); wireCompare(rec, c);
-        const sc = +r.score || 0; result(c, item, r.same_words === false ? 0 : sc >= 80 ? 2 : sc >= 55 ? 1 : 0, '');
-      } catch (e) { $('#micst').textContent = gemErr(e); }
-    });
   },
   async shadow(c, item) {
     const rates = [1, 1, Math.max(1.1, S.speed)];
@@ -1081,13 +866,13 @@ VIEWS.convos = function () {
   DL = { d: p.d, idx: p.i, m: p.unknown.length ? 'learn' : 'read', i: 0, show: {}, right: 0, unknown: p.unknown };
   view = 'convo'; render();
 };
-const lineSay = async (txt, btn) => { if (!hasAI() || !S.settings.ttsOn) return; if (btn) btn.classList.add('playing'); const u = await tts(txt); if (btn) btn.classList.remove('playing'); if (u && view === 'convo') await playUrl(u, 1); };
+const lineSay = () => { };
 function bubble(d, l, j, opts = {}) {
   const me = l[0] === 'b', showEn = opts.en || DL.show[j];
   return `<div class="msg ${me ? 'me' : 'them'}"><div class="small" style="opacity:.75">${esc(me ? d.b : d.a)}</div><div style="font-weight:700">${esc(l[1])}</div>
     ${showEn ? `<div class="tr" ${me ? 'style="color:inherit;opacity:.85"' : ''}>${esc(l[2])}</div>` : `<button class="linkbtn" data-en="${j}" ${me ? 'style="color:inherit"' : ''}>English</button>`}
     ${opts.note && l[3] ? `<div class="tr" ${me ? 'style="color:inherit;opacity:.85"' : ''}><i>${esc(l[3])}</i></div>` : ''}
-    ${hasAI() && S.settings.ttsOn ? `<button class="miniplay" data-say="${j}" style="margin-top:6px">${I.play}</button>` : ''}</div>`;
+</div>`;
 }
 function wireBubbles(d) {
   document.querySelectorAll('[data-en]').forEach(b => b.onclick = () => { DL.show[+b.dataset.en] = true; render(); });
@@ -1115,18 +900,7 @@ VIEWS.convo = function () {
     wireBubbles(d);
     const adv = () => { DL.i++; render(); };
     if (!mine) { foot(`<button class="btn primary block" id="nx">Next</button>`); $('#nx').onclick = adv; if (DL.spoke !== 'p' + DL.i) { DL.spoke = 'p' + DL.i; lineSay(l[1]); } }
-    else if (hasAI()) {
-      foot(`<button class="btn ghost block" id="skip">Show me the line</button>`);
-      $('#skip').onclick = () => { Rec.cancel(); $('#res').innerHTML = `<div class="corr">${esc(l[1])}</div>`; foot(`<button class="btn primary block" id="nx">Next</button>`); $('#nx').onclick = adv; lineSay(l[1]); };
-      micWidget($('#micw'), async rec => {
-        try {
-          const r = await gradeSay({ id: 'dl', ceb: l[1], en: l[2], audio: false }, rec); absorb(r);
-          $('#res').innerHTML = aiFeedback(r, rec, null) + `<div class="small">The line: <b>${esc(l[1])}</b></div>`; wireCompare(rec, { audio: false });
-          if (r.verdict !== 'wrong') DL.right++;
-          foot(`<button class="btn primary block" id="nx">Next</button>`); $('#nx').onclick = adv;
-        } catch (e) { $('#micst').textContent = gemErr(e); }
-      });
-    } else {
+    else {
       foot(`<button class="btn primary block" id="show">Show the line</button>`);
       $('#show').onclick = () => { $('#res').innerHTML = `<div class="corr">${esc(l[1])}</div>`; foot(`<div class="grades"><button class="btn" data-q="1">I said it</button><button class="btn" data-q="0">I blanked or used English</button></div>`); document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { if (+b.dataset.q) DL.right++; adv(); }); };
     }
@@ -1189,108 +963,6 @@ function runShadow(u) {
   loop();
 }
 
-/* ---------- pronunciation drill ---------- */
-let PR = null;
-VIEWS.pron = function () {
-  if (!hasPack()) { toast('Load the content pack first. Pronunciation uses its recordings.'); return go('home'); }
-  if (!hasAI()) { toast('Add your Gemini key in Settings to get scored.'); return go('settings'); }
-  if (!PR) { let pool = Object.keys(S.cards).filter(id => id[0] === 'p'); if (pool.length < 8) pool = pool.concat(PHRASE_ORDER.slice(0, 30)); PR = { list: shuffle([...new Set(pool)]).slice(0, 10), i: 0, scores: [] }; }
-  if (PR.i >= PR.list.length) {
-    const avg = PR.scores.length ? Math.round(PR.scores.reduce((a, b) => a + b, 0) / PR.scores.length) : 0;
-    $('#app').innerHTML = `<section class="panel summary"><div class="label">Pronunciation done</div><h1 style="font-size:2rem;color:var(--sea)">Maayo!</h1><div class="sumgrid"><div><b class="tnum">${avg}</b><span class="small muted">average</span></div><div><b class="tnum">${PR.scores.length}</b><span class="small muted">phrases</span></div><div><b class="tnum">${Math.max(0, ...PR.scores)}</b><span class="small muted">best</span></div></div>${(PR.scores.length && tick('pron'), cameoHtml('done') + binkoSays(planNext() ? BINKO_NEXT[planNext().k] : BINKO_NEXT.done) + nextBtnHtml())}<button class="btn ghost block" id="home">Home</button></section>`;
-    PR = null; wireNext(); $('#home').onclick = () => go('home'); return;
-  }
-  const c = card(PR.list[PR.i]);
-  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><div class="prog"><i style="width:${PR.i / PR.list.length * 100}%"></i></div><span class="speedchip tnum">${PR.i + 1}/${PR.list.length}</span></div>
-  <div class="ex"><div class="label">Listen, then say it the same way</div><div class="ceb">${esc(c.ceb)}</div><div class="muted">${esc(c.en)}</div>
-  <div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button></div>
-  <div id="micw"></div><div id="res"></div></div><div class="foot"><button class="btn primary block" id="nx">Next phrase</button></div>`;
-  $('#quit').onclick = () => { PR = null; go('home'); };
-  wirePlay(c, 1);
-  $('#nx').onclick = () => { PR.i++; render(); };
-  micWidget($('#micw'), async rec => {
-    try { const r = await gradePron(c, rec); PR.scores.push(Math.round(+r.score || 0)); addXP(4); save(); $('#res').innerHTML = aiFeedback(r, rec, c); wireCompare(rec, c); $('#micst').textContent = 'Try again any time to improve the score.'; }
-    catch (e) { $('#micst').textContent = gemErr(e); }
-  });
-};
-
-/* ---------- voice tutor ---------- */
-const TOPICS = ['Your day so far', 'What you ate today', 'Family news', 'Weekend plans', 'Your work', 'Family and where they come from', 'Shopping at the palengke', 'Practice my weak spots'];
-let TU = null;
-function tutorStart(topic) { TU = { topic, msgs: [], busy: false, turns: 0 }; view = 'tutor'; render(); tutorTurn(null); }
-function tutorSystem() {
-  const weak = weakList(6), gaps = S.custom.slice(-10);
-  return `${learnerText()}
-You are the learner's Bisaya conversation tutor: a friendly native Cebuano speaker from Cebu. You are talking OUT LOUD; they hear your reply as audio.
-Topic: ${TU.topic}.
-${weak.length ? 'Their recurring mistakes (steer the conversation so they have to use these correctly): ' + weak.map(([k, v]) => k + ' (fix: ' + v.fix + ')').join('; ') + '.' : ''}
-${gaps.length ? 'Words they keep saying in English (ask questions that make them use the Bisaya): ' + gaps.map(g => g.en + ' = ' + g.ceb).join(', ') + '.' : ''}
-Rules for your reply: only everyday Cebuano as people in Cebu really talk (loanwords Cebuanos really use are fine); 1 to 3 short sentences at low-intermediate level; always end with one question they must answer; react to what they actually said.`;
-}
-async function tutorTurn(rec) {
-  TU.busy = true; drawTutor();
-  const hist = TU.msgs.map(m => (m.role === 'me' ? 'Learner: ' + (m.heard || '') : 'Tutor: ' + m.text)).join('\n');
-  const parts = rec
-    ? [{ text: (hist ? 'Conversation so far:\n' + hist + '\n\n' : '') + "The learner's new spoken turn is this recording:" }, recPart(rec), { text: `Return JSON only:
-{"heard": "exactly what the learner said, word for word, including any English",
- "reply": "your spoken reply in Bisaya",
- "reply_en": "English translation of your reply",
- "fixed": "how a Cebuano would naturally say what they meant, all in Bisaya; \\"\\" if they already said it naturally",
- "english_words": [{"en": "English word they used", "ceb": "Bisaya equivalent"}],
- ${mistakeRules()},
- "pron_note": "one short note on a sound they mispronounced, or \\"\\""}` }]
-    : [{ text: 'Open the conversation with a short greeting and one question about the topic. Return JSON only: {"reply": "...", "reply_en": "..."}' }];
-  try {
-    const r = await gemJSON(parts, tutorSystem());
-    if (rec) {
-      absorb(r);
-      TU.msgs.push({ role: 'me', heard: r.heard || '(could not make it out)', url: rec.url, fixed: r.fixed || '', swaps: r.english_words || [], mistakes: r.mistakes || [], pron: r.pron_note || '' });
-      TU.turns++; addXP(5);
-      if (TU.turns >= 5 && !planDay().talk) { tick('talk'); TU.justDone = true; }
-      save();
-    }
-    const m = { role: 'tutor', text: r.reply || '…', en: r.reply_en || '', showEn: false, url: null };
-    TU.msgs.push(m); TU.busy = false; drawTutor();
-    const u = await tts(m.text); if (u) { m.url = u; drawTutor(); if (view === 'tutor') playUrl(u, 1); }
-  } catch (e) { TU.busy = false; drawTutor(); toast(gemErr(e)); }
-}
-VIEWS.tutor = function () {
-  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Tutor</h2>${TU ? '<button class="btn sm ghost" id="newt">New topic</button>' : ''}</div><div id="tbody"></div>`;
-  $('#quit').onclick = () => { Rec.cancel(); go('home'); };
-  if ($('#newt')) $('#newt').onclick = () => { TU = null; render(); };
-  if (!hasAI()) { $('#tbody').innerHTML = `<section class="panel"><p style="margin:0">The Tutor needs a Gemini API key so it can hear you.</p><button class="btn primary" data-go="settings">Add key</button></section>`; document.querySelector('[data-go]').onclick = () => go('settings'); return; }
-  if (!TU) {
-    $('#tbody').innerHTML = `<section class="panel"><p style="margin:0">A spoken conversation in Bisaya. Tap the mic, answer out loud, tap again. The Tutor replies by voice, shows what it heard, gives you the natural way to say it, and remembers the mistakes you repeat.</p>
-      <p class="muted small" style="margin:0">Use headphones so the Tutor's voice doesn't feed back into your mic. Its Bisaya and its grading are good but not a native speaker's, so check anything odd with family.</p></section>
-      <section class="panel"><div class="label">Pick a topic</div><div class="chips">${TOPICS.map(t => `<button class="chip" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</div></section>`;
-    document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => tutorStart(b.dataset.t));
-    return;
-  }
-  drawTutor();
-};
-function drawTutor() {
-  const body = $('#tbody'); if (!body || view !== 'tutor') return;
-  body.innerHTML = `${TU.justDone ? `<section class="banner" style="margin-bottom:10px"><b>Talk ticked for today.</b> Keep going, or move on.${nextBtnHtml('tnext')}</section>` : ''}<div class="small muted" style="margin-bottom:8px">Topic: ${esc(TU.topic)} · ${TU.turns} turn${TU.turns === 1 ? '' : 's'}</div>
-  <div class="chat">${TU.msgs.map((m, i) => m.role === 'me'
-    ? `<div class="msg me"><span class="small" style="opacity:.8">You said</span><br>${esc(m.heard)}${m.url ? `<br><button class="linkbtn" style="color:inherit" data-mine="${i}">Play yours</button>` : ''}</div>
-       ${m.fixed ? `<div class="fix"><b>More natural:</b> ${esc(m.fixed)}</div>` : ''}
-       ${m.swaps.length ? `<div class="fix">${m.swaps.map(s => `<b>${esc(s.en)}</b> → ${esc(s.ceb)}`).join(' · ')}<br><span class="muted">Added to Gap words</span></div>` : ''}
-       ${m.mistakes.length ? `<div class="fix">${m.mistakes.map(x => `<b>${esc(x.label)}</b>: ${esc(x.fix)}`).join('<br>')}</div>` : ''}
-       ${m.pron ? `<div class="fix"><b>Sound:</b> ${esc(m.pron)}</div>` : ''}`
-    : `<div class="msg them">${esc(m.text)}<div class="tr" ${m.showEn ? '' : 'hidden'}>${esc(m.en)}</div>
-       <div class="row" style="margin-top:6px;gap:12px">${m.url ? `<button class="linkbtn" data-say="${i}">Play</button><button class="linkbtn" data-slow="${i}">Slower</button>` : ''}<button class="linkbtn" data-en="${i}">${m.showEn ? 'Hide' : 'Show'} English</button></div></div>`).join('')}
-    ${TU.busy ? '<div class="msg them muted">Naminaw… (listening)</div>' : ''}</div>
-  <div class="foot" style="margin-top:12px"><div id="micw"></div></div>`;
-  body.querySelectorAll('[data-en]').forEach(b => b.onclick = () => { const m = TU.msgs[+b.dataset.en]; m.showEn = !m.showEn; drawTutor(); });
-  body.querySelectorAll('[data-say]').forEach(b => b.onclick = () => playUrl(TU.msgs[+b.dataset.say].url, 1));
-  body.querySelectorAll('[data-slow]').forEach(b => b.onclick = () => playUrl(TU.msgs[+b.dataset.slow].url, 0.8));
-  body.querySelectorAll('[data-mine]').forEach(b => b.onclick = () => playUrl(TU.msgs[+b.dataset.mine].url, 1));
-  wireNext('tnext');
-  if (!TU.busy) micWidget($('#micw'), async rec => { await tutorTurn(rec); }, 40);
-  else $('#micw').innerHTML = '<div class="small muted">Waiting for the Tutor…</div>';
-  const last = body.querySelector('.chat > :last-child'); if (last && TU.msgs.length > 1) last.scrollIntoView({ block: 'nearest' });
-}
-
 /* ---------- gap words ---------- */
 function addGap(en, ceb, ex, exEn, quiet) {
   if (!en || !ceb) return false;
@@ -1302,7 +974,7 @@ VIEWS.gaps = function () {
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Gap words</h2></div>
   <section class="panel"><p style="margin:0">Every time you reach for an English word mid-sentence, it belongs here. Add them here and they become flashcards. They become flashcards you practice out loud.</p>
   <label class="label" for="gen">The word or phrase you said in English</label><input class="field" id="gen" placeholder="e.g. appointment, I'm running late">
-  <label class="label" for="gceb">Bisaya (leave blank to ask Gemini)</label><input class="field" id="gceb" placeholder="Optional">
+  <label class="label" for="gceb">How to say it in Bisaya (ask family if you're not sure)</label><input class="field" id="gceb" placeholder="e.g. tigum">
   <div class="row"><button class="btn primary" id="gadd">Add</button><span class="muted small" id="gmsg"></span></div></section>
   <section class="panel"><div class="row spread"><h2>Your list</h2><span class="muted small tnum">${S.custom.length}</span></div>
   <div>${S.custom.length ? S.custom.slice().reverse().map(x => `<div class="gap"><div style="min-width:0"><span class="c">${esc(x.ceb)}</span> <span class="muted">· ${esc(x.en)}</span>${x.ex ? `<div class="small">${esc(x.ex)} <span class="muted">${esc(x.exEn)}</span></div>` : ''}</div><button class="btn sm ghost" data-del="${x.id}">Remove</button></div>`).join('') : '<p class="muted" style="margin:0">Nothing yet.</p>'}</div></section>`;
@@ -1311,19 +983,13 @@ VIEWS.gaps = function () {
   $('#gadd').onclick = async () => {
     const en = $('#gen').value.trim(), ceb = $('#gceb').value.trim(); if (!en) return;
     if (ceb) { addGap(en, ceb) ? render() : ($('#gmsg').textContent = 'Already on your list.'); return; }
-    if (!hasAI()) { $('#gmsg').textContent = 'Type the Bisaya yourself, or add a Gemini key in Settings.'; return; }
-    $('#gadd').disabled = true; $('#gmsg').textContent = 'Looking it up…';
-    try {
-      const r = await gemJSON([{ text: `${learnerText()}\nThe learner keeps saying "${en}" in English when speaking Bisaya. Give what Cebuanos in Cebu would naturally say instead (a common loanword is fine if that's what people really say) and one short everyday example. JSON only: {"ceb": "...", "example": "...", "example_en": "..."}` }]);
-      if (addGap(en, r.ceb, r.example, r.example_en)) render(); else { $('#gmsg').textContent = 'Already on your list.'; $('#gadd').disabled = false; }
-    } catch (e) { $('#gmsg').textContent = gemErr(e); $('#gadd').disabled = false; }
+    $('#gmsg').textContent = 'Add the Bisaya too.';
   };
 };
 
 /* ---------- boot ---------- */
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  if (e.key === ' ' && micWidget.current && micWidget.current.isConnected) { e.preventDefault(); micWidget.current.click(); return; }
   if (view !== 'session' && view !== 'speedrun') return;
   if (/^[1-4]$/.test(e.key)) { const b = document.querySelectorAll('.opt')[+e.key - 1]; if (b && !b.disabled) b.click(); }
   if (e.key === 'Enter') { const b = $('#chk:not([disabled])') || $('#cont'); if (b && document.activeElement !== b) { e.preventDefault(); b.click(); } }
