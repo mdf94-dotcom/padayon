@@ -84,6 +84,7 @@ nav button .dot{position:absolute;top:10px;left:calc(50% + 9px);width:9px;height
 .grid i{aspect-ratio:1;border-radius:4px;background:var(--chip);display:block;max-width:100%}
 .grid i.on{background:var(--c)}
 .grid i.t{outline:2px solid var(--ink);outline-offset:1px}
+.grid i.rest{background:repeating-linear-gradient(135deg,var(--chip) 0 3px,color-mix(in srgb,var(--ember) 30%,var(--chip)) 3px 6px)}
 .grid .dl{font-size:.68rem;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
 .btn{border:0;border-radius:12px;padding:10px 16px;font-weight:700;background:var(--chip);min-height:42px}
 .btn.primary{background:var(--ink);color:var(--surface)}
@@ -151,7 +152,8 @@ const APPS = [
 ];
 
 /* ---------- Hevy ---------- */
-const H = {key: ls.get('practice.hevyKey') || '', goal: ls.get('practice.goal') || 5, cache: ls.get('practice.hevyCache'), busy:false, err:''};
+const H = {key: ls.get('practice.hevyKey') || '', goal: ls.get('practice.goal') || 5, rest: ls.get('practice.rest') || [3, 6], // rest days: 0 = Sunday … 3 = Wednesday, 6 = Saturday
+  cache: ls.get('practice.hevyCache'), busy:false, err:''};
 const localDay = iso => ymd(new Date(iso));
 async function hevyFetch(force){
   if (!H.key || H.busy) return;
@@ -179,6 +181,7 @@ async function hevyFetch(force){
   H.busy = false; renderToday();
 }
 const workoutsOn = off => (H.cache?.workouts || []).filter(w => w.start && localDay(w.start) === ymd(dayAt(off)));
+const isRest = off => H.rest.includes(dayAt(off).getDay());
 function weekCount(){ const now = dayAt(0), dow = (now.getDay() + 6) % 7; let n = 0; for (let i = 0; i <= dow; i++) if (workoutsOn(-i).length) n++; return n; }
 
 /* ---------- views ---------- */
@@ -211,7 +214,7 @@ function renderToday(){
   if (tab !== 'today') { renderNav(); return; }
   const date = new Date().toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric'});
   const done = APPS.filter(a => a.did(0)).length;
-  const wToday = workoutsOn(0), wDone = wToday.length > 0;
+  const wToday = workoutsOn(0), restToday = isRest(0), wDone = wToday.length > 0 || restToday;
   const total = APPS.length + (H.key ? 1 : 0), got = done + (H.key && wDone ? 1 : 0);
   const rows = APPS.map(a => { const d = a.did(0);
     return `<div class="item ${a.cls} ${d ? 'done' : ''}"><div class="ico" aria-hidden="true">${I[a.k]}${d ? `<span class="ok">${I.check}</span>` : ''}</div>
@@ -221,16 +224,17 @@ function renderToday(){
   if (!H.key) wline = `<b>Not connected</b> · add your Hevy key below`;
   else if (H.err) wline = `<b>Can’t check</b> · see the note below`;
   else if (H.busy && !H.cache) wline = `<b>Checking Hevy…</b>`;
-  else if (wDone){ const w = wToday[0], min = w.end ? Math.round((new Date(w.end) - new Date(w.start)) / 60000) : null;
+  else if (wToday.length){ const w = wToday[0], min = w.end ? Math.round((new Date(w.end) - new Date(w.start)) / 60000) : null;
     wline = `<b>Logged</b> · ${esc(w.title)}${min ? ` · ${min} min` : ''}${w.n ? ` · ${w.n} exercises` : ''} · ${weekCount()} of ${H.goal} this week`; }
+  else if (restToday) wline = `<b>Rest day</b> · ${weekCount()} of ${H.goal} this week`;
   else wline = `<b>No workout logged yet</b> · ${weekCount()} of ${H.goal} this week`;
   const lift = `<div class="item ember ${wDone ? 'done' : ''}"><div class="ico" aria-hidden="true">${I.lift}${wDone ? `<span class="ok">${I.check}</span>` : ''}</div>
-    <h2>Workout</h2><button class="go" data-a="${H.key ? 'hrefresh' : 'hsetup'}">${H.key ? (H.busy ? 'Checking' : 'Refresh') : 'Connect'}</button>
+    <h2>${restToday && !wToday.length ? 'Rest day' : 'Workout'}</h2><button class="go" data-a="${H.key ? 'hrefresh' : 'hsetup'}">${H.key ? (H.busy ? 'Checking' : 'Refresh') : 'Connect'}</button>
     <div class="st">${wline}</div></div>`;
   const days = Array.from({length:14}, (_, i) => i - 13);
-  const grow = (label, color, fn) => `<span class="rl">${label}</span>` + days.map(o => `<i style="--c:var(${color})" class="${fn(o) ? 'on' : ''} ${o === 0 ? 't' : ''}"></i>`).join('');
+  const grow = (label, color, fn, rest) => `<span class="rl">${label}</span>` + days.map(o => `<i style="--c:var(${color})" class="${fn(o) ? 'on' : rest && rest(o) ? 'rest' : ''} ${o === 0 ? 't' : ''}" title="${rest && rest(o) && !fn(o) ? 'Rest day' : ''}"></i>`).join('');
   const grid = `<span></span>` + days.map(o => `<span class="dl">${o === 0 || o === -7 || o === -13 ? dayAt(o).getDate() : ''}</span>`).join('')
-    + APPS.map(a => grow(a.tab, a.color, o => a.did(o))).join('') + (H.key && H.cache ? grow('Workout', '--ember', o => workoutsOn(o).length) : '');
+    + APPS.map(a => grow(a.tab, a.color, o => a.did(o))).join('') + (H.key && H.cache ? grow('Workout', '--ember', o => workoutsOn(o).length, isRest) : '');
   const signed = window.Cloud && Cloud.user;
   $('#page').innerHTML = `
   <header class="top"><div><div class="label">${date}</div><h1>${got === total ? 'All done today' : 'Daily Practice'}</h1></div>
@@ -239,13 +243,15 @@ function renderToday(){
   <div class="list">${rows}${lift}</div>
   ${H.err ? `<div class="note bad" role="alert">${H.err}</div>` : ''}
   ${!signed && window.Cloud && Cloud.ready ? `<div class="note">Sign in with Google (the same account as Padayon) so every app syncs between your phone and PC. <button class="btn primary" data-a="signin" style="margin-top:8px;display:block">Sign in with Google</button></div>` : ''}
-  <section class="panel"><div class="top"><h2 style="font-size:1.1rem">Last 14 days</h2><span class="small muted">Today is outlined</span></div><div class="grid">${grid}</div></section>
+  <section class="panel"><div class="top"><h2 style="font-size:1.1rem">Last 14 days</h2><span class="small muted">Today is outlined${H.key && H.cache ? ' · striped = rest day' : ''}</span></div><div class="grid">${grid}</div></section>
   <section class="panel"><details id="setdet" ${ui.open ? 'open' : ''}><summary>Settings</summary>
     <div class="set"><b>Account</b><span class="small muted">${signed ? `Signed in as ${esc(Cloud.user.email || 'your Google account')}. Padayon, Word Hoard, and chess all sync to this account.` : 'Not signed in. Progress is saved on this device only.'}${window.Cloud && Cloud.err ? ` Last sync error: ${esc(Cloud.err)}` : ''}</span>
       <div><button class="btn" data-a="${signed ? 'signout' : 'signin'}">${signed ? 'Sign out' : 'Sign in with Google'}</button></div></div>
     <div class="set" id="hevyset"><b>Hevy</b><span class="small muted">Needs Hevy Pro. In Hevy on the web, open Settings → Developer, create an API key, and paste it here. The key stays on this device.</span>
       <div class="row"><input class="field" id="hkey" type="password" autocomplete="off" placeholder="Hevy API key" value="${esc(H.key)}" aria-label="Hevy API key"><button class="btn primary" data-a="hsave">Save</button></div>
       ${H.key ? `<div><button class="btn" data-a="hremove">Remove key</button></div>` : ''}
+      <span class="small muted">Rest days (count as done on the Today page)</span>
+      <div class="seg" role="group" aria-label="Rest days">${[1,2,3,4,5,6,0].map(d => `<button data-a="rest" data-d="${d}" class="${H.rest.includes(d) ? 'on' : ''}" aria-pressed="${H.rest.includes(d)}">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]}</button>`).join('')}</div>
       <span class="small muted">Workouts per week</span>
       <div class="seg">${[3,4,5,6].map(n => `<button data-a="goal" data-n="${n}" class="${H.goal === n ? 'on' : ''}">${n}</button>`).join('')}</div></div>
     <div class="set"><b>Install</b><span class="small muted">${installEvt ? 'Add Daily Practice to this device so it opens like an app.' : 'On iPhone: tap Share, then Add to Home Screen. On Android or PC (Chrome or Edge): use the install icon in the address bar or the browser menu.'}</span>
@@ -265,6 +271,8 @@ document.addEventListener('click', async e => {
     case 'hsave': { const v = $('#hkey').value.trim(); if (!v){ toast('Paste your Hevy API key first.'); return; } H.key = v; ls.set('practice.hevyKey', v); H.cache = null; ui.open = true; await hevyFetch(true); if (!H.err) toast('Hevy connected'); break; }
     case 'hremove': H.key = ''; H.cache = null; H.err = ''; try{ localStorage.removeItem('practice.hevyKey'); localStorage.removeItem('practice.hevyCache'); }catch(_){ } renderToday(); break;
     case 'hrefresh': hevyFetch(true); break;
+    case 'rest': { const d = +b.dataset.d; H.rest = H.rest.includes(d) ? H.rest.filter(x => x !== d) : H.rest.concat(d); ls.set('practice.rest', H.rest);
+      H.goal = Math.min(6, Math.max(3, 7 - H.rest.length)); ls.set('practice.goal', H.goal); renderToday(); break; }
     case 'goal': H.goal = +b.dataset.n; ls.set('practice.goal', H.goal); renderToday(); break;
     case 'install': if (installEvt){ installEvt.prompt(); installEvt = null; renderToday(); } break;
   }
