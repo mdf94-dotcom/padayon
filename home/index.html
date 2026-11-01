@@ -102,6 +102,15 @@ details[open] > summary::after{content:"–"}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .seg button{border:1px solid var(--line);background:transparent;border-radius:10px;padding:6px 12px;font-weight:700}
 .seg button.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.flow{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav) + 12px + env(safe-area-inset-bottom,0px));width:min(560px,calc(100% - 24px));
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:12px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;z-index:6}
+.flow .msg{flex:1;min-width:160px}
+.flow .msg b{font-family:var(--f-display)}
+.nextup{--c:var(--ink);background:var(--c);color:var(--surface);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.nextup .label{color:inherit;opacity:.85}
+.nextup h2{font-size:1.4rem}
+.nextup .btn{background:var(--surface);color:var(--c)}
+.nextup .btn.ghost{background:transparent;color:inherit;border:1px solid currentColor}
 .toast{position:fixed;left:50%;bottom:calc(var(--nav) + 16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:700;z-index:50;max-width:calc(100% - 32px)}
 @media (max-width:420px){.grid{grid-template-columns:56px repeat(14,minmax(0,1fr));gap:3px}.top h1{font-size:1.7rem}}
 </style>
@@ -109,6 +118,7 @@ details[open] > summary::after{content:"–"}
 <body>
 <div class="stage" id="stage"><div id="today"><div class="page" id="page"></div></div></div>
 <nav id="nav" aria-label="Apps"></nav>
+<div class="flow" id="flow" hidden role="status"></div>
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -138,7 +148,8 @@ function newest(localKey, field){ const a = ls.get(localKey), b = window.Cloud &
 const chessOk = d => !!(d && (d.session || (d.warmDone && (d.opening || d.game))));
 const APPS = [
   {k:'bisaya', name:'Padayon', tab:'Bisaya', cls:'sea', color:'--sea', src:'/padayon/',
-    did(off){ const s = newest('padayon-app-v1', 's'); if (!s) return false; const n = pday(dayAt(off)); return (s.xp && s.xp[n] > 0) || (s.streak && s.streak.last === n); },
+    did(off){ const s = newest('padayon-app-v1', 's'); if (!s) return false; const n = pday(dayAt(off));
+      if (off === 0) return !!(s.plan && s.plan[n] && s.plan[n].session); return !!(s.xp && s.xp[n] > 0); },
     line(){ const s = newest('padayon-app-v1', 's'); if (!s) return 'Not started on this site yet'; const t = pday(dayAt(0)), st = s.streak || {};
       const n = (st.last === t || st.last === t - 1) ? st.count : 0; return `${n} day streak${s.xp && s.xp[t] ? ` · ${s.xp[t]} XP today` : ''}`; }},
   {k:'words', name:'Word Hoard', tab:'Words', cls:'ind', color:'--ind', src:'words/',
@@ -195,6 +206,7 @@ function show(k){
   APPS.forEach(a => {
     if (a.k === k && !frames[a.k]){
       const f = document.createElement('iframe'); f.src = a.src; f.title = a.name; f.allow = 'microphone; autoplay; clipboard-write';
+      f.addEventListener('load', () => { f.dataset.loaded = '1'; });
       $('#stage').appendChild(f); frames[a.k] = f;
     }
     if (frames[a.k]) frames[a.k].hidden = a.k !== k;
@@ -218,7 +230,7 @@ function renderToday(){
   const total = APPS.length + (H.key ? 1 : 0), got = done + (H.key && wDone ? 1 : 0);
   const rows = APPS.map(a => { const d = a.did(0);
     return `<div class="item ${a.cls} ${d ? 'done' : ''}"><div class="ico" aria-hidden="true">${I[a.k]}${d ? `<span class="ok">${I.check}</span>` : ''}</div>
-      <h2>${a.name}</h2><button class="go" data-tab="${a.k}">${d ? 'Open' : 'Start'}</button>
+      <h2>${a.name}</h2><button class="go" ${d ? `data-tab="${a.k}"` : `data-start="${a.k}"`}>${d ? 'Open' : 'Start'}</button>
       <div class="st"><b>${d ? 'Done today' : 'Not yet'}</b> · ${esc(a.line())}</div></div>`; }).join('');
   let wline;
   if (!H.key) wline = `<b>Not connected</b> · add your Hevy key below`;
@@ -240,6 +252,7 @@ function renderToday(){
   <header class="top"><div><div class="label">${date}</div><h1>${got === total ? 'All done today' : 'Daily Practice'}</h1></div>
     <span class="count tnum">${got} of ${total} done</span></header>
   <div class="meter" aria-hidden="true">${Array.from({length: total}, (_, i) => `<i class="${i < got ? 'on' : ''}"></i>`).join('')}</div>
+  ${FL.next ? nextCard() : ''}
   <div class="list">${rows}${lift}</div>
   ${H.err ? `<div class="note bad" role="alert">${H.err}</div>` : ''}
   ${!signed && window.Cloud && Cloud.ready ? `<div class="note">Sign in with Google (the same account as Padayon) so every app syncs between your phone and PC. <button class="btn primary" data-a="signin" style="margin-top:8px;display:block">Sign in with Google</button></div>` : ''}
@@ -260,9 +273,43 @@ function renderToday(){
   renderNav();
 }
 
+/* ---------- finishing one app: back to Today, then on to the next ---------- */
+const FL = {prev: {}, timer: null, next: null, left: 0};
+APPS.forEach(a => FL.prev[a.k] = a.did(0));
+const order = a => APPS.indexOf(a);
+function nextApp(after){ for (let i = 1; i <= APPS.length; i++){ const a = APPS[(order(after) + i) % APPS.length]; if (!a.did(0)) return a; } return null; }
+function stopFlow(){ clearInterval(FL.timer); FL.timer = null; }
+function checkFinished(){
+  APPS.forEach(a => { const now = a.did(0); if (now && !FL.prev[a.k] && tab === a.k) finished(a); FL.prev[a.k] = now; });
+}
+function finished(a){
+  stopFlow(); FL.left = 6; const nx = nextApp(a);
+  const bar = $('#flow');
+  const draw = () => { bar.innerHTML = `<div class="msg"><b>${a.name} done.</b> <span class="muted">Back to Today in ${FL.left}${nx ? `, then ${esc(nx.name)}` : ''}.</span></div>
+    <button class="btn" data-a="flowstay">Stay here</button><button class="btn primary" data-a="flowgo">Go now</button>`; };
+  FL.pending = nx; draw(); bar.hidden = false;
+  FL.timer = setInterval(() => { FL.left--; if (FL.left <= 0) backHome(); else draw(); }, 1000);
+}
+function backHome(){
+  stopFlow(); $('#flow').hidden = true;
+  FL.next = FL.pending || null; FL.pending = null;
+  show('today'); $('#today').scrollTop = 0;
+  if (FL.next){ FL.left = 3; renderToday(); FL.timer = setInterval(() => { FL.left--; if (FL.left <= 0){ const n = FL.next; FL.next = null; stopFlow(); startApp(n.k); } else renderToday(); }, 1000); }
+}
+function nextCard(){ const a = FL.next;
+  return `<section class="nextup" style="--c:var(${a.color})"><div class="label">Next up</div><h2>${a.name}</h2>
+    <span>Starting in ${FL.left}…</span><div class="row"><button class="btn" data-a="nextnow">Start now</button><button class="btn ghost" data-a="nextcancel">Not now</button></div></section>`; }
+function startApp(k){
+  stopFlow(); FL.next = null; show(k);
+  const f = frames[k]; if (!f) return;
+  const go = () => setTimeout(() => { try{ const w = f.contentWindow; const fn = w && (w.startFromHome || w.startSession); if (typeof fn === 'function') fn('daily'); }catch(e){} }, 900);
+  if (f.dataset.loaded) go(); else f.addEventListener('load', go, {once:true});
+}
+
 /* ---------- events ---------- */
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-tab]'); if (t){ show(t.dataset.tab); return; }
+  const st = e.target.closest('[data-start]'); if (st){ startApp(st.dataset.start); return; }
+  const t = e.target.closest('[data-tab]'); if (t){ if (FL.next){ FL.next = null; stopFlow(); } show(t.dataset.tab); return; }
   const b = e.target.closest('[data-a]'); if (!b) return;
   switch (b.dataset.a){
     case 'signin': try{ await Cloud.signIn(); }catch(err){ toast(err.message || 'Sign-in failed'); } break;
@@ -271,6 +318,10 @@ document.addEventListener('click', async e => {
     case 'hsave': { const v = $('#hkey').value.trim(); if (!v){ toast('Paste your Hevy API key first.'); return; } H.key = v; ls.set('practice.hevyKey', v); H.cache = null; ui.open = true; await hevyFetch(true); if (!H.err) toast('Hevy connected'); break; }
     case 'hremove': H.key = ''; H.cache = null; H.err = ''; try{ localStorage.removeItem('practice.hevyKey'); localStorage.removeItem('practice.hevyCache'); }catch(_){ } renderToday(); break;
     case 'hrefresh': hevyFetch(true); break;
+    case 'flowgo': backHome(); break;
+    case 'flowstay': stopFlow(); FL.pending = null; $('#flow').hidden = true; break;
+    case 'nextnow': { const n = FL.next; startApp(n.k); break; }
+    case 'nextcancel': FL.next = null; stopFlow(); renderToday(); break;
     case 'rest': { const d = +b.dataset.d; H.rest = H.rest.includes(d) ? H.rest.filter(x => x !== d) : H.rest.concat(d); ls.set('practice.rest', H.rest);
       H.goal = Math.min(6, Math.max(3, 7 - H.rest.length)); ls.set('practice.goal', H.goal); renderToday(); break; }
     case 'goal': H.goal = +b.dataset.n; ls.set('practice.goal', H.goal); renderToday(); break;
@@ -278,10 +329,10 @@ document.addEventListener('click', async e => {
   }
 });
 document.addEventListener('toggle', e => { if (e.target.id === 'setdet') ui.open = e.target.open; }, true);
-window.addEventListener('storage', () => renderToday());
+window.addEventListener('storage', () => { checkFinished(); renderToday(); });
 window.addEventListener('hashchange', () => show(location.hash.slice(1)));
 document.addEventListener('visibilitychange', () => { if (!document.hidden && tab === 'today'){ renderToday(); hevyFetch(false); } });
-if (window.Cloud) Cloud.on(() => renderToday());
+if (window.Cloud) Cloud.on(() => { checkFinished(); renderToday(); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 show(location.hash.slice(1) || 'today');
 </script>

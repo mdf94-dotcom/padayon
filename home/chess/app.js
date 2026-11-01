@@ -437,6 +437,7 @@ function buildSession(){
 /* ---- the session screen ---- */
 let SESS=null;
 function startSession(){SESS={q:buildSession(),i:0,xp:0,right:0,total:0,graded:new Set(),requeued:new Set(),fresh:new Set(),ups:0};go("session")}
+window.startSession=()=>{if(!SESS)startSession()}; // lets the Daily Practice home start today's session
 function vSession(v){
  if(!SESS){go("today");return}
  if(SESS.i>=SESS.q.length)return sessionSummary(v);

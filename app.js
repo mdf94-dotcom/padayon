@@ -523,6 +523,8 @@ VIEWS.settings = function () {
 let Q = [], qi = 0, sess = null, timerH = null;
 const newSess = mode => ({ xp: 0, right: 0, total: 0, graded: new Set(), requeued: new Set(), newIds: new Set(), mode, peak: S.speed });
 function startSession() { Q = buildSession(); qi = 0; sess = newSess('daily'); go('session'); }
+/* The Daily Practice home calls this to start today's session; it does nothing until the content pack is loaded. */
+window.startFromHome = () => { try { if (P && P.length && view !== 'session') startSession(); } catch (e) { } };
 function startDictation() {
   if (!hasPack()) return toast('Load the content pack first. Dictation uses its recordings.');
   let pool = Object.keys(S.cards).filter(id => IDX[id]);
