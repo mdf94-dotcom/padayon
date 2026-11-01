@@ -247,7 +247,7 @@ function planItems() {
     { k: 'dict', name: 'Dictation', d: 'Type what you hear, every little word.', run: () => startDictation() },
     { k: 'shadow', name: 'Shadowing', d: 'Speak along with one unit. Hands-free.', run: () => go('shadow') },
     ai ? { k: 'pron', name: 'Pronunciation', d: 'Repeat 10 phrases and get scored.', run: () => { PR = null; go('pron'); } } : null,
-    ai ? { k: 'talk', name: 'Talk with the Tutor', d: '5 turns out loud.', run: () => go('tutor') } : { k: 'talk', name: 'Talk out loud', d: 'A call with family in Bisaya. Tick it when done.', manual: true },
+    { k: 'talk', name: 'Talk out loud', d: 'A call or chat with family in Bisaya. Tick it when done.', manual: true },
     { k: 'input', name: '10 minutes of real Bisaya', d: "A vlog, radio, or teleserye. Follow the gist. Tick it when done.", manual: true }
   ].filter(Boolean);
 }
@@ -583,9 +583,9 @@ VIEWS.home = function () {
   $('#app').innerHTML = `
   <div class="top"><div class="brand"><h1>Padayon</h1><span class="muted small">Bisaya with the Lucky Clovers</span></div>
     <div class="stats"><span class="stat tnum" title="Day streak"><span class="flame">${I.flame}</span>${streakNow()}</span><span class="stat tnum" title="Listening speed"><span class="flame">${I.bolt}</span>${S.speed.toFixed(1)}×</span></div></div>
-  ${!hasPack() || !hasAI() ? `<section class="banner"><b>Finish setting up</b>
+  ${!hasPack() ? `<section class="banner"><b>Finish setting up</b>
     ${!hasPack() ? (packState === 'loading' ? `<div class="small">Downloading 225 phrases and 1,002 words with native recordings… <b id="packpct">${packPct}%</b> (about 10 MB, one time only)</div>` : `<div class="small">${packState === 'error' ? "The phrases and recordings didn't download. Check your connection and try again." : 'Phrases and recordings are not loaded yet.'}</div><button class="btn primary" id="packretry">Download phrases and recordings</button>`) : ''}
-    ${!hasAI() ? `<div class="small">Add a free Gemini API key so the Tutor can hear and grade you.</div><button class="btn ${hasPack() ? 'primary' : ''}" data-go="settings">Add Gemini key</button>` : ''}</section>` : ''}
+</section>` : ''}
   <section class="hero">
     <div class="hero-guide">${binkoSays(BINKO_NEXT[nextUp ? nextUp.k : 'done'], true)}</div>
     <div><div class="label" style="color:inherit;opacity:.8">Karon nga adlaw · Today</div><h2>${nextUp ? 'Next up: ' + esc(nextUp.name) : 'All done today. Padayon!'}</h2>
@@ -595,16 +595,14 @@ VIEWS.home = function () {
   </section>
   ${pathPanel()}
   <section class="drills">
-    <button class="drill" data-go="tutor"><span class="label">Speaking</span><span class="big">Tutor</span><b>Talk out loud</b><span class="muted small">A voice conversation in Bisaya that corrects you as you go.</span></button>
-    <button class="drill" data-go="pron"><span class="label">Pronunciation</span><span class="big">Sulti</span><b>Repeat and get scored</b><span class="muted small">Copy a native speaker, see what to fix.</span></button>
+    ${hasAI() ? `<button class="drill" data-go="pron"><span class="label">Pronunciation</span><span class="big">Sulti</span><b>Repeat and get scored</b><span class="muted small">Copy a native speaker, see what to fix.</span></button>` : ''}
     <button class="drill" data-go="speed"><span class="label">Listening</span><span class="big tnum">${S.speed.toFixed(1)}×</span><b>Speed round</b><span class="muted small">Clips get faster as you get them right.</span></button>
     <button class="drill" id="dictgo"><span class="label">Fast speech</span><span class="big">Dictation</span><b>Type what you hear</b><span class="muted small">Catch every little word.</span></button>
     <button class="drill" data-go="shadow"><span class="label">Fluency</span><span class="big">Shadow</span><b>Speak along</b><span class="muted small">Hands-free. Repeat with the speaker.</span></button>
     <button class="drill" data-go="convos"><span class="label">Chaining</span><span class="big">Istorya</span><b>Today's conversation</b><span class="muted small">Picked to match what you know. Play your part out loud.</span></button>
     <button class="drill" data-go="gaps"><span class="label">Your words</span><span class="big tnum">${S.custom.length}</span><b>Gap words</b><span class="muted small">English you keep reaching for.</span></button>
   </section>
-  <section class="panel"><div class="row spread"><h2>Your weak spots</h2>${weak.length ? '<button class="btn sm primary" id="weakgo">Practice with Tutor</button>' : ''}</div>
-    ${weak.length ? `<div>${weak.map(([k, v]) => `<div class="weak"><span class="n tnum">${v.n}×</span><div style="min-width:0"><b>${esc(k)}</b><div class="small muted">${esc(v.fix)}</div></div></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Mistakes the Tutor catches in your speaking collect here. The Tutor then steers conversations toward them.</p>'}</section>
+  ${weak.length ? `<section class="panel"><h2>Your weak spots</h2><div>${weak.map(([k, v]) => `<div class="weak"><span class="n tnum">${v.n}×</span><div style="min-width:0"><b>${esc(k)}</b><div class="small muted">${esc(v.fix)}</div></div></div>`).join('')}</div></section>` : ''}
   <section class="panel"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${doneN} of ${items.length}</span></div>
     <div class="bar" style="grid-column:auto"><i style="width:${doneN / items.length * 100}%"></i></div>
     <div>${items.map(it => `<div class="check"><button class="box ${isDone(it, plan) ? 'on' : ''}" data-plan="${it.k}" ${it.manual ? '' : 'disabled title="Ticks itself when you finish"'} aria-label="${esc(it.name)}">${isDone(it, plan) ? I.check : ''}</button><div style="flex:1;min-width:0"><b>${esc(it.name)}${it.locked ? ' 🔒' : ''}</b><span class="muted small">${esc(it.d)}</span></div>${!isDone(it, plan) && !it.manual ? `<button class="btn sm ghost" data-run="${it.k}">Go</button>` : ''}</div>`).join('')}</div></section>
@@ -626,13 +624,12 @@ VIEWS.home = function () {
   <section class="panel"><div class="row spread"><h2>Sync across devices</h2><button class="btn sm ${Sync.user ? 'ghost' : 'primary'} syncbtn" id="synchome">${Sync.user ? 'Sign out' : 'Sign in with Google'}</button></div>
     <p class="small syncline" style="margin:0">${syncLine()}</p><p class="muted small" style="margin:0">Sign in with the same Google account on your phone and PC and your progress follows you.</p></section>
   <section class="panel"><div class="row spread"><h2>Settings</h2><button class="btn sm ghost" data-go="settings">Open</button></div>
-    <p class="muted small" style="margin:0">Gemini key, tutor voice, cards per day, and moving your progress between devices.</p></section>`;
+    <p class="muted small" style="margin:0">Your name, cards per day, sync, and backups.</p></section>`;
   $('#start').onclick = () => { if (!nextUp) return startSession(); if (nextUp.manual) { tick(nextUp.k); return render(); } nextUp.run(); };
   document.querySelectorAll('[data-run]').forEach(b => b.onclick = () => planItems().find(i => i.k === b.dataset.run).run());
   $('#dictgo').onclick = startDictation;
   $('#synchome').onclick = () => Sync.user ? signOutSync() : signIn();
   if ($('#packretry')) $('#packretry').onclick = autoPack;
-  if ($('#weakgo')) $('#weakgo').onclick = () => { TU = null; tutorStart('Practice my weak spots'); };
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
   document.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { const p = planDay(); p[b.dataset.plan] = !p[b.dataset.plan]; save(); render(); });
   document.querySelectorAll('[data-focus]').forEach(b => b.onclick = () => { S.focus = S.focus === b.dataset.focus ? null : b.dataset.focus; save(); render(); toast(S.focus ? 'New cards will come from this unit first' : 'Back to the normal order'); });
@@ -640,15 +637,6 @@ VIEWS.home = function () {
 VIEWS.settings = function () {
   const k = getKey(), st = S.settings;
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Settings</h2></div>
-  <section class="panel"><h2>Gemini API key</h2>
-    <p class="small" style="margin:0">The Tutor uses Google's Gemini to hear you. Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>, then paste it here. It stays on this device only.</p>
-    <div class="keybox"><input class="field" id="key" type="password" autocomplete="off" placeholder="Paste your key" value="${esc(k)}"><button class="btn primary" id="savekey">Save</button></div>
-    <div class="row"><button class="btn sm ghost" id="testkey" ${k ? '' : 'disabled'}>Test it</button><span class="small muted" id="keymsg">${k ? 'Key saved.' : 'No key yet.'}</span></div>
-    <p class="muted small" style="margin:0">On Google's free tier, Google may use what you send to improve its products. Turning on billing in AI Studio stops that.</p></section>
-  <section class="panel"><h2>Tutor voice</h2>
-    <div class="seg" id="voices">${['Kore', 'Aoede', 'Puck', 'Charon', 'Zephyr', 'Fenrir'].map(v => `<button class="${st.voice === v ? 'on' : ''}" data-v="${v}">${v}</button>`).join('')}</div>
-    <label class="row small"><input type="checkbox" id="ttson" ${st.ttsOn ? 'checked' : ''}> Read Tutor replies out loud</label>
-    <button class="btn sm ghost" id="trytts" ${k ? '' : 'disabled'}>Hear a sample</button></section>
   <section class="panel"><h2>Your name</h2>
     <p class="small" style="margin:0">Binko uses this when he announces your finished lessons in the family Discord.</p>
     <div class="keybox"><input class="field" id="myname" placeholder="${esc(displayName())}" value="${esc(S.settings.name || '')}"><button class="btn primary" id="savename">Save</button></div></section>
@@ -663,6 +651,17 @@ VIEWS.settings = function () {
   <section class="panel"><h2>Backup file</h2>
     <p class="small" style="margin:0">A manual copy of your progress, if you ever want one.</p>
     <div class="row"><button class="btn" id="exp">Save backup file</button><button class="btn ghost" id="imp">Load backup</button></div></section>
+  <section class="panel"><details><summary><b>Optional: Gemini voice and grading</b></summary><div style="display:grid;gap:14px;margin-top:10px">
+  <div style="display:grid;gap:10px"><h3>Gemini API key</h3>
+    <p class="small" style="margin:0">Not needed. With a free Gemini key, cards without a recording get a voice, speaking answers get graded, and you get extra memory tricks. Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>, then paste it here. It stays on this device only.</p>
+    <div class="keybox"><input class="field" id="key" type="password" autocomplete="off" placeholder="Paste your key" value="${esc(k)}"><button class="btn primary" id="savekey">Save</button></div>
+    <div class="row"><button class="btn sm ghost" id="testkey" ${k ? '' : 'disabled'}>Test it</button><span class="small muted" id="keymsg">${k ? 'Key saved.' : 'No key yet.'}</span></div>
+    <p class="muted small" style="margin:0">On Google's free tier, Google may use what you send to improve its products. Turning on billing in AI Studio stops that.</p></div>
+  <div style="display:grid;gap:10px"><h3>Voice</h3>
+    <div class="seg" id="voices">${['Kore', 'Aoede', 'Puck', 'Charon', 'Zephyr', 'Fenrir'].map(v => `<button class="${st.voice === v ? 'on' : ''}" data-v="${v}">${v}</button>`).join('')}</div>
+    <label class="row small"><input type="checkbox" id="ttson" ${st.ttsOn ? 'checked' : ''}> Read cards without a recording out loud</label>
+    <button class="btn sm ghost" id="trytts" ${k ? '' : 'disabled'}>Hear a sample</button></div>
+  </div></details></section>
   <section class="panel"><details><summary>Advanced: model names</summary>
     <div style="display:grid;gap:8px;margin-top:10px"><label class="label" for="mdl">Listening and grading model</label><input class="field" id="mdl" value="${esc(st.model)}">
     <label class="label" for="tmdl">Voice model</label><input class="field" id="tmdl" value="${esc(st.tts)}">
@@ -1301,7 +1300,7 @@ function addGap(en, ceb, ex, exEn, quiet) {
 }
 VIEWS.gaps = function () {
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Gap words</h2></div>
-  <section class="panel"><p style="margin:0">Every time you reach for an English word mid-sentence, it belongs here. Words the Tutor catches are added automatically. They become flashcards you practice out loud.</p>
+  <section class="panel"><p style="margin:0">Every time you reach for an English word mid-sentence, it belongs here. Add them here and they become flashcards. They become flashcards you practice out loud.</p>
   <label class="label" for="gen">The word or phrase you said in English</label><input class="field" id="gen" placeholder="e.g. appointment, I'm running late">
   <label class="label" for="gceb">Bisaya (leave blank to ask Gemini)</label><input class="field" id="gceb" placeholder="Optional">
   <div class="row"><button class="btn primary" id="gadd">Add</button><span class="muted small" id="gmsg"></span></div></section>
