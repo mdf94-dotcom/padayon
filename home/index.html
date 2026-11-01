@@ -198,14 +198,14 @@ const isRest = off => H.rest.includes(dayAt(off).getDay());
 function weekCount(){ const now = dayAt(0), dow = (now.getDay() + 6) % 7; let n = 0; for (let i = 0; i <= dow; i++) if (workoutsOn(-i).length) n++; return n; }
 
 /* ---------- Outfit Inspo (a page inside Claude; it can't be embedded, so it opens in a new tab) ---------- */
-const OUTFIT = {url: 'https://claude.ai/artifact/526ztr6SRrbUUpy9ZTgJ9g', at: [18, 41]}; // new picks arrive daily at 6:41 PM
+const OUTFIT = {url: 'https://claude.ai/artifact/526ztr6SRrbUUpy9ZTgJ9g', at: [6, 0]}; // new picks are ready by 6 AM
 const outfitDays = () => { const a = ls.get('practice.outfitDays') || {}, b = (window.Cloud && Cloud.get('outfitDays')) || {}; return Object.assign({}, b, a); };
 const outfitSeen = off => !!outfitDays()[ymd(dayAt(off))];
 function markOutfit(){ const d = outfitDays(); d[ymd()] = 1; Object.keys(d).sort().slice(0, -60).forEach(k => delete d[k]); ls.set('practice.outfitDays', d); if (window.Cloud && Cloud.user) Cloud.save('outfitDays', d); }
 function outfitLine(){
   const now = new Date(), mins = now.getHours() * 60 + now.getMinutes(), drop = OUTFIT.at[0] * 60 + OUTFIT.at[1];
-  if (outfitSeen(0)) return `<b>Checked today</b> · new picks daily at 6:41 PM`;
-  return mins >= drop ? `<b>Today’s picks are in</b> · swipe through pants, shoes, and tops` : `<b>New picks at 6:41 PM</b> · yesterday’s are still there to swipe`;
+  if (outfitSeen(0)) return `<b>Checked today</b> · new picks every morning by 6 AM`;
+  return mins >= drop ? `<b>Today’s picks are in</b> · swipe through pants, shoes, and tops` : `<b>New picks by 6 AM</b> · yesterday’s are still there to swipe`;
 }
 
 /* ---------- views ---------- */
