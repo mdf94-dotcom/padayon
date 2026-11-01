@@ -156,6 +156,13 @@ const GLOSS = {
   gutom: 'hungry', gikapoy: 'tired', okay: 'okay', iro: 'dog', iring: 'cat', balay: 'house', kwarta: 'money', uyab: 'boyfriend/girlfriend', oras: 'time',
   trabaho: 'work/job', kape: 'coffee', manok: 'chicken', kusina: 'kitchen', lami: 'delicious', init: 'hot', nindot: 'nice/beautiful', dako: 'big', dakong: 'big (+ linker)',
   gamay: 'small', layo: 'far', duol: 'near', tinuod: 'true', kasilyas: 'bathroom', ngalan: 'name', lakaw: 'go/walk', kaon: 'eat', adlaw: 'day/sun', mama: 'mom', ma: 'mom',
+  buntag: 'morning', udto: 'noon', hapon: 'afternoon', gabii: 'evening/night', amping: 'take care', 'pag-amping': 'take care',
+  padulong: 'headed to', merkado: 'market', mamalit: 'will shop/buy', isda: 'fish', nikaon: 'ate', magluto: 'will cook', lutoon: 'will cook (it)',
+  adobo: 'adobo', babay: 'bye', order: 'order', usa: 'one', 'kan-on': 'rice', tanan: 'everything', ania: 'here it is', sapayan: 'matter (walay sapayan = you\'re welcome)',
+  'ig-agaw': 'cousin', nalipay: 'happy', nakaila: 'got to know', 'taga-asa': 'from where', pero: 'but', nagpuyo: 'living', singkwenta: 'fifty', mahal: 'expensive',
+  hangyo: 'discount (haggle)', kwarenta: 'forty', kuhaon: 'will take (it)', balik: 'come back', buhaton: 'will do', nganong: 'why', nangutana: 'asked',
+  moadto: 'will go', moapil: 'will join', unsang: 'what (+ linker)', orasa: 'time', alas: "o'clock", otso: 'eight', sayo: 'early', diha: 'there (where you are)',
+  saysenta: 'sixty', ta: 'we (incl. you) / let\'s', kaon: 'eat', gutom: 'hungry', inyong: 'your (all)',
   kumusta: 'how are', ha: 'okay?', lagi: 'indeed', bitaw: 'right', kaha: 'I wonder', unta: 'hopefully', baya: 'you know', gani: 'again/even'
 };
 const AFFIX = [
@@ -186,6 +193,22 @@ const CONF = [
 
 /* ---------- conversations: typical exchanges to practice chaining lines together ---------- */
 const DIALOGS = [
+  { title: 'Morning hello', ceb: 'Maayong buntag', a: 'Tita', b: 'You', lines: [
+    ['a', 'Maayong buntag!', 'Good morning!', 'Before about 11 am, so buntag.'],
+    ['b', 'Maayong buntag sad!', 'Good morning to you too!', 'Sad = too. Answer a greeting by repeating it + sad.'],
+    ['a', 'Kumusta ka?', 'How are you?', 'Ka = you.'],
+    ['b', 'Okay ra ko. Ikaw?', "I'm fine. You?", 'Ikaw? bounces the question back.'],
+    ['a', 'Okay ra man. Salamat!', "I'm fine too. Thanks!", ''],
+    ['b', 'Sige, pag-amping!', 'Okay, take care!', 'Pag-amping goes to the person heading off.']
+  ] },
+  { title: 'Are you hungry?', ceb: 'Gutom ka?', a: 'Sister', b: 'You', lines: [
+    ['a', 'Gutom ka?', 'Are you hungry?', 'Gutom = hungry, ka = you.'],
+    ['b', 'Oo, gutom ko. Ikaw?', "Yes, I'm hungry. You?", 'Ko = I. Swap ka for ko to answer about yourself.'],
+    ['a', 'Gutom sad ko. Kaon na ta!', "I'm hungry too. Let's eat!", 'Ta = we, including you.'],
+    ['b', 'Sige! Naa kay adobo?', 'Okay! Do you have adobo?', 'Naa kay…? = do you have…?'],
+    ['a', 'Naa. Lami kaayo!', "Yes. It's really good!", 'Naa alone = yes, there is.'],
+    ['b', 'Salamat!', 'Thanks!', '']
+  ] },
   { title: 'Saying hi to a neighbor', ceb: 'Sa silingan', a: 'Neighbor', b: 'You', lines: [
     ['a', 'Maayong hapon!', 'Good afternoon!', 'It\'s after lunch, so hapon, not udto.'],
     ['b', 'Maayong hapon sad. Kumusta ka?', 'Good afternoon to you too. How are you?', 'Sad = too. Answer a greeting by repeating it + sad.'],

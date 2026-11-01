@@ -171,6 +171,7 @@ function mergeState(a, b) {
   out.mistakes = {}; new Set(Object.keys(a.mistakes).concat(Object.keys(b.mistakes))).forEach(k => { const x = a.mistakes[k], y = b.mistakes[k]; out.mistakes[k] = !x ? y : !y ? x : { n: Math.max(x.n, y.n), fix: (newer === b ? y.fix : x.fix) || x.fix || y.fix, last: Math.max(x.last || 0, y.last || 0) }; });
   out.tips = Object.assign({}, a.tips, b.tips);
   out.announced = Math.max(a.announced || 0, b.announced || 0);
+  out.convoDone = {}; [a.convoDone || {}, b.convoDone || {}].forEach(x => Object.keys(x).forEach(k => out.convoDone[k] = Math.max(out.convoDone[k] || 0, x[k])));
   out.updated = Math.max(a.updated || 0, b.updated || 0);
   return out;
 }
@@ -236,7 +237,7 @@ function planItems() {
   const ai = hasAI();
   return [
     { k: 'session', name: 'Daily session', d: 'Reviews, new words, and building blocks.', run: () => startSession() },
-    { k: 'convo', name: 'One conversation', d: 'Read it, then play your part out loud.', run: () => go('convos') },
+    { k: 'convo', name: "Today's conversation", d: 'New words first, then read it and say your part out loud.', run: () => go('convos') },
     { k: 'speed', name: 'Speed round', d: 'Fast listening that speeds up as you get it right.', run: () => go('speed') },
     { k: 'dict', name: 'Dictation', d: 'Type what you hear, every little word.', run: () => startDictation() },
     { k: 'shadow', name: 'Shadowing', d: 'Speak along with one unit. Hands-free.', run: () => go('shadow') },
@@ -536,7 +537,7 @@ VIEWS.home = function () {
     <button class="drill" data-go="speed"><span class="label">Listening</span><span class="big tnum">${S.speed.toFixed(1)}×</span><b>Speed round</b><span class="muted small">Clips get faster as you get them right.</span></button>
     <button class="drill" id="dictgo"><span class="label">Fast speech</span><span class="big">Dictation</span><b>Type what you hear</b><span class="muted small">Catch every little word.</span></button>
     <button class="drill" data-go="shadow"><span class="label">Fluency</span><span class="big">Shadow</span><b>Speak along</b><span class="muted small">Hands-free. Repeat with the speaker.</span></button>
-    <button class="drill" data-go="convos"><span class="label">Chaining</span><span class="big">Istorya</span><b>Conversations</b><span class="muted small">Real exchanges. Play your part out loud.</span></button>
+    <button class="drill" data-go="convos"><span class="label">Chaining</span><span class="big">Istorya</span><b>Today's conversation</b><span class="muted small">Picked to match what you know. Play your part out loud.</span></button>
     <button class="drill" data-go="gaps"><span class="label">Your words</span><span class="big tnum">${S.custom.length}</span><b>Gap words</b><span class="muted small">English you keep reaching for.</span></button>
   </section>
   <section class="panel"><div class="row spread"><h2>Your weak spots</h2>${weak.length ? '<button class="btn sm primary" id="weakgo">Practice with Tutor</button>' : ''}</div>
@@ -984,18 +985,24 @@ async function speedQ() {
 
 /* ---------- conversations: chain lines into a real exchange ---------- */
 let DL = null;
+/* One conversation a day, picked to fit what the learner already knows. Flow: new words → read and listen → your turn. */
+function knownWords() {
+  const k = new Set();
+  Object.keys(S.cards).forEach(id => { const c = card(id); if (c) tokens(c.ceb).forEach(t => k.add(lowTok(t))); });
+  return k;
+}
+const dlgTokens = d => [...new Set(d.lines.flatMap(l => tokens(l[1]).map(lowTok)))].filter(t => t && !/^\d/.test(t));
+function pickDialog() {
+  const k = knownWords(), done = S.convoDone || {};
+  const scored = DIALOGS.map((d, i) => ({ i, d, unknown: dlgTokens(d).filter(t => !k.has(t)), times: done[i] || 0 }));
+  // fewest unfamiliar words first; among ties, the one practiced least; the starter dialogs win ties so beginners start easy
+  scored.sort((x, y) => (x.unknown.length + x.times * 3) - (y.unknown.length + y.times * 3) || x.i - y.i);
+  return scored[0];
+}
 VIEWS.convos = function () {
-  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Conversations</h2></div>
-  <section class="panel"><p style="margin:0">Short, everyday exchanges. Read and listen first, then play your part out loud, then put the lines back in order. Each line has a note on how it connects to the last one.</p></section>
-  <section class="panel">${DIALOGS.map((d, i) => `<div class="unit"><div class="nm"><b>${esc(d.ceb)}</b> <span class="muted small">${esc(d.title)} · ${d.lines.length} lines</span></div><span></span>
-    <div class="row" style="grid-column:1/-1"><button class="btn sm primary" data-d="${i}" data-m="read">Read and listen</button><button class="btn sm" data-d="${i}" data-m="part">Play your part</button><button class="btn sm ghost" data-d="${i}" data-m="order">Put in order</button>${hasAI() ? `<button class="btn sm ghost" data-d="${i}" data-m="tutor">Role-play with Tutor</button>` : ''}</div></div>`).join('')}</section>`;
-  $('#quit').onclick = () => go('home');
-  document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => {
-    const d = DIALOGS[+b.dataset.d], m = b.dataset.m;
-    if (m === 'tutor') { TU = null; return tutorStart(`Role-play "${d.title}". You are the ${d.a.toLowerCase()}, the learner is themselves. Use lines like: ${d.lines.filter(l => l[0] === 'a').map(l => l[1]).join(' / ')}`); }
-    DL = { d, m, i: 0, show: {}, right: 0, order: [], pool: m === 'order' ? shuffle(d.lines.map((_, j) => j)) : [] };
-    view = 'convo'; render();
-  });
+  const p = pickDialog();
+  DL = { d: p.d, idx: p.i, m: p.unknown.length ? 'learn' : 'read', i: 0, show: {}, right: 0, unknown: p.unknown };
+  view = 'convo'; render();
 };
 const lineSay = async (txt, btn) => { if (!hasAI() || !S.settings.ttsOn) return; if (btn) btn.classList.add('playing'); const u = await tts(txt); if (btn) btn.classList.remove('playing'); if (u && view === 'convo') await playUrl(u, 1); };
 function bubble(d, l, j, opts = {}) {
@@ -1012,14 +1019,19 @@ function wireBubbles(d) {
 VIEWS.convo = function () {
   const d = DL.d, n = d.lines.length;
   const head = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><div class="prog"><i style="width:${(DL.m === 'order' ? DL.order.length : DL.i) / n * 100}%"></i></div><span class="muted small">${esc(d.ceb)}</span></div>`;
-  const done = () => { const xp = DL.m === 'part' ? 4 * DL.right + 6 : 10; addXP(xp); if (DL.m === 'part' || DL.m === 'order') tick('convo'); save(); view = 'done'; sectionDone('Conversation done', '+' + xp + ' XP · ' + esc(d.title)); };
-  if (DL.m === 'read') {
+  const done = () => { const xp = DL.m === 'part' ? 4 * DL.right + 6 : 10; addXP(xp); if (DL.m === 'part' || DL.m === 'order') { tick('convo'); S.convoDone = S.convoDone || {}; S.convoDone[DL.idx] = (S.convoDone[DL.idx] || 0) + 1; } save(); view = 'done'; sectionDone('Conversation done', '+' + xp + ' XP · ' + esc(d.title)); };
+  if (DL.m === 'learn') {
+    $('#app').innerHTML = `${head}<div class="ex">${binkoSays('Today\'s conversation: <b>' + esc(d.title) + '</b>. First, the words you haven\'t met yet. Binko binks you\'ll be fine!')}
+      <div class="panel"><div class="label">New words in this conversation</div>${DL.unknown.map(t => `<div class="gap"><span class="c">${esc(t)}</span><span class="small muted">${esc(glossOf(t) || 'see it in the conversation')}</span></div>`).join('')}</div></div><div class="foot" id="foot"></div>`;
+    foot(`<button class="btn primary block" id="nx">Start the conversation</button>`);
+    $('#nx').onclick = () => { DL.m = 'read'; DL.i = 0; render(); };
+  } else if (DL.m === 'read') {
     $('#app').innerHTML = `${head}<div class="ex"><div class="label">${esc(d.title)}</div><div class="chat">${d.lines.slice(0, DL.i + 1).map((l, j) => bubble(d, l, j, { note: true })).join('')}</div></div><div class="foot" id="foot"></div>`;
-    foot(DL.i < n - 1 ? `<button class="btn primary block" id="nx">Next line</button>` : `<button class="btn primary block" id="nx">Done. Now play your part</button>`);
-    $('#nx').onclick = () => { if (DL.i < n - 1) { DL.i++; render(); lineSay(d.lines[DL.i][1]); } else { DL = { d, m: 'part', i: 0, show: {}, right: 0 }; render(); } };
+    foot(DL.i < n - 1 ? `<button class="btn primary block" id="nx">Next line</button>` : `<button class="btn primary block" id="nx">Your turn: say your lines</button>`);
+    $('#nx').onclick = () => { if (DL.i < n - 1) { DL.i++; render(); lineSay(d.lines[DL.i][1]); } else { DL = Object.assign(DL, { m: 'part', i: 0, show: {}, right: 0, spoke: 0 }); render(); } };
     if (DL.i === 0 && !DL.spoke) { DL.spoke = 1; lineSay(d.lines[0][1]); }
   } else if (DL.m === 'part') {
-    if (DL.i >= n) { $('#app').innerHTML = `${head}<section class="panel summary"><div class="label">Conversation done</div><h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1><p class="muted">${DL.right} of ${d.lines.filter(l => l[0] === 'b').length} of your lines said right.</p><button class="btn primary block" id="fin">Continue</button></section>`; $('#fin').onclick = done; $('#quit').onclick = () => go('convos'); return; }
+    if (DL.i >= n) { $('#app').innerHTML = `${head}<section class="panel summary"><div class="label">Conversation done</div><h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1><p class="muted">${DL.right} of ${d.lines.filter(l => l[0] === 'b').length} of your lines said right.</p><button class="btn primary block" id="fin">Continue</button></section>`; $('#fin').onclick = done; $('#quit').onclick = () => go('home'); return; }
     const l = d.lines[DL.i], mine = l[0] === 'b';
     $('#app').innerHTML = `${head}<div class="ex"><div class="chat">${d.lines.slice(0, DL.i).map((x, j) => bubble(d, x, j)).join('')}${mine ? '' : bubble(d, l, DL.i)}</div>
       ${mine ? `<div class="panel"><div class="label">Your turn. Say it in Bisaya</div><div class="prompt">${esc(l[2])}</div>${l[3] ? `<div class="small muted">Hint: ${esc(l[3])}</div>` : ''}<div id="micw"></div><div id="res"></div></div>` : ''}</div><div class="foot" id="foot"></div>`;
@@ -1057,7 +1069,7 @@ VIEWS.convo = function () {
       if ($('#again')) $('#again').onclick = () => { DL.order = []; DL.checked = false; DL.pool = shuffle(DL.pool); render(); };
     }
   }
-  $('#quit').onclick = () => go('convos');
+  $('#quit').onclick = () => go('home');
 };
 
 /* ---------- shadowing ---------- */
