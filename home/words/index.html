@@ -434,7 +434,7 @@ function save(){ S.updated = Date.now(); saveLocal(); if (window.Cloud && Cloud.
 function mergeW(a, b){
   const newer = (b.updated || 0) > (a.updated || 0) ? b : a, out = Object.assign(fresh(), JSON.parse(JSON.stringify(newer)));
   out.cards = {}; new Set(Object.keys(a.cards || {}).concat(Object.keys(b.cards || {}))).forEach(id => { const x = (a.cards || {})[id], y = (b.cards || {})[id];
-    out.cards[id] = !x ? y : !y ? x : ((y.r + y.x) > (x.r + x.x) || ((y.r + y.x) === (x.r + x.x) && y.due > x.due)) ? y : x; });
+    out.cards[id] = !x ? y : !y ? x : (x.t || y.t) ? ((y.t || 0) > (x.t || 0) ? y : x) : ((y.r + y.x) > (x.r + x.x) || ((y.r + y.x) === (x.r + x.x) && y.due > x.due)) ? y : x; });
   out.days = {}; [a.days || {}, b.days || {}].forEach(ds => Object.keys(ds).forEach(d => { const p = out.days[d] || {n:0}; out.days[d] = {done: !!(p.done || ds[d].done), n: Math.max(p.n || 0, ds[d].n || 0)}; }));
   const seen = new Set(); out.custom = (a.custom || []).concat(b.custom || []).filter(c => !seen.has(c.id) && seen.add(c.id));
   out.sent = {}; [a.sent || {}, b.sent || {}].forEach(ss => Object.keys(ss).forEach(id => { const have = out.sent[id] || []; ss[id].forEach(s => { if (!have.some(h => h.t === s.t)) have.push(s); }); out.sent[id] = have; }));
@@ -510,14 +510,18 @@ const markEx = w => esc(w.e || '').replace(/\{([^}]+)\}/, '<mark>$1</mark>');
 const blankEx = w => esc(w.e || '').replace(/\{([^}]+)\}/, '<span class="blank">&nbsp;</span>');
 const active = w => w.lv === 0 || S.set.lv.includes(w.lv);
 
-function dueList(){ const t = today(); return Object.keys(S.cards).filter(id => BY[id] && S.cards[id].due <= t)
+function dueList(){ const t = today(); return Object.keys(S.cards).filter(id => BY[id] && !S.cards[id].k && S.cards[id].due <= t)
   .sort((a, b) => S.cards[a].due.localeCompare(S.cards[b].due) || S.cards[a].b - S.cards[b].b); }
 function newList(){ const ws = allWords().filter(w => active(w) && !S.cards[w.id]);
   const by = S.set.lv.map(l => ws.filter(w => w.lv === l)), mixed = [];
   for (let i = 0; by.some(a => i < a.length); i++) by.forEach(a => { if (a[i]) mixed.push(a[i]); });
   return ws.filter(w => w.lv === 0).concat(mixed); }
-function trickyList(){ return Object.keys(S.cards).filter(id => BY[id] && S.cards[id].x > 0)
+function trickyList(){ return Object.keys(S.cards).filter(id => BY[id] && !S.cards[id].k && S.cards[id].x > 0)
   .sort((a, b) => { const A = S.cards[a], B = S.cards[b]; return (B.x / (B.r + B.x)) - (A.x / (A.r + A.x)) || B.x - A.x; }).slice(0, 10); }
+/* Banked: words you already know well. They leave your reviews; you can move them back from the Words tab. */
+function bank(id){ const c = S.cards[id] || (S.cards[id] = {b:0, due:today(), r:0, x:0}); c.k = 1; c.b = 6; c.due = '9999-12-31'; c.t = Date.now(); save(); }
+function unbank(id){ const c = S.cards[id]; if (!c) return; c.k = 0; c.b = 3; c.due = today(); c.t = Date.now(); save(); }
+const bankedCount = () => Object.values(S.cards).filter(c => c.k).length;
 function learnedCount(){ return Object.values(S.cards).filter(c => c.b >= 1).length; }
 function streak(){ let n = 0, d = today(); if (!S.days[d]?.done) d = addDays(d, -1); while (S.days[d]?.done){ n++; d = addDays(d, -1); } return n; }
 
@@ -545,7 +549,8 @@ function makeEx(id, t){
 }
 function reviewType(id){
   const w = BY[id], b = S.cards[id]?.b || 0;
-  const ts = b >= 2 ? ['def','word','blank','type','syn','blank','kind'] : ['def','word','blank','kind'];
+  // Early on, recognize it; once it's familiar, mostly recall it (typing it or filling the blank), which sticks better.
+  const ts = b >= 3 ? ['type','type','blank','blank','word','syn','kind'] : b >= 2 ? ['type','blank','blank','word','def','syn','kind'] : ['def','word','blank','kind'];
   return pick(ts.filter(t => canDo(w, t)));
 }
 
@@ -565,6 +570,8 @@ function startSession(mode){
     q.splice(at, 0, makeEx(w.id, 'intro'));
     q.splice(Math.min(q.length, at + 3), 0, makeEx(w.id, canDo(w, 'blank') && i % 2 ? 'blank' : 'def'));
   });
+  // Second look at each new word at the end, from memory this time (practice only, not graded)
+  news.forEach(w => q.push(makeEx(w.id, canDo(w, 'type') ? 'type' : canDo(w, 'blank') ? 'blank' : 'word')));
   sess = {mode, q, i:0, ans:null, graded:{}, retried:{}, right:0, wrong:0, news: news.map(w => w.id), revs: reviews, hint:false};
   view = 'session'; render();
 }
@@ -573,7 +580,7 @@ function grade(id, ok){
   sess.graded[id] = ok;
   const c = S.cards[id] || (S.cards[id] = {b:0, due:today(), r:0, x:0});
   if (ok){ c.b = Math.min(6, c.b + 1); c.r++; } else { c.b = Math.max(1, c.b - 2); c.x++; }
-  c.due = addDays(today(), INT[c.b]); c.last = today();
+  c.due = addDays(today(), INT[c.b]); c.last = today(); c.t = Date.now();
   save();
 }
 function answer(ok, pickIdx, typed){
@@ -600,8 +607,8 @@ function finish(){
   const t = today(); const d = S.days[t] || {n:0};
   d.done = true; d.n += sess.right + sess.wrong; S.days[t] = d; save();
   if (sess.mode === 'daily') try{ if (window.parent !== window) window.parent.postMessage({practice:'done', app:'words'}, location.origin); }catch(e){}
-  done = {right: sess.right, wrong: sess.wrong, news: sess.news, revs: sess.revs.length,
-    useId: sess.news[0] || pick(sess.revs), saved:false};
+  done = {right: sess.right, wrong: sess.wrong, news: sess.news.filter(id => !S.cards[id]?.k), revs: sess.revs.length,
+    banked: sess.banked || 0};
   sess = null; view = 'done'; render();
 }
 
@@ -635,7 +642,7 @@ function homeHTML(){
   <section class="hero">
     <div><div class="label">Today’s session</div>
       <h2>${doneT ? 'Done for today' : nothing ? 'All caught up' : 'About 10 minutes'}</h2>
-      <p>${nothing ? 'Nothing is due. Turn on another deck in Settings or add your own words.' : `${due} to review · ${nw} new`}</p></div>
+      <p>${bankedCount() ? '' : ''}${nothing ? 'Nothing is due. Turn on another deck in Settings or add your own words.' : `${due} to review · ${nw} new`}</p></div>
     ${nx && nw ? `<div class="next"><div class="label">Up next</div><div class="hw"><span>${esc(nx.w)}</span><i class="pos">${esc(nx.p)}</i></div></div>` : ''}
     <div class="row"><button class="btn" data-a="start" ${nothing ? 'disabled' : ''}>${doneT ? 'Practice more' : 'Start session'}</button></div>
   </section>
@@ -691,7 +698,7 @@ function renderSession(){
   }
   let foot = '';
   if (it.t === 'intro'){
-    foot = `<div class="foot"><button class="btn primary block" data-a="next" id="go">Got it</button></div>`;
+    foot = `<div class="foot"><div class="row" style="flex-wrap:nowrap"><button class="btn ghost" data-a="bank" style="flex:1">I already know it</button><button class="btn primary" data-a="next" id="go" style="flex:1.4">Got it</button></div></div>`;
   } else if (a){
     const spell = a.ok && a.typed && norm(a.typed) !== norm(w.w) && norm(a.typed) !== norm(inflected(w));
     foot = `<div class="foot ${a.ok ? 'good' : 'bad'}" role="status">
@@ -699,7 +706,7 @@ function renderSession(){
       <div class="hwrow" style="gap:8px">${sayBtn(w, 'sm')}<div style="flex:1;min-width:0"><span class="fw">${esc(w.w)}</span> <i class="pos">${esc(w.p)}</i>${w.pr ? ` <span class="muted small">${esc(w.pr)}</span>` : ''} · ${esc(w.d)}</div></div>
       ${spell ? `<div class="small">Watch the spelling: <b>${esc(w.w)}</b></div>` : ''}
       ${it.t === 'kind' && KINDS[w.p] ? `<div class="small"><b>${KINDS[w.p].name}:</b> ${esc(KINDS[w.p].what)}</div>` : !a.ok && w.e ? `<div class="small">${markEx(w)}</div>` : ''}
-      <button class="btn primary block" data-a="next" id="go">Continue</button></div>`;
+      ${a.ok ? `<div class="row" style="flex-wrap:nowrap"><button class="btn ghost" data-a="bank" style="flex:1" title="Stop reviewing this word">Know it well · Bank it</button><button class="btn primary" data-a="next" id="go" style="flex:1.4">Continue</button></div>` : `<button class="btn primary block" data-a="next" id="go">Continue</button>`}</div>`;
   }
   app.innerHTML = `<div class="sbar"><button class="x" data-a="quit" aria-label="End session">${IC.x}</button>
     <div class="prog" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
@@ -712,21 +719,14 @@ function renderSession(){
 }
 function renderDone(){
   const d = done, tot = d.right + d.wrong, pct = tot ? Math.round(d.right / tot * 100) : 100;
-  const uw = BY[d.useId];
   app.innerHTML = header() + `
   <section class="panel" style="align-items:center;text-align:center">
     <div class="label">Session complete</div><h2 style="font-size:1.6rem">${pct >= 85 ? 'Strong session' : pct >= 60 ? 'Good work' : 'Those will come back tomorrow'}</h2>
     <div class="sumgrid"><div><b>${pct}%</b><span class="small muted">first try</span></div><div><b>${d.news.length}</b><span class="small muted">new words</span></div><div><b>${d.revs}</b><span class="small muted">reviewed</span></div></div>
+    ${d.banked ? `<p class="small muted" style="margin:0">Banked ${d.banked} word${d.banked === 1 ? '' : 's'} you already knew.</p>` : ''}
     ${d.news.length ? `<div class="syns" style="justify-content:center">${d.news.map(id => `<span class="syn">${esc(BY[id].w)}</span>`).join('')}</div>` : ''}
   </section>
-  ${uw ? `<section class="panel"><div class="label">Use it</div>
-    <h2>Write one sentence with <mark>${esc(uw.w)}</mark></h2>
-    <p class="small muted" style="margin:0">${esc(uw.d)}. A word sticks better once you've used it about something in your own life.</p>
-    ${d.saved ? `<div class="sent">${esc(d.saved)}</div><div class="msg ok">Saved to the word’s entry.</div>` :
-    `<textarea class="field" id="usein" placeholder="Your sentence"></textarea>
-    <div class="row"><button class="btn primary" data-a="savesent">Save sentence</button><button class="btn ghost" data-a="tab" data-v="home">Skip</button></div>`}
-  </section>` : ''}
-  <button class="btn block ${uw && !d.saved ? 'ghost' : 'primary'}" data-a="tab" data-v="home">Back to today</button>`;
+  <button class="btn block primary" data-a="tab" data-v="home">Back to today</button>`;
 }
 
 /* speed round */
@@ -760,7 +760,7 @@ function speedAnswer(i){
 }
 
 /* words */
-function status(id){ const c = S.cards[id]; return !c ? 'new' : c.b >= 4 ? 'mastered' : 'learning'; }
+function status(id){ const c = S.cards[id]; return !c ? 'new' : c.k ? 'banked' : c.b >= 4 ? 'mastered' : 'learning'; }
 function wordRows(){
   const q = wf.q.trim().toLowerCase();
   const ws = allWords().filter(w => (wf.lv === 'all' || String(w.lv) === wf.lv) && (wf.m === 'all' || status(w.id) === wf.m)
@@ -769,9 +769,10 @@ function wordRows(){
   return ws.map(w => {
     const b = S.cards[w.id]?.b || 0, open = wf.open === w.id, sents = S.sent[w.id] || [];
     return `<button class="wrow" data-a="wopen" data-id="${esc(w.id)}" aria-expanded="${open}"><span class="ww">${esc(w.w)} <i class="pos">${esc(w.p)}</i></span>
-      <span class="dots" aria-label="Box ${b} of 6">${[1,2,3,4,5,6].map(n => `<i class="${n <= b ? 'on' : ''}"></i>`).join('')}</span><span class="wd">${esc(w.d)}</span></button>
+      ${S.cards[w.id]?.k ? `<span class="syn">Banked</span>` : `<span class="dots" aria-label="Box ${b} of 6">${[1,2,3,4,5,6].map(n => `<i class="${n <= b ? 'on' : ''}"></i>`).join('')}</span>`}<span class="wd">${esc(w.d)}</span></button>
       ${open ? `<div class="wdetail">${entryHTML(w)}
-        ${S.cards[w.id] ? `<div class="small muted">Next review ${S.cards[w.id].due <= today() ? 'today' : S.cards[w.id].due} · ${S.cards[w.id].r} right, ${S.cards[w.id].x} missed</div>` : ''}
+        ${S.cards[w.id]?.k ? `<div class="small muted">Banked. It won’t come up in reviews.</div>` : S.cards[w.id] ? `<div class="small muted">Next review ${S.cards[w.id].due <= today() ? 'today' : S.cards[w.id].due} · ${S.cards[w.id].r} right, ${S.cards[w.id].x} missed</div>` : ''}
+        <div>${S.cards[w.id]?.k ? `<button class="btn sm" data-a="wunbank" data-id="${esc(w.id)}">Move back to reviews</button>` : `<button class="btn sm" data-a="wbank" data-id="${esc(w.id)}">I know this well · Bank it</button>`}</div>
         ${sents.length ? `<div class="label">Your sentences</div>${sents.map(s => `<div class="sent">${esc(s.t)}</div>`).join('')}` : ''}
         ${w.lv === 0 ? `<div><button class="btn danger sm" data-a="delword" data-id="${esc(w.id)}">${ui.delArm === w.id ? 'Tap again to remove' : 'Remove this word'}</button></div>` : ''}</div>` : ''}`;
   }).join('');
@@ -794,7 +795,7 @@ function wordsHTML(){
     <p class="small muted" style="margin:0">For essays and applications: keep similes and metaphors that are your own, cut clichés, and avoid slang unless you’re quoting someone.</p></div></details></section>
   <div class="filters"><input class="field" id="wsearch" type="search" placeholder="Search words or definitions" value="${esc(wf.q)}" aria-label="Search words">
     <div class="seg" role="group" aria-label="Deck">${lvOpts.map(([k, l]) => `<button data-a="wlv" data-k="${k}" class="${wf.lv === k ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>
-    <div class="seg" role="group" aria-label="Status">${[['all','Any status'],['new','Not started'],['learning','Learning'],['mastered','Mastered']].map(([k, l]) => `<button data-a="wm" data-k="${k}" class="${wf.m === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+    <div class="seg" role="group" aria-label="Status">${[['all','Any status'],['new','Not started'],['learning','Learning'],['mastered','Mastered'],['banked','Banked']].map(([k, l]) => `<button data-a="wm" data-k="${k}" class="${wf.m === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
   <section class="panel"><div class="wlist" id="wlist">${wordRows()}</div></section>`;
 }
 function settingsHTML(){
@@ -841,9 +842,12 @@ app.addEventListener('click', e => {
     case 'hint': sess.hint = true; render(); break;
     case 'checktype': checkType(); break;
     case 'next': nextItem(); window.scrollTo(0, 0); break;
+    case 'bank': { const id = sess.q[sess.i].id; bank(id); sess.graded[id] = true;
+      sess.q = sess.q.filter((x, j) => j <= sess.i || x.id !== id); sess.banked = (sess.banked || 0) + 1;
+      toast(`Banked “${BY[id].w}”`); nextItem(); window.scrollTo(0, 0); break; }
+    case 'wbank': bank(b.dataset.id); $('#wlist').innerHTML = wordRows(); fillRec(); toast(`Banked “${BY[b.dataset.id].w}”`); break;
+    case 'wunbank': unbank(b.dataset.id); $('#wlist').innerHTML = wordRows(); fillRec(); toast(`“${BY[b.dataset.id].w}” is back in your reviews`); break;
     case 'sopt': speedAnswer(+b.dataset.i); break;
-    case 'savesent': { const t = $('#usein').value.trim(); if (!t){ toast('Write a sentence first, or tap Skip.'); return; }
-      (S.sent[done.useId] = S.sent[done.useId] || []).push({d:today(), t}); save(); done.saved = t; render(); break; }
     case 'wopen': wf.open = wf.open === b.dataset.id ? null : b.dataset.id; $('#wlist').innerHTML = wordRows(); fillRec(); break;
     case 'wlv': wf.lv = b.dataset.k; render(); break;
     case 'wm': wf.m = b.dataset.k; render(); break;

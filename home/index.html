@@ -260,7 +260,7 @@ function renderToday(){
   <section class="panel"><details id="setdet" ${ui.open ? 'open' : ''}><summary>Settings</summary>
     <div class="set"><b>Account</b><span class="small muted">${signed ? `Signed in as ${esc(Cloud.user.email || 'your Google account')}. Padayon, Word Hoard, and chess all sync to this account.` : 'Not signed in. Progress is saved on this device only.'}${window.Cloud && Cloud.err ? ` Last sync error: ${esc(Cloud.err)}` : ''}</span>
       <div><button class="btn" data-a="${signed ? 'signout' : 'signin'}">${signed ? 'Sign out' : 'Sign in with Google'}</button></div></div>
-    <div class="set" id="hevyset"><b>Hevy</b><span class="small muted">Needs Hevy Pro. In Hevy on the web, open Settings → Developer, create an API key, and paste it here. The key stays on this device.</span>
+    <div class="set" id="hevyset"><b>Hevy</b><span class="small muted">${H.key ? 'Connected. ' : ''}Needs Hevy Pro. Paste your key from Hevy’s Settings → Developer once; it saves to your account and fills in on every device you sign in on.</span>
       <div class="row"><input class="field" id="hkey" type="password" autocomplete="off" placeholder="Hevy API key" value="${esc(H.key)}" aria-label="Hevy API key"><button class="btn primary" data-a="hsave">Save</button></div>
       ${H.key ? `<div><button class="btn" data-a="hremove">Remove key</button></div>` : ''}
       <span class="small muted">Rest days (count as done on the Today page)</span>
@@ -307,6 +307,21 @@ function startApp(k){
   if (f.dataset.loaded) go(); else f.addEventListener('load', go, {once:true});
 }
 
+/* The Hevy key is kept on this device and in your signed-in account (the same private record as your progress),
+   so it only has to be entered once; every device picks it up after you sign in. */
+async function setHevyKey(v, announce){
+  H.key = v; ls.set('practice.hevyKey', v); H.cache = null;
+  if (window.Cloud && Cloud.user) Cloud.save('hevy', {key: v});
+  await hevyFetch(true);
+  if (announce && !H.err) toast(window.Cloud && Cloud.user ? 'Hevy connected on all your devices' : 'Hevy connected. Sign in to keep it on your other devices.');
+}
+function syncHevyKey(c){
+  if (!c.user || !c.data) return;
+  const r = c.get('hevy'), remote = r && typeof r.key === 'string' ? r.key : null;
+  if (remote && remote !== H.key){ setHevyKey(remote, false); }
+  else if (remote === null && H.key){ Cloud.save('hevy', {key: H.key}); }
+}
+
 /* ---------- events ---------- */
 document.addEventListener('click', async e => {
   const st = e.target.closest('[data-start]'); if (st){ startApp(st.dataset.start); return; }
@@ -316,8 +331,8 @@ document.addEventListener('click', async e => {
     case 'signin': try{ await Cloud.signIn(); }catch(err){ toast(err.message || 'Sign-in failed'); } break;
     case 'signout': await Cloud.signOut(); toast('Signed out. Progress stays on this device.'); break;
     case 'hsetup': ui.open = true; renderToday(); $('#hkey').focus(); $('#hevyset').scrollIntoView({behavior:'smooth', block:'center'}); break;
-    case 'hsave': { const v = $('#hkey').value.trim(); if (!v){ toast('Paste your Hevy API key first.'); return; } H.key = v; ls.set('practice.hevyKey', v); H.cache = null; ui.open = true; await hevyFetch(true); if (!H.err) toast('Hevy connected'); break; }
-    case 'hremove': H.key = ''; H.cache = null; H.err = ''; try{ localStorage.removeItem('practice.hevyKey'); localStorage.removeItem('practice.hevyCache'); }catch(_){ } renderToday(); break;
+    case 'hsave': { const v = $('#hkey').value.trim(); if (!v){ toast('Paste your Hevy API key first.'); return; } ui.open = true; await setHevyKey(v, true); break; }
+    case 'hremove': H.key = ''; H.cache = null; H.err = ''; try{ localStorage.removeItem('practice.hevyKey'); localStorage.removeItem('practice.hevyCache'); }catch(_){ } if (window.Cloud && Cloud.user) Cloud.save('hevy', {key: ''}); renderToday(); break;
     case 'hrefresh': hevyFetch(true); break;
     case 'flowgo': backHome(); break;
     case 'flowstay': stopFlow(); FL.pending = null; FL.cur = null; $('#flow').hidden = true; break;
@@ -339,7 +354,9 @@ window.addEventListener('message', e => {
 });
 window.addEventListener('hashchange', () => show(location.hash.slice(1)));
 document.addEventListener('visibilitychange', () => { if (!document.hidden && tab === 'today'){ renderToday(); hevyFetch(false); } });
-if (window.Cloud) Cloud.on(() => { checkFinished(); renderToday(); });
+if (window.Cloud) Cloud.on(c => { syncHevyKey(c); checkFinished(); renderToday(); });
+// Pasting a key saves it right away, no Save tap needed
+document.addEventListener('input', e => { if (e.target.id === 'hkey'){ const v = e.target.value.trim(); if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) && v !== H.key){ ui.open = true; setHevyKey(v, true); } } });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 show(location.hash.slice(1) || 'today');
 </script>
