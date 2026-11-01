@@ -52,6 +52,7 @@ const GRAM_ORDER = GRAM_UNITS.flatMap(u => u.ids);
 let P = [], W = [], UNITS = [], IDX = {}, PHRASE_ORDER = [], WORD_UNITS = [];
 const UNIT_OF = {};
 G.forEach((g, i) => UNIT_OF['g' + i] = 'g' + g[3]); F.forEach((f, i) => UNIT_OF['f' + i] = 'f' + f.u);
+const D_ORDER = DIALOGS.flatMap((d, i) => d.lines.map((_, j) => 'd' + i + '_' + j)); D_ORDER.forEach(id => UNIT_OF[id] = 'd' + id.slice(1).split('_')[0]);
 const SPR = { p: null, w: null };
 function setPack(h, pbuf, wbuf) {
   P = h.P; W = h.W; UNITS = h.UNITS; IDX = h.IDX; SPR.p = pbuf; SPR.w = wbuf;
@@ -131,7 +132,7 @@ function importPack() {
 
 /* ---------- state ---------- */
 const LS = 'padayon-app-v1';
-function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newP: 4, newW: 4, newG: 2, newF: 3, learner: 'all', goal: 60, voice: 'Kore', model: 'gemini-3.8-flash', tts: 'gemini-3.8-flash-tts', ttsOn: true }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
+function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newP: 4, newW: 4, newG: 2, newF: 3, newD: 2, learner: 'all', goal: 60, voice: 'Kore', model: 'gemini-3.8-flash', tts: 'gemini-3.8-flash-tts', ttsOn: true }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
 function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.tips = s.tips || {}; if (s.settings.learner !== 'all') { s.settings.learner = 'all'; s.settings.newF = Math.max(3, s.settings.newF || 0); } return s; }
 let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && r.v === 1) return migrate(r); } catch (e) { } return fresh(); })();
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
@@ -237,7 +238,7 @@ function planItems() {
   const ai = hasAI();
   return [
     { k: 'session', name: 'Daily session', d: 'Reviews, new words, and building blocks.', run: () => startSession() },
-    { k: 'convo', name: "Today's conversation", d: 'New words first, then read it and say your part out loud.', run: () => go('convos') },
+    pickDialog() || planDay().convo ? { k: 'convo', name: "Today's conversation", d: 'New words first, then read it and say your part out loud.', run: () => go('convos') } : (() => { const n = nextConvo(); return { k: 'convo', locked: true, name: "Today's conversation", d: `Locked for now, so it counts as done. "${n.d.title}" opens after you learn ${n.left.length} more word${n.left.length === 1 ? '' : 's'} in your daily sessions.` }; })(),
     { k: 'speed', name: 'Speed round', d: 'Fast listening that speeds up as you get it right.', run: () => go('speed') },
     { k: 'dict', name: 'Dictation', d: 'Type what you hear, every little word.', run: () => startDictation() },
     { k: 'shadow', name: 'Shadowing', d: 'Speak along with one unit. Hands-free.', run: () => go('shadow') },
@@ -246,7 +247,8 @@ function planItems() {
     { k: 'input', name: '10 minutes of real Bisaya', d: "A vlog, radio, or teleserye. Follow the gist. Tick it when done.", manual: true }
   ].filter(Boolean);
 }
-const planNext = () => { const p = planDay(); return planItems().find(i => !p[i.k]) || null; };
+const planNext = () => { const p = planDay(); return planItems().find(i => !p[i.k] && !i.locked) || null; };
+const isDone = (it, p) => !!(p[it.k] || it.locked);
 function tick(k) { const p = planDay(); if (!p[k]) { p[k] = true; if (k === 'session') { bumpStreak(); announceLesson(); } save(); } }
 /* ---------- Discord: Binko posts in #🔥streaks when someone finishes the daily lesson ----------
    The webhook link lives in Firestore (config/discord, field "webhook"), readable only by signed-in users,
@@ -293,6 +295,7 @@ function card(id) {
   if (k === 'p') return P[n] && { id, kind: 'p', ceb: P[n][0], en: P[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
   if (k === 'w') return W[n] && { id, kind: 'w', ceb: W[n][0], en: W[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
   if (k === 'g') return G[n] && { id, kind: 'g', ceb: G[n][0], en: G[n][1], note: G[n][2], audio: false };
+  if (k === 'd') { const [di, li] = id.slice(1).split('_').map(Number), d = DIALOGS[di], l = d && d.lines[li]; return l && { id, kind: 'd', ceb: l[1], en: l[2], note: l[3] || '', audio: false, convo: d.title }; }
   if (k === 'f') return F[n] && { id, kind: 'f', ceb: F[n].ceb, en: F[n].en, note: F[n].note, trick: F[n].trick, combos: F[n].combos, audio: false };
   const c = (S.custom || []).find(x => x.id === id);
   return c && { id, kind: 'c', ceb: c.ceb, en: c.en, ex: c.ex, exEn: c.exEn, audio: false };
@@ -306,13 +309,14 @@ function grade(id, q) {
 const learned = ids => ids.filter(id => S.cards[id] && S.cards[id].b >= 2).length;
 const seen = ids => ids.filter(id => S.cards[id]).length;
 function dueIds() { const t = today(); return Object.keys(S.cards).filter(id => S.cards[id].d <= t && card(id)).sort((a, b) => S.cards[a].d - S.cards[b].d); }
-function newAllowance() { const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; return Math.max(0, S.settings.newP + S.settings.newW + S.settings.newG + (S.settings.newF || 0) - S.newDay.n); }
+function newAllowance() { const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; return Math.max(0, S.settings.newP + S.settings.newW + S.settings.newG + (S.settings.newF || 0) + (S.settings.newD ?? 2) - S.newDay.n); }
 function pickNew() {
   let left = newAllowance(); const out = [];
   const take = (order, max) => { let n = Math.min(max, left); for (const id of order) { if (n <= 0) break; if (!S.cards[id] && !out.includes(id) && card(id)) { out.push(id); n--; left--; } } };
   const focused = (pre, units, order) => (S.focus && S.focus[0] === pre && units[+S.focus.slice(1)]) ? units[+S.focus.slice(1)].ids.concat(order) : order;
   take(S.custom.map(c => c.id), 3);
   take(focused('f', F_UNITS, F_ORDER), S.settings.newF || 0);
+  take(D_ORDER, S.settings.newD ?? 2);
   take(focused('g', GRAM_UNITS, GRAM_ORDER), S.settings.newG);
   take(focused('u', UNITS, PHRASE_ORDER), S.settings.newP);
   take(focused('k', WORD_UNITS, W.map((_, i) => 'w' + i)), S.settings.newW);
@@ -321,6 +325,7 @@ function pickNew() {
 function exType(id, isNew) {
   const c = card(id), b = isNew ? 0 : (S.cards[id] ? S.cards[id].b : 0);
   const n = tokens(c.ceb).length, multi = n >= 2 && n <= 9, ai = hasAI();
+  if (c.kind === 'd') return isNew || b < 1 ? 'build' : pick(['build', 'mc', ai ? 'say' : 'type']);
   if (c.kind === 'f') return isNew || b < 1 ? 'build' : b < 2 ? pick(['build', 'mc']) : pick(ai ? ['say', 'build', 'type'] : ['build', 'type', 'speak']);
   if (!c.audio) return isNew || b < 1 ? 'mc' : b < 2 ? pick(['mc', 'type']) : pick(ai ? ['say', 'say', 'type'] : ['speak', 'type']);
   if (isNew || b <= 0) return pick(['listen', 'mc']);
@@ -516,7 +521,7 @@ function unitRow(u, key) {
 }
 VIEWS.home = function () {
   const t = today(), xp = S.xp[t] || 0, goal = S.settings.goal, due = dueIds().length, nw = Math.min(newAllowance(), pickNew().length), plan = planDay();
-  const items = planItems(), nextUp = planNext(), doneN = items.filter(i => plan[i.k]).length;
+  const items = planItems(), nextUp = planNext(), doneN = items.filter(i => isDone(i, plan)).length;
   const weak = weakList(5);
   $('#app').innerHTML = `
   <div class="top"><div class="brand"><h1>Padayon</h1><span class="muted small">Bisaya with the Lucky Clovers</span></div>
@@ -544,7 +549,7 @@ VIEWS.home = function () {
     ${weak.length ? `<div>${weak.map(([k, v]) => `<div class="weak"><span class="n tnum">${v.n}×</span><div style="min-width:0"><b>${esc(k)}</b><div class="small muted">${esc(v.fix)}</div></div></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Mistakes the Tutor catches in your speaking collect here. The Tutor then steers conversations toward them.</p>'}</section>
   <section class="panel"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${doneN} of ${items.length}</span></div>
     <div class="bar" style="grid-column:auto"><i style="width:${doneN / items.length * 100}%"></i></div>
-    <div>${items.map(it => `<div class="check"><button class="box ${plan[it.k] ? 'on' : ''}" data-plan="${it.k}" ${it.manual ? '' : 'disabled title="Ticks itself when you finish"'} aria-label="${esc(it.name)}">${plan[it.k] ? I.check : ''}</button><div style="flex:1;min-width:0"><b>${esc(it.name)}</b><span class="muted small">${esc(it.d)}</span></div>${!plan[it.k] && !it.manual ? `<button class="btn sm ghost" data-run="${it.k}">Go</button>` : ''}</div>`).join('')}</div></section>
+    <div>${items.map(it => `<div class="check"><button class="box ${isDone(it, plan) ? 'on' : ''}" data-plan="${it.k}" ${it.manual ? '' : 'disabled title="Ticks itself when you finish"'} aria-label="${esc(it.name)}">${isDone(it, plan) ? I.check : ''}</button><div style="flex:1;min-width:0"><b>${esc(it.name)}${it.locked ? ' 🔒' : ''}</b><span class="muted small">${esc(it.d)}</span></div>${!isDone(it, plan) && !it.manual ? `<button class="btn sm ghost" data-run="${it.k}">Go</button>` : ''}</div>`).join('')}</div></section>
   <section class="panel"><div class="row spread"><h2>Foundations</h2><span class="muted small tnum">${learned(F_ORDER)} of ${F.length} learned</span></div>
     <p class="muted small" style="margin:0">How words fit together: who, whose, have, like, questions, and when. Each block comes with sentences you build yourself.</p>
     <div>${F_UNITS.map((u, i) => unitRow(u, 'f' + i)).join('')}</div></section>
@@ -585,7 +590,7 @@ VIEWS.settings = function () {
     <p class="small" style="margin:0">Binko uses this when he announces your finished lessons in the family Discord.</p>
     <div class="keybox"><input class="field" id="myname" placeholder="${esc(displayName())}" value="${esc(S.settings.name || '')}"><button class="btn primary" id="savename">Save</button></div></section>
   <section class="panel"><h2>Daily cards</h2>
-    ${[['newF', 'New building blocks per day', [0, 1, 2, 3, 4]], ['newP', 'New phrases per day', [0, 2, 4, 6, 8]], ['newW', 'New words per day', [0, 2, 4, 6, 10]], ['newG', 'New grammar cards per day', [0, 1, 2, 3]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}</section>
+    ${[['newF', 'New building blocks per day', [0, 1, 2, 3, 4]], ['newD', 'New conversation lines per day', [0, 1, 2, 3, 4]], ['newP', 'New phrases per day', [0, 2, 4, 6, 8]], ['newW', 'New words per day', [0, 2, 4, 6, 10]], ['newG', 'New grammar cards per day', [0, 1, 2, 3]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}</section>
   <section class="panel"><h2>Content pack</h2><p class="small" style="margin:0">${hasPack() ? `Loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Not loaded yet.'}</p><div class="row"><button class="btn ${hasPack() ? 'ghost' : 'primary'}" id="pack3">${hasPack() ? 'Download again' : 'Download now'}</button><button class="btn ghost" id="pack2">Load from a file</button></div></section>
   <section class="panel"><h2>Sync across devices</h2>
     <p class="small syncline" style="margin:0">${syncLine()}</p>
@@ -648,7 +653,7 @@ function result(c, item, ok, extra) {
   const gap = sess.total - (sess.lastCameo || -9) >= 4;
   const cameoKind = !gap ? null : q > 0 && sess.run > 0 && sess.run % 3 === 0 ? 'streak' : q > 0 && prevWrong >= 1 && Math.random() < 0.4 ? 'comeback' : q === 0 && sess.wrongRun === 2 ? 'rough' : null;
   if (cameoKind) sess.lastCameo = sess.total;
-  if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push({ id: c.id, type: c.kind === 'f' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
+  if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push({ id: c.id, type: c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
   save();
   const f = $('#foot'); f.className = 'foot ' + (q > 0 ? 'good' : 'bad');
   f.innerHTML = `<div class="row spread"><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
@@ -703,7 +708,7 @@ function swapVariants(c) {
 }
 function distract(c, n, field) {
   const pool = c.kind === 'w' ? W.map((_, i) => 'w' + i).concat(PHRASE_ORDER.filter(id => tokens(P[+id.slice(1)][0]).length === 1))
-    : c.kind === 'p' ? PHRASE_ORDER : c.kind === 'g' ? GRAM_ORDER.concat(F_ORDER) : c.kind === 'f' ? F_ORDER.concat(GRAM_ORDER) : GRAM_ORDER.concat(PHRASE_ORDER, S.custom.map(x => x.id));
+    : c.kind === 'p' ? PHRASE_ORDER : c.kind === 'g' ? GRAM_ORDER.concat(F_ORDER) : c.kind === 'f' ? F_ORDER.concat(GRAM_ORDER) : c.kind === 'd' ? D_ORDER : GRAM_ORDER.concat(PHRASE_ORDER, S.custom.map(x => x.id));
   const ranked = pool.filter(id => id !== c.id).map(card).filter(Boolean).map(d => [simScore(c, d), d]).sort((x, y) => y[0] - x[0]);
   const out = [], used = new Set([norm(c[field])]);
   const ok = d => { const v = norm(d[field]); if (!v || used.has(v) || sameMeaning(c.en, d.en)) return false; used.add(v); return true; };
@@ -799,7 +804,7 @@ const EX = {
   teach(c, item) {
     sess.newIds.add(c.id);
     if (!S.cards[c.id]) { S.cards[c.id] = { b: 0, d: today() + 1, r: 0, w: 0 }; const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; S.newDay.n++; save(); }
-    $('#ex').innerHTML = `<div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
+    $('#ex').innerHTML = `<div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : c.kind === 'd' ? 'Line from a conversation: ' + esc(c.convo) : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
       <div class="ceb">${esc(c.ceb)}</div><div class="prompt" style="font-weight:500">${esc(c.en)}</div>
       ${breakdown(c.ceb)}
       ${c.note ? `<div class="panel note">${castImg('binko', 'peek')}<div class="label">Binko explains · ${c.kind === 'p' || c.kind === 'w' ? 'when to use it' : 'how it fits together'}</div>${esc(c.note)}</div>` : ''}
@@ -992,15 +997,24 @@ function knownWords() {
   return k;
 }
 const dlgTokens = d => [...new Set(d.lines.flatMap(l => tokens(l[1]).map(lowTok)))].filter(t => t && !/^\d/.test(t));
+function nextConvo() { const k = knownWords(); return DIALOGS.map(d => ({ d, left: dlgTokens(d).filter(t => !k.has(t)) })).sort((x, y) => x.left.length - y.left.length)[0]; }
 function pickDialog() {
   const k = knownWords(), done = S.convoDone || {};
-  const scored = DIALOGS.map((d, i) => ({ i, d, unknown: dlgTokens(d).filter(t => !k.has(t)), times: done[i] || 0 }));
+  // only conversations whose every word has been taught
+  const scored = DIALOGS.map((d, i) => ({ i, d, unknown: dlgTokens(d).filter(t => !k.has(t)), times: done[i] || 0 })).filter(x => !x.unknown.length);
+  if (!scored.length) return null;
   // fewest unfamiliar words first; among ties, the one practiced least; the starter dialogs win ties so beginners start easy
   scored.sort((x, y) => (x.unknown.length + x.times * 3) - (y.unknown.length + y.times * 3) || x.i - y.i);
   return scored[0];
 }
 VIEWS.convos = function () {
   const p = pickDialog();
+  if (!p) {
+    const near = nextConvo();
+    $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Conversations</h2></div>
+      ${binkoSays('No conversation is unlocked yet! Binko is still building it. <b>' + esc(near.d.title) + '</b> opens once you\'ve learned ' + near.left.length + ' more word' + (near.left.length === 1 ? '' : 's') + '. Keep doing your daily sessions!')}`;
+    $('#quit').onclick = () => go('home'); return;
+  }
   DL = { d: p.d, idx: p.i, m: p.unknown.length ? 'learn' : 'read', i: 0, show: {}, right: 0, unknown: p.unknown };
   view = 'convo'; render();
 };
