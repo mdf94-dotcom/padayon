@@ -183,10 +183,11 @@ textarea.field{min-height:96px;resize:vertical}
 .loadnote{font-size:.82rem;color:var(--muted)}
 
 /* Binko comes alive: idle on the home screen, reactions in lessons */
-.hero-guide .guide .art{transform-origin:50% 100%;animation:bk-idle 3.6s ease-in-out infinite}
+.guide .art.idle{width:118px;height:auto;object-fit:contain;filter:none;margin:-6px -4px -2px -6px}
+.guide .art:not(.idle){transform-origin:50% 100%}.hero-guide .guide .art:not(.idle){animation:bk-idle 3.6s ease-in-out infinite}
 @keyframes bk-idle{0%,100%{transform:translateY(0) rotate(0)}20%{transform:translateY(-4px) rotate(-2deg)}40%{transform:translateY(0) rotate(0)}55%{transform:translateY(-2px) rotate(3deg)}62%{transform:translateY(-2px) rotate(-3deg)}70%{transform:translateY(-2px) rotate(3deg)}80%{transform:translateY(0) rotate(0)}}
 .hero-guide .guide{position:relative}
-.hero-guide .guide::before{content:'✦';position:absolute;left:62px;top:-4px;color:#f0e278;font-size:14px;animation:bk-twinkle 2.4s ease-in-out infinite}
+.hero-guide .guide::before{content:'✦';position:absolute;left:96px;top:-4px;color:#f0e278;font-size:14px;animation:bk-twinkle 2.4s ease-in-out infinite}
 @keyframes bk-twinkle{0%,100%{opacity:0;transform:scale(.6)}50%{opacity:1;transform:scale(1.1) rotate(20deg)}}
 .since{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:.9rem;opacity:.92;margin-top:4px}
 .since b{font-family:var(--f-display)}

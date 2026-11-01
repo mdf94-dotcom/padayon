@@ -52,4 +52,4 @@ const castImg = (k, cls = '') => { const c = CAST[k]; return `<img class="art ${
 const castFace = k => `<img class="face" src="img/${k}-face.webp" alt="${CAST[k].name}" width="72" height="72">`;
 const pickLine = kind => CHEERS[kind][Math.floor(Math.random() * CHEERS[kind].length)];
 function cameoHtml(kind) { const [k, line] = pickLine(kind); return `<div class="cameo">${castFace(k)}<div><div class="who">${CAST[k].name}</div><div class="line">${line}</div></div></div>`; }
-function binkoSays(text, big) { return `<div class="guide ${big ? 'big' : ''}">${castImg('binko')}<div class="bubble"><span class="who">⍢ Binko-SR157 🔧</span>${text}</div></div>`; }
+function binkoSays(text, big) { return `<div class="guide ${big ? 'big' : ''}">${big ? '<img class="art idle" src="img/binko-idle.webp" alt="Binko-SR157">' : castImg('binko')}<div class="bubble"><span class="who">⍢ Binko-SR157 🔧</span>${text}</div></div>`; }
