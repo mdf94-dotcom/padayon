@@ -516,9 +516,9 @@ VIEWS.home = function () {
 };
 VIEWS.again = function () {
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Another session?</h2></div>
-    ${binkoSays("You finished today's daily session! Want to keep the engine running? Binko can start TOMORROW'S plan right now, or you can just do extra practice.", true)}
+    ${binkoSays("You finished today's daily session! Want to keep the engine running? Binko can start TOMORROW'S plan right now, or you can review what you already know.", true)}
     <div class="panel"><b>Start the next day</b><div class="small">Your checklist resets for a new day, with new cards and reviews. Finishing its daily session adds a day to your streak, and Binko announces it in #streaks.</div><button class="btn primary block" id="nextday" style="margin-top:8px">Start the next day</button></div>
-    <div class="panel"><b>Just extra practice</b><div class="small">Stay on today. Your checklist stays as it is, and nothing is announced.</div><button class="btn ghost block" id="extra" style="margin-top:8px">Extra practice</button></div>`;
+    <div class="panel"><b>Review what you know</b><div class="small">A quick round of cards you've already learned. No new cards, your checklist stays as it is, and nothing is announced.</div><button class="btn ghost block" id="extra" style="margin-top:8px">Review again</button></div>`;
   $('#quit').onclick = () => go('home');
   $('#extra').onclick = () => startSession();
   $('#nextday').onclick = () => { S.dayShift = (S.dayShift || 0) + 1; DAY_SHIFT = S.dayShift; save(); toast('Day ' + (today() - (S.started || today()) + 1) + ' started. Padayon!'); startSession(); };
