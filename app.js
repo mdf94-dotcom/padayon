@@ -208,7 +208,9 @@ resetStreak(S);
 function capStreak(st) {
   if (!st || !st.streak) return st; const s = st.streak, rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5);
   const maxNow = Math.max(0, (s.last || 0) - STREAK_BASE + 1);
-  const doneToday = !!(st.plan && Object.keys(st.plan).some(k => +k >= rt && st.plan[k].session));
+  // today's plan is keyed by the real day plus any "start the next day early" shift; an older shifted plan
+  // still sitting in the list was finished on an earlier day and must not count for today
+  const doneToday = !!((st.plan && st.plan[rt + (st.dayShift || 0)] && st.plan[rt + (st.dayShift || 0)].session) || (st.credit && st.credit[rt]) || st.announced === rt);
   if (s.count > maxNow) s.count = maxNow;
   // on the reset day itself a streak of 1 means today's session is done
   if (s.last === rt && rt === STREAK_BASE && !doneToday) { s.count = 0; s.last = 0; }
@@ -255,6 +257,7 @@ function mergeState(a, b) {
   out.mistakes = {}; new Set(Object.keys(a.mistakes).concat(Object.keys(b.mistakes))).forEach(k => { const x = a.mistakes[k], y = b.mistakes[k]; out.mistakes[k] = !x ? y : !y ? x : { n: Math.max(x.n, y.n), fix: (newer === b ? y.fix : x.fix) || x.fix || y.fix, last: Math.max(x.last || 0, y.last || 0) }; });
   out.tips = Object.assign({}, a.tips, b.tips);
   out.announced = Math.max(a.announced || 0, b.announced || 0);
+  out.credit = Object.assign({}, a.credit || {}, b.credit || {}); out.sessAt = Math.max(a.sessAt || 0, b.sessAt || 0);
   out.dayShift = Math.max(a.dayShift || 0, b.dayShift || 0);
   out.convoDone = {}; [a.convoDone || {}, b.convoDone || {}].forEach(x => Object.keys(x).forEach(k => out.convoDone[k] = Math.max(out.convoDone[k] || 0, x[k])));
   out.started = Math.min(...[a.started, b.started].filter(Boolean).concat([out.started || Infinity])) || 0; if (!isFinite(out.started)) out.started = 0;
@@ -266,7 +269,7 @@ function mergeState(a, b) {
   if ((a.streakReset || 0) !== (b.streakReset || 0)) { const w = (a.streakReset || 0) > (b.streakReset || 0) ? a : b;
     ['rushBest', 'rushHow', 'geoBest', 'geoHow', 'newMax', 'bestSpeed', 'acc', 'freezeWk', 'freezeDay'].forEach(k => out[k] = w[k]); out.announced = w.announced || 0; out.reannounce = w.reannounce || 0; }
   // another device finished today's session: count it
-  { const td = today(); if (out.plan[td] && out.plan[td].session && (out.streakReset || 0) >= STREAK_RESET && out.streak.last < calDay()) { const c = calDay(); out.streak.count = out.streak.last === c - 1 ? out.streak.count + 1 : 1; out.streak.last = c; out.streak.best = Math.max(out.streak.best || 0, out.streak.count); } }
+  { const td = calDay() + (out.dayShift || 0); if (out.plan[td] && out.plan[td].session && (out.streakReset || 0) >= STREAK_RESET && out.streak.last < calDay()) { const c = calDay(); out.streak.count = out.streak.last === c - 1 ? out.streak.count + 1 : 1; out.streak.last = c; out.streak.best = Math.max(out.streak.best || 0, out.streak.count); } }
   if ((a.streakReset || 0) === (b.streakReset || 0)) { out.freezeWk = Math.max(a.freezeWk || 0, b.freezeWk || 0); out.freezeDay = Math.max(a.freezeDay || 0, b.freezeDay || 0); }
   out.pod = (a.pod && b.pod) ? (a.pod.d >= b.pod.d ? a.pod : b.pod) : (a.pod || b.pod);
   out.flags = Object.assign({}, b.flags || {}, a.flags || {}); out.storyDone = Object.assign({}, b.storyDone || {}, a.storyDone || {}); out.placed = Math.max(a.placed || 0, b.placed || 0);
@@ -302,6 +305,7 @@ function initSync() {
       const snap = await userDoc().get();
       if (snap.exists) applyRemote(snap.data().s); else await pushNow();
       Sync.state = 'on'; Sync.last = Date.now();
+      try { pushBoard(); } catch (e) { } // refresh the scoreboard row and post any missed lesson announcement
       Sync.unsub = userDoc().onSnapshot(sn => { if (!sn.exists || sn.metadata.hasPendingWrites) return; applyRemote(sn.data().s); Sync.last = Date.now(); refreshSyncUI(); });
     } catch (e) { Sync.state = 'error'; Sync.err = e.message || String(e); }
     refreshSyncUI();
@@ -361,7 +365,8 @@ function planItems() {
 const lockDrill = it => { if (!it || !DRILL_MIN[it.k]) return it; const L = drillLock(it.k); return L && !planDay()[it.k] ? Object.assign({}, it, { locked: true, d: `Locked for now, so it counts as done. Opens after you learn ${L.need} more ${L.what}${L.need === 1 ? '' : 's'} with a recording.` }) : it; };
 const planNext = () => { const p = planDay(); return planItems().find(i => !p[i.k] && !i.locked) || null; };
 const isDone = (it, p) => !!(p[it.k] || it.locked);
-function tick(k) { const p = planDay(); if (!p[k]) { p[k] = true; if (k === 'session') { bumpStreak(); announceLesson(); } save(); } }
+let sessHere = 0; // the day this device finished the session (it posts right away; others wait so they don't double post)
+function tick(k) { const p = planDay(); if (!p[k]) { p[k] = true; if (k === 'session') { S.sessAt = Date.now(); sessHere = calDay(); bumpStreak(); announceLesson(); } save(); } }
 /* ---------- Discord: Binko posts in #🔥streaks when someone finishes the daily lesson ----------
    The webhook link lives in Firestore (config/discord, field "webhook"), readable only by signed-in users,
    so it never sits in this public code. */
@@ -2158,15 +2163,45 @@ const weekStart = () => { const t = today(), dow = (t + 4) % 7; return t - ((dow
 const xpWeek = () => { const w = weekStart(); return Object.entries(S.xp).reduce((s, [k, v]) => s + (+k >= w ? v : 0), 0); };
 const learnedCount = () => Object.keys(S.cards).filter(id => id[0] !== 'r' && S.cards[id].b >= 2 && card(id)).length;
 // each signed-in person's public scoreboard row: board/{uid}. Nothing else of their progress is shared.
-function boardRow() { const a = acc7(); return { name: displayName(), streakReset: STREAK_RESET, streak: streakNow(), best: S.streak.best || 0, accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, rushHow: S.rushHow || 'pick', newMax: S.newMax || 0, geoP: (S.geoBest || {}).prov || 0, geoL: (S.geoBest || {}).lang || 0, geoPHow: (S.geoHow || {}).prov || 'pick', geoLHow: (S.geoHow || {}).lang || 'pick', updated: Date.now() }; }
+function boardRow() { const a = acc7(); return { name: displayName(), streakReset: STREAK_RESET, streak: streakNow(), best: S.streak.best || 0, sLast: S.streak.last || 0, sCount: S.streak.count || 0, fWk: S.freezeWk || 0, tzo: new Date().getTimezoneOffset(), accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, rushHow: S.rushHow || 'pick', newMax: S.newMax || 0, geoP: (S.geoBest || {}).prov || 0, geoL: (S.geoBest || {}).lang || 0, geoPHow: (S.geoHow || {}).prov || 'pick', geoLHow: (S.geoHow || {}).lang || 'pick', updated: Date.now() }; }
 let boardTimer = null;
-function pushBoard() { if (!Sync.user || !window.firebase) return; if (ANNOUNCED_BY_HAND[Sync.user.uid] === calDay() && S.announced !== calDay()) { S.announced = calDay(); S.reannounce = 0; } if (DONE_ON_RESET[Sync.user.uid] === calDay() && (S.streak.last || 0) < calDay()) { S.streak = { count: 1, last: calDay(), best: Math.max(1, S.streak.best || 0) }; S.announced = calDay(); } if (NAME_BY_UID[Sync.user.uid] && S.settings.name !== NAME_BY_UID[Sync.user.uid]) S.settings.name = NAME_BY_UID[Sync.user.uid]; if (S.reannounce && DONE_ON_RESET[Sync.user.uid] === calDay()) S.reannounce = 0; if (!S.reannounce && planDay().session && S.announced !== calDay() && !(DONE_ON_RESET[Sync.user.uid] === calDay())) announceLesson(); if (S.reannounce && planDay().session) { S.reannounce = 0; announceLesson(); } clearTimeout(boardTimer); boardTimer = setTimeout(() => { const row = boardRow(); firebase.firestore().collection('board').doc(Sync.user.uid).set(row).catch(() => { }); if (BOARD) { const i = BOARD.findIndex(r => r.uid === Sync.user.uid), mine = Object.assign({ uid: Sync.user.uid }, row); if (i >= 0) BOARD[i] = mine; else BOARD.push(mine); } }, 3000); }
+function pushBoard() {
+  if (!Sync.user || !window.firebase) return; const uid = Sync.user.uid, t = calDay();
+  if (ANNOUNCED_BY_HAND[uid] === t && S.announced !== t) { S.announced = t; S.reannounce = 0; }
+  // a session finished before the app could record it: credit that day once, for good (it carries through sync)
+  const cd = DONE_ON_RESET[uid];
+  if (cd && !(S.credit && S.credit[cd])) { S.credit = Object.assign({}, S.credit || {}, { [cd]: 1 }); const st = S.streak;
+    if ((st.last || 0) < cd) S.streak = { count: st.last === cd - 1 ? (st.count || 0) + 1 : 1, last: cd, best: Math.max(1, st.best || 0) };
+    else if (st.last === cd + 1 && st.count === 1) { st.count = 2; st.best = Math.max(2, st.best || 0); }
+    if (t === cd) S.announced = t; S.reannounce = 0; localSave(); schedulePush(); }
+  if (NAME_BY_UID[uid] && S.settings.name !== NAME_BY_UID[uid]) S.settings.name = NAME_BY_UID[uid];
+  // catch up a missed post. If another device finished the session it posts itself, so wait a bit before stepping in.
+  if (planDay().session && S.announced !== t) { const wait = sessHere === t ? 0 : 90000 - (Date.now() - (S.sessAt || 0));
+    if (wait <= 0) { S.reannounce = 0; announceLesson(); } else { clearTimeout(catchTimer); catchTimer = setTimeout(pushBoard, wait + 500); } }
+  clearTimeout(boardTimer); boardTimer = setTimeout(() => { const row = boardRow(); firebase.firestore().collection('board').doc(uid).set(row).catch(() => { }); if (BOARD) { const i = BOARD.findIndex(r => r.uid === uid), mine = boardFix(Object.assign({ uid }, row)); if (i >= 0) BOARD[i] = mine; else BOARD.push(mine); } }, 3000); }
+let catchTimer = null;
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { try { const was = streakNow(); capStreak(S); pushBoard(); if (view === 'home' && streakNow() !== was) render(); } catch (e) { } } });
+// a row's streak as of right now: worked out from the day it was last extended, in that person's own time zone
+function boardFix(r) {
+  const cap = n => Math.min(n || 0, Math.max(0, calDay() - STREAK_BASE + 1));
+  if ((r.streakReset || 0) < STREAK_RESET) return Object.assign(r, { streak: DONE_ON_RESET[r.uid] && calDay() - DONE_ON_RESET[r.uid] <= 1 ? 1 : 0, best: DONE_ON_RESET[r.uid] ? 1 : 0, accR: 0, accN: 0, newMax: 0, speed: 1, rush: 0, geoP: 0, geoL: 0 });
+  if (r.sLast != null) {
+    let last = r.sLast, count = r.sCount; const cd = DONE_ON_RESET[r.uid];
+    if (cd && last < cd) { count = last === cd - 1 ? count + 1 : 1; last = cd; }
+    const day = Math.floor((Date.now() - (r.tzo || 0) * 60000) / 864e5);
+    const alive = last >= day - 1 || (last === day - 2 && count > 0 && (r.fWk || 0) !== wkOf(day - 1));
+    r.streak = alive ? count : 0;
+  } else {
+    const cd = DONE_ON_RESET[r.uid]; if (cd && calDay() - cd <= 1 && (r.streak || 0) < 1) r.streak = 1;
+    if (r.updated && Date.now() - r.updated > 2.5 * 864e5) r.streak = 0;
+  }
+  r.streak = cap(r.streak); r.best = Math.max(r.streak, cap(r.best)); return r;
+}
 let BOARD = null, boardAt = 0, boardTab = 'streak', boardErr = '';
 async function loadBoard() {
   if (!Sync.user || !window.firebase || Date.now() - boardAt < 60000) return;
   boardAt = Date.now();
-  try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => Object.assign({ uid: d.id }, d.data())).map(r => DONE_ON_RESET[r.uid] === calDay() && (r.streak || 0) < 1 ? Object.assign(r, { streak: 1, best: Math.max(1, r.best || 0) }) : r).map(r => Object.assign(r, { streak: Math.min(r.streak || 0, Math.max(0, calDay() - STREAK_BASE + 1)), best: Math.min(r.best || 0, Math.max(0, calDay() - STREAK_BASE + 1)) })).map(r => (r.updated && Date.now() - r.updated > 2.5 * 864e5 && (r.streakReset || 0) >= STREAK_RESET) ? Object.assign(r, { streak: 0 }) : r).map(r => (r.streakReset || 0) < STREAK_RESET
-      ? Object.assign(r, { streak: DONE_ON_RESET[r.uid] === calDay() ? 1 : 0, best: DONE_ON_RESET[r.uid] ? 1 : 0, accR: 0, accN: 0, newMax: 0, speed: 1, rush: 0, geoP: 0, geoL: 0 }) : r); boardErr = ''; }
+  try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => boardFix(Object.assign({ uid: d.id }, d.data()))); boardErr = ''; }
   catch (e) { boardErr = 'The leaderboard needs a Firebase rule update first.'; }
   if (view === 'board') return render(); if (view === 'home') { const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }
 }
