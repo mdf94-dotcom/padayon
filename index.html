@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<script>try{if(window.parent!==window)document.documentElement.classList.add('embed')}catch(e){document.documentElement.classList.add('embed')}</script>
 <style>
 /* Layout: one phone-width column; home is a stack of panels, a session takes the whole column with a sticky check bar. */
 :root{
@@ -306,6 +307,10 @@ details>summary{cursor:pointer}
 /* ---------- tabs layout (Today / Practice / Progress / Me) ---------- */
 kbd{font:700 .7rem var(--f-body);border:1px solid currentColor;border-radius:6px;padding:0 6px;margin-left:8px;opacity:.75;display:none}
 .app.tabbed{padding-bottom:88px}
+html.embed:root{padding-bottom:0}
+html.embed .tabs{padding-bottom:6px!important}
+html.embed .foot{padding-bottom:14px}
+html.embed .toast{bottom:20px}
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#121d20;border-top:1px solid var(--line);padding:6px max(6px,env(safe-area-inset-left,0px)) calc(8px + env(safe-area-inset-bottom,0px))}
 .tabs-brand,.tabs-me{display:none}
 .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px;background:none;border:0;border-radius:12px;color:var(--muted);font-size:.75rem;font-weight:700}

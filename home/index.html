@@ -54,6 +54,10 @@ nav{position:fixed;left:0;right:0;bottom:0;height:calc(var(--nav) + env(safe-are
 nav button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:.78rem;font-weight:700;color:var(--muted);position:relative}
 nav button svg{width:24px;height:24px}
 nav button.on{color:var(--c,var(--ink))}
+nav.dark{background:#121d20;border-top-color:#22343a}
+nav.dark button{color:#8fa6a0}
+nav.dark button.on{color:#43B9AF}
+nav.dark button .dot{border-color:#121d20}
 nav button.on::before{content:"";position:absolute;top:0;left:28%;right:28%;height:3px;border-radius:0 0 3px 3px;background:var(--c,var(--ink))}
 nav button .dot{position:absolute;top:10px;left:calc(50% + 9px);width:9px;height:9px;border-radius:50%;background:var(--good);border:2px solid var(--surface)}
 
@@ -229,6 +233,7 @@ function show(k){
   if (location.hash.slice(1) !== k) history.replaceState(null, '', '#' + k);
 }
 function renderNav(){
+  $('#nav').classList.toggle('dark', tab === 'bisaya');
   $('#nav').innerHTML = TABS.map(t => { const a = APPS.find(x => x.k === t.k);
     return `<button data-tab="${t.k}" class="${tab === t.k ? 'on' : ''}" style="--c:var(${t.color})" aria-current="${tab === t.k ? 'page' : 'false'}">${I[t.k]}${a && a.did(0) ? '<span class="dot" aria-label="done today"></span>' : ''}${t.label}</button>`; }).join('');
 }
@@ -246,7 +251,7 @@ function renderToday(){
     <div class="st">${outfitLine()}</div></div>`;
   const rows = APPS.map(a => { const d = a.did(0);
     return `<div class="item ${a.cls} ${d ? 'done' : ''}"><div class="ico" aria-hidden="true">${I[a.k]}${d ? `<span class="ok">${I.check}</span>` : ''}</div>
-      <h2>${a.name}</h2><button class="go" ${d ? `data-tab="${a.k}"` : `data-start="${a.k}"`}>${d ? 'Open' : 'Start'}</button>
+      <h2>${a.name}</h2><button class="go" data-tab="${a.k}">Open</button>
       <div class="st"><b>${d ? 'Done today' : 'Not yet'}</b> · ${esc(a.line())}</div></div>`; }).join('');
   let wline;
   if (!H.key) wline = `<b>Not connected</b> · add your Hevy key below`;
@@ -296,7 +301,7 @@ const order = a => APPS.indexOf(a);
 function nextApp(after){ for (let i = 1; i <= APPS.length; i++){ const a = APPS[(order(after) + i) % APPS.length]; if (!a.did(0)) return a; } return null; }
 function stopFlow(){ clearInterval(FL.timer); FL.timer = null; }
 function checkFinished(){
-  APPS.forEach(a => { const now = a.did(0); if (now && !FL.prev[a.k] && tab === a.k) finished(a); FL.prev[a.k] = now; });
+  APPS.forEach(a => { FL.prev[a.k] = a.did(0); }); // finishing is signaled by the app itself, not by synced data arriving
 }
 function finished(a){
   if (FL.cur === a.k && !$('#flow').hidden) return;
@@ -315,12 +320,11 @@ function backHome(){
 }
 function nextCard(){ const a = FL.next;
   return `<section class="nextup" style="--c:var(${a.color})"><div class="label">Next up</div><h2>${a.name}</h2>
-    <span>Starting in ${FL.left}…</span><div class="row"><button class="btn" data-a="nextnow">Start now</button><button class="btn ghost" data-a="nextcancel">Not now</button></div></section>`; }
+    <span>Opening in ${FL.left}…</span><div class="row"><button class="btn" data-a="nextnow">Open now</button><button class="btn ghost" data-a="nextcancel">Not now</button></div></section>`; }
 function startApp(k){
   stopFlow(); FL.next = null; show(k);
   const f = frames[k]; if (!f) return;
-  const go = () => setTimeout(() => { try{ const w = f.contentWindow; const fn = w && (w.startFromHome || w.startSession); if (typeof fn === 'function') fn('daily'); }catch(e){} }, 900);
-  if (f.dataset.loaded) go(); else f.addEventListener('load', go, {once:true});
+  // Opens the app on its own home screen; you start the lesson yourself.
 }
 
 /* The Hevy key is kept on this device and in your signed-in account (the same private record as your progress),
