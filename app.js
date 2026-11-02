@@ -232,6 +232,9 @@ function mergeState(a, b) {
   out.rules = Object.assign({}, b.rules || {}, a.rules || {}); out.ruleDay = Math.max(a.ruleDay || 0, b.ruleDay || 0);
   out.acc = Object.assign({}, b.acc || {}, a.acc || {}); [a.acc || {}, b.acc || {}].forEach(x => Object.keys(x).forEach(k => { const o = out.acc[k], v = x[k]; if (!o || v.t > o.t) out.acc[k] = v; }));
   out.rushBest = Math.max(a.rushBest || 0, b.rushBest || 0);
+  out.freezeWk = Math.max(a.freezeWk || 0, b.freezeWk || 0); out.freezeDay = Math.max(a.freezeDay || 0, b.freezeDay || 0);
+  out.pod = (a.pod && b.pod) ? (a.pod.d >= b.pod.d ? a.pod : b.pod) : (a.pod || b.pod);
+  out.flags = Object.assign({}, b.flags || {}, a.flags || {}); out.storyDone = Object.assign({}, b.storyDone || {}, a.storyDone || {}); out.placed = Math.max(a.placed || 0, b.placed || 0);
   out.realDone = {}; [a.realDone || {}, b.realDone || {}].forEach(x => Object.keys(x).forEach(k => out.realDone[k] = Math.max(out.realDone[k] || 0, x[k])));
   out.updated = Math.max(a.updated || 0, b.updated || 0);
   return out;
@@ -290,8 +293,19 @@ function refreshSyncUI() { document.querySelectorAll('.syncline').forEach(el => 
 function addXP(n) { const t = today(); S.xp[t] = (S.xp[t] || 0) + n; if (!S.started || S.started > t) S.started = t; }
 // streaks and Discord posts count real calendar days only, so starting the next day early doesn't add to either
 const calDay = () => today() - DAY_SHIFT;
-function bumpStreak() { const t = calDay(); const s = S.streak; if (s.last === t) return; s.count = s.last === t - 1 ? s.count + 1 : 1; s.last = t; s.best = Math.max(s.best, s.count); }
-function streakNow() { const s = S.streak, t = calDay(); return (s.last === t || s.last === t - 1) ? s.count : 0; }
+/* Streak freeze: miss one day and the streak survives, once a week (Monday to Sunday). It's used automatically. */
+const wkOf = t => { const dow = (t + 4) % 7; return t - ((dow + 6) % 7); };
+const freezeOk = t => (S.freezeWk || 0) !== wkOf(t - 1);
+function bumpStreak() {
+  const t = calDay(); const s = S.streak; if (s.last === t) return;
+  if (s.last === t - 1) s.count++;
+  else if (s.last === t - 2 && s.count > 0 && freezeOk(t)) { s.count++; S.freezeWk = wkOf(t - 1); S.freezeDay = t - 1; setTimeout(() => toast('🧊 Streak freeze! Binko covered the day you missed. Next one is ready next week.'), 600); }
+  else s.count = 1;
+  s.last = t; s.best = Math.max(s.best, s.count);
+}
+function streakNow() { const s = S.streak, t = calDay(); return (s.last === t || s.last === t - 1 || (s.last === t - 2 && freezeOk(t))) ? s.count : 0; }
+// the streak is only alive because a freeze is waiting: finish today to use it
+const freezePending = () => { const s = S.streak, t = calDay(); return s.last === t - 2 && s.count > 0 && freezeOk(t); };
 function planDay() { const t = today(); if (!S.plan[t]) S.plan = { [t]: {} }; return S.plan[t]; }
 /* Today's plan is every activity, in order. The hero ring fills as they tick, and finishing one offers the next. */
 function planItems() {
@@ -313,7 +327,8 @@ function tick(k) { const p = planDay(); if (!p[k]) { p[k] = true; if (k === 'ses
 /* ---------- Discord: Binko posts in #🔥streaks when someone finishes the daily lesson ----------
    The webhook link lives in Firestore (config/discord, field "webhook"), readable only by signed-in users,
    so it never sits in this public code. */
-const displayName = () => (S.settings.name || (Sync.user && Sync.user.displayName) || '').trim().split(/\s+/)[0] || 'Someone';
+const capName = s => { s = String(s || '').trim(); return s ? s[0].toUpperCase() + s.slice(1) : s; };
+const displayName = () => capName((S.settings.name || (Sync.user && Sync.user.displayName) || '').trim().split(/\s+/)[0]) || 'Someone';
 let hookCache = null;
 async function discordHook() {
   if (hookCache !== null) return hookCache;
@@ -517,6 +532,9 @@ function pickNew() {
   // a unit the learner chose to focus on comes first, as long as its stage is open
   const { cur } = pathState(), open = PATH.slice(0, cur + 1).flatMap(st => st.ids), openSet = new Set(open);
   if (S.focus) { const map = { f: F_UNITS, g: GRAM_UNITS, u: UNITS, k: WORD_UNITS, m: M_UNITS }, u = (map[S.focus[0]] || [])[+S.focus.slice(1)]; if (u) take(u.ids.filter(id => openSet.has(id)), left); }
+  // one word a day that brings the nearest of Binko's stories closer to opening
+  if (left > 0 && typeof STORIES !== 'undefined') { const near = STORIES.map(storyMissing).filter(m => m.length && m.length <= 3).sort((x, y) => x.length - y.length)[0];
+    if (near) for (const w of near) { const id = cardForWord(w); if (id && !S.cards[id] && !out.includes(id) && ready(card(id))) { learn(id); break; } } }
   take(open, left);
   // still room: words from later on the path that already have an example
   if (left > 0) take(PATH.slice(cur + 1).flatMap(st => st.ids).filter(id => { const c = card(id); return c && needsExample(c); }), left);
@@ -560,16 +578,30 @@ function buildSession() {
 const urls = {}; const player = new Audio(); player.preservesPitch = true;
 let playToken = 0;
 /* ---------- computer voice: cards with no native recording ----------
-   voice.bin holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
-const VOICE_V = 4; let VOICE = null, VOICE_BUF = null; const vurls = {};
+   voice/ holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
-function setVoice(buf) { const dv = new DataView(buf); if (String.fromCharCode(...new Uint8Array(buf, 0, 4)) !== 'PVOI') throw new Error('bad voice pack'); const hl = dv.getUint32(4, true); VOICE = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, hl))); VOICE_BUF = buf.slice(8 + hl); }
+const VOICE_V = 6; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
+/* The computer voice comes in pieces: a small index, then one piece per stage. You only download the pieces for
+   where you are on the path (plus the next one); the rest arrive when a sentence from them is first played. */
 async function loadVoice() {
-  try { const b = await idbGet('voice'); if (b) { setVoice(b); if (VOICE.v === VOICE_V) return; } } catch (e) { }
-  try { const r = await fetch('voice.bin?v=' + VOICE_V, { cache: 'no-store' }); if (!r.ok) return; const b = await r.arrayBuffer(); setVoice(b); await idbSet('voice', b); if (view === 'home') render(); } catch (e) { }
+  try { const ix = await idbGet('vidx'); if (ix && ix.v === VOICE_V) VIDX = ix; } catch (e) { }
+  if (!VIDX) { try { const r = await fetch('voice/index.json?v=' + VOICE_V, { cache: 'no-store' }); if (r.ok) { VIDX = await r.json(); try { await idbSet('vidx', VIDX); } catch (e) { } } } catch (e) { } }
+  if (!VIDX) return;
+  try { await idbSet('voice', null); } catch (e) { }   // the old all-in-one pack: free the space
+  const cur = pathState().cur; [...new Set([0, cur, Math.min(VIDX.n - 1, cur + 1)])].forEach(loadShard);
+  if (view === 'home') render();
 }
-const hasVoice = s => !!(VOICE && VOICE.k[vkey(s)]);
-function voiceUrl(s) { const k = vkey(s), ix = VOICE && VOICE.k[k]; if (!ix) return null; return vurls[k] || (vurls[k] = URL.createObjectURL(new Blob([VOICE_BUF.slice(ix[0], ix[0] + ix[1])], { type: 'audio/mpeg' }))); }
+function loadShard(n) {
+  if (SHARD[n]) return Promise.resolve(); if (shardLoading[n]) return shardLoading[n];
+  return (shardLoading[n] = (async () => {
+    let b = null; try { b = await idbGet('vs' + n + '_' + VOICE_V); } catch (e) { }
+    if (!b) { const r = await fetch('voice/s' + n + '.bin?v=' + VOICE_V); if (!r.ok) throw new Error('voice piece'); b = await r.arrayBuffer(); try { await idbSet('vs' + n + '_' + VOICE_V, b); } catch (e) { } }
+    SHARD[n] = b;
+  })().catch(() => { }).finally(() => { delete shardLoading[n]; }));
+}
+const hasVoice = s => !!(VIDX && VIDX.k[vkey(s)]);
+function voiceUrl(s) { const k = vkey(s), ix = VIDX && VIDX.k[k]; if (!ix) return null; if (vurls[k]) return vurls[k]; const b = SHARD[ix[0]]; if (!b) { loadShard(ix[0]); return null; } return (vurls[k] = URL.createObjectURL(new Blob([b.slice(ix[1], ix[1] + ix[2])], { type: 'audio/mpeg' }))); }
+async function voiceUrlA(s) { const ix = VIDX && VIDX.k[vkey(s)]; if (!ix) return null; if (!SHARD[ix[0]]) await loadShard(ix[0]); return voiceUrl(s); }
 // last resort for the learner's own gap words: the device voice (usually Filipino, not Cebuano)
 ['play', 'playing'].forEach(ev => player.addEventListener(ev, () => typeof Music !== 'undefined' && Music.duck(true)));
 ['pause', 'ended', 'error'].forEach(ev => player.addEventListener(ev, () => typeof Music !== 'undefined' && Music.duck(false)));
@@ -590,7 +622,7 @@ async function playUrl(u, rate, btn) {
   await new Promise(res => { player.onended = res; player.onerror = res; player.onpause = res; player.play().then(() => { player.playbackRate = rate || 1; }).catch(res); });
   if (btn && tok === playToken) btn.classList.remove('playing');
 }
-const play = (id, rate, btn) => { const u = clipUrl(id); if (u) return playUrl(u, rate, btn); const c = card(id); if (c) sayFallback(firstAlt(c.ceb)); };
+const play = async (id, rate, btn) => { let u = clipUrl(id); const c = card(id); if (!u && c && hasVoice(c.ceb)) u = await voiceUrlA(c.ceb); if (u) return playUrl(u, rate, btn); if (c) sayFallback(firstAlt(c.ceb)); };
 function stopAudio() { playToken++; player.pause(); }
 
 function weakList(n = 6) { return Object.entries(S.mistakes || {}).sort((a, b) => b[1].n - a[1].n).slice(0, n); }
@@ -621,7 +653,7 @@ const VIEWS = {};
 function musicFor() {
   if (view === 'rush') return 'rush';
   if (view === 'session') { const it = Q[qi]; return it && ['speak', 'shadow', 'pron', 'say'].includes(it.type) ? 'off' : 'calm'; }
-  return ['speedrun', 'build', 'real'].includes(view) ? 'calm' : 'off';
+  return ['speedrun', 'build', 'real', 'story', 'stories'].includes(view) ? 'calm' : 'off';
 }
 function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); if (typeof Music !== 'undefined') Music.set(musicFor()); }
 function go(v) { view = v; render(); }
@@ -677,6 +709,25 @@ function sinceShort() {
   const d = new Date(S.started * 864e5 + new Date().getTimezoneOffset() * 60000 + 12 * 36e5);
   return `Day ${today() - S.started + 1} · since ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
 }
+/* Phrase of the day: one line you already know, to actually say to someone in the family today */
+function podPick() {
+  const t = calDay(), ok = id => { const c = card(id); if (!c) return false; const n = tokens(firstAlt(c.ceb)).length; return n >= 2 && n <= 7; };
+  let pool = Object.keys(S.cards).filter(id => /^[pd]/.test(id) && S.cards[id].b >= 1 && ok(id)).sort();
+  if (pool.length < 3) pool = PATH[0].ids.filter(id => /^[p]/.test(id) && ok(id)).slice(0, 20);
+  return pool.length ? card(pool[(t * 7919) % pool.length]) : null;
+}
+const POD_TIPS = ['Say it to someone in the family today: in person, on a call, or in the group chat.', 'Bonus points if you say it to Lola or Lolo. Binko predicts a big smile!', 'Drop it in the family chat and see who answers in Bisaya.', 'Say it at dinner. Binko dares you!', 'Use it on a call today. Even a 10-second call counts.'];
+function podHtml() {
+  const c = podPick(); if (!c) return ''; const done = S.pod && S.pod.d === calDay();
+  return `<section class="panel pod"><div class="row spread"><div class="label">Phrase of the day</div>${done ? '<span class="tag soft">✓ Said it</span>' : ''}</div>
+    <div class="row" style="gap:10px;align-items:center">${picImg(picFile(c), 'md')}<div style="min-width:0"><div class="ceb" style="font-size:1.5rem">${esc(firstAlt(c.ceb))}</div><div>${esc(firstAlt(c.en))}</div>${phonHtml(c.ceb)}</div></div>
+    <p class="small muted" style="margin:0">${esc(POD_TIPS[calDay() % POD_TIPS.length])}</p>
+    <div class="row">${canHear(c) ? `<button class="btn ghost" id="podplay" data-id="${c.id}">${I.play} Hear it</button>` : ''}${done ? '' : '<button class="btn primary" id="podsaid">I said it!</button>'}</div></section>`;
+}
+function wirePod() {
+  if ($('#podplay')) $('#podplay').onclick = e => play(e.currentTarget.dataset.id, 1, e.currentTarget);
+  if ($('#podsaid')) $('#podsaid').onclick = () => { S.pod = { d: calDay() }; save(); toast(pick(['Maayo kaayo! Binko is proud of you!', 'Nindot! That counts as real Bisaya!', 'BINKO REPORTING: phrase delivered!'])); render(); };
+}
 let showDone = false;
 VIEWS.home = function () {
   const t = today(), xp = S.xp[t] || 0, due = dueIds().length, nw = Math.min(newAllowance(), pickNew().length), plan = planDay();
@@ -700,8 +751,10 @@ VIEWS.home = function () {
     <div class="hero-text"><div class="label">Karon nga adlaw · Today</div><h2>${nextUp ? esc(nextUp.name) : 'All done today. Padayon!'}</h2>
       <p>${nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${due} review${due === 1 ? '' : 's'}, ${nw} new` : nextUp.d) : 'Come back tomorrow, or do another session.'}</p></div>
     <div class="hero-actions"><button class="btn" id="start">${nextUp ? (nextUp.manual ? 'I did it' : 'Start') : 'Do another session'}<kbd>Enter</kbd></button></div>
-    <div class="hero-foot"><span>${sinceShort()}</span><span>Best streak ${S.streak.best || 0}</span></div>
+    <div class="hero-foot"><span>${sinceShort()}</span><span>${freezePending() ? `🧊 Freeze ready: finish today to keep your ${S.streak.count}-day streak` : freezeOk(calDay() + 1) ? '🧊 Streak freeze ready' : `Best streak ${S.streak.best || 0}`}</span></div>
   </section>
+  ${!S.placed && learnedCount() < 40 ? `<section class="banner"><b>Already know some Bisaya?</b><div class="small">Take the 5-minute placement check and skip the words you already know.</div><div class="row"><button class="btn primary" id="placego2">Take the check</button><button class="btn ghost" id="placeno">I'm new to Bisaya</button></div></section>` : ''}
+  ${podHtml()}
   <section class="panel plan"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${doneN} of ${items.length} done</span></div>
     <div class="bar"><i style="width:${doneN / items.length * 100}%"></i></div>
     <div class="plist">${open.map(row).join('')}${showDone ? done.map(row).join('') : ''}</div>
@@ -711,6 +764,8 @@ VIEWS.home = function () {
   $('#start').onclick = () => { if (!nextUp) return planDay().session ? go('again') : startSession(); if (nextUp.manual) { tick(nextUp.k); return render(); } nextUp.run(); };
   document.querySelectorAll('[data-run]').forEach(b => b.onclick = () => planItems().find(i => i.k === b.dataset.run).run());
   if ($('#showdone')) $('#showdone').onclick = () => { showDone = !showDone; render(); };
+  wirePod();
+  if ($('#placego2')) { $('#placego2').onclick = startPlacement; $('#placeno').onclick = () => { S.placed = 1; save(); render(); }; }
   wireBoard(); loadBoard();
   if ($('#packretry')) $('#packretry').onclick = autoPack;
   document.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { const p = planDay(); p[b.dataset.plan] = !p[b.dataset.plan]; save(); render(); });
@@ -747,7 +802,8 @@ VIEWS.practice = function () {
   ${g('Build &amp; read', 'var(--good)', [
     { id: 'buildgo', icon: PI.blocks, c: 'var(--good)', sub: 'Gramatika · learn a rule, then use it', name: 'Grammar', badge: ruleN + ' of ' + RULES.length },
     { go: 'rules', icon: PI.book, c: 'var(--good)', sub: 'Every rule, in plain words', name: 'Rule book' },
-    { go: 'real', icon: PI.video, c: 'var(--good)', sub: 'Tinuod · posts, clips, songs', name: 'Real Bisaya', badge: realOpen + ' open' }])}
+    { go: 'real', icon: PI.video, c: 'var(--good)', sub: 'Tinuod · posts, clips, songs', name: 'Real Bisaya', badge: realOpen + ' open' },
+    { go: 'stories', icon: PI.book, c: 'var(--good)', sub: 'Sugilanon · short, silly family stories', name: "Binko's stories", badge: storyOpenN() + ' open' }])}
   ${g('Your words', 'var(--copper)', [
     { id: 'againgo', icon: PI.redo, c: 'var(--copper)', sub: 'A quick round, or start tomorrow', name: 'Another session' },
     { go: 'gaps', icon: PI.plus, c: 'var(--copper)', sub: 'English you keep reaching for', name: 'Gap words', badge: S.custom.length ? String(S.custom.length) : '' }])}
@@ -801,7 +857,7 @@ function progressHtml() {
 function wireProgress() { document.querySelectorAll('[data-focus]').forEach(b => b.onclick = () => { S.focus = S.focus === b.dataset.focus ? null : b.dataset.focus; save(); render(); toast(S.focus ? 'New cards will come from this unit first' : 'Back to the normal order'); }); }
 VIEWS.progress = function () { go('me'); };
 VIEWS.board = function () {
-  shell('board', `<div class="ptitle"><h1>Leaderboard</h1><p class="muted">The family this week. Tap a tab to rank by something else.</p></div><div class="board-wrap">${boardPanel()}</div>`);
+  shell('board', `<div class="ptitle"><h1>Leaderboard</h1><p class="muted">How the family is doing. Scroll for every ranking.</p></div><div class="board-wrap">${boardBoxes()}</div>`);
   wireBoard(); loadBoard();
 };
 VIEWS.settings = function () { go('me'); };
@@ -823,12 +879,16 @@ VIEWS.me = function () {
     <p class="small muted" style="margin:0">${hasPack() ? `Word pack loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Word pack not loaded yet.'}</p>
     <div class="row"><button class="btn" id="exp">Save a backup</button><button class="btn ghost" id="imp">Restore a backup</button></div>
     <div class="row"><button class="btn ghost" id="pack3">${hasPack() ? 'Reload word pack' : 'Download word pack'}</button><button class="btn ghost" id="pack2">Load pack from a file</button></div></section>
+  ${flagsHtml()}
+  <section class="panel"><h2>Already know some Bisaya?</h2><p class="small muted" style="margin:0">A quick placement check marks the words you already know as learned, so you skip ahead. About 5 minutes.</p><div class="row"><button class="btn ghost" id="placego">Take the placement check</button></div></section>
   <section class="panel"><h2>How Padayon works</h2><p class="small muted" style="margin:0">A quick tour of every part of the app.</p><div class="row"><button class="btn ghost" id="guidego">Show the guide</button></div></section>
   <section class="panel"><h2>About</h2><p class="small muted" style="margin:0">Made for the Balay Ta family. Computer voice: Meta MMS Cebuano (CC BY-NC 4.0). Pictures: Twemoji (CC BY 4.0).</p></section>
   </div>`);
   wireProgress();
   document.querySelectorAll('#musicseg button').forEach(b => b.onclick = () => { S.settings.music = b.dataset.m === '1'; save(); render(); toast(S.settings.music ? 'Music on in lessons and Rush' : 'Music off'); });
   $('#guidego').onclick = () => openGuide('me');
+  $('#placego').onclick = startPlacement;
+  if (FLAGS_ALL === null && Sync.user && !window.__flagsTried) (window.__flagsTried = 1, loadFlags()).then(r => { if (r && view === 'me') render(); });
   $('#syncset').onclick = () => Sync.user ? signOutSync() : signIn();
   $('#savename').onclick = () => { S.settings.name = $('#myname').value.trim(); save(); toast('Saved'); };
   document.querySelectorAll('[data-set]').forEach(g => g.querySelectorAll('button').forEach(b => b.onclick = () => { S.settings[g.dataset.set] = +b.dataset.v; save(); render(); }));
@@ -836,19 +896,147 @@ VIEWS.me = function () {
   $('#exp').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' })); a.download = 'padayon-progress-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); };
   $('#imp').onclick = () => { const fi = $('#filein'); fi.accept = '.json,application/json'; fi.value = ''; fi.onchange = async () => { try { const s = JSON.parse(await fi.files[0].text()); if (s.v !== 1) throw 0; S = migrate(s); save(); toast('Progress loaded'); go('home'); } catch (e) { toast('That is not a Padayon backup file.'); } }; fi.click(); };
 };
+/* ---------- Binko's stories ----------
+   Short silly family stories, told by Binko a line at a time, each opening once you know every Bisaya word in it.
+   Names and English loanwords (SM, pizza) don't count as words to learn. */
+let VOCAB_ALL = null;
+function storyMissing(s) {
+  if (!VOCAB_ALL) { VOCAB_ALL = new Set(); PATH.flatMap(st => st.ids).forEach(id => { const c = card(id); if (c) tokens(c.ceb).forEach(t => VOCAB_ALL.add(lowTok(t))); }); }
+  const kw = knownWords(), names = new Set(['lola', 'lolo', 'tita', 'tito', 'ate', 'kuya', 'mama', 'papa', 'binko', 'inday', 'dong', 'oi', 'uy', 'oy']), miss = new Set();
+  s.lines.forEach(l => tokens(l[0]).forEach(t => { const w = lowTok(t); if (!w || names.has(w) || knownTok(w, kw)) return; if (!VOCAB_ALL.has(w) && !VOCAB_ALL.has(rootOf(w))) return; miss.add(w); }));
+  return [...miss];
+}
+const storyOpenN = () => STORIES.filter(s => !storyMissing(s).length).length;
+VIEWS.stories = function () {
+  const rows = STORIES.map((s, i) => ({ s, i, miss: storyMissing(s), done: (S.storyDone || {})[i] }));
+  const open = rows.filter(r => !r.miss.length), next = rows.filter(r => r.miss.length).sort((x, y) => x.miss.length - y.miss.length)[0];
+  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Binko's stories</h2></div>
+    ${binkoSays(open.length ? 'Gather round! Binko has stories, and every word in them is one you know. Pick one!' : 'Binko is still polishing his stories. The first one opens soon!')}
+    <div class="plist2">${open.map(r => `<button class="prac" data-story="${r.i}"><span class="pic" style="font-size:1.4rem">${r.s.emoji}</span><span class="pt"><span class="small muted">${r.done ? '✓ Read · ' : ''}Story ${r.i + 1}</span><b>${esc(r.s.title)}</b></span><span class="chev">${TI.chev}</span></button>`).join('')}</div>
+    ${next ? `<section class="panel"><b>Next up: ${next.s.emoji} ${esc(next.s.title)}</b><div class="small muted">Opens after you learn ${next.miss.length} more word${next.miss.length === 1 ? '' : 's'}${next.miss.length <= 4 ? ': ' + esc(next.miss.join(', ')) : ''}. Keep doing your daily sessions!</div></section>` : ''}`;
+  $('#quit').onclick = () => goTab();
+  document.querySelectorAll('[data-story]').forEach(b => b.onclick = () => { ST = { i: +b.dataset.story, at: 0, en: {}, phase: 'read', qi: 0, right: 0 }; go('story'); });
+};
+let ST = null;
+VIEWS.story = function () {
+  const s = STORIES[ST.i];
+  const head = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">${s.emoji} ${esc(s.title)}</h2></div>`;
+  const who = l => l[2] === 'n' ? 'Binko tells it' : l[2];
+  if (ST.phase === 'read') {
+    const shown = s.lines.slice(0, ST.at), last = ST.at >= s.lines.length;
+    $('#app').innerHTML = `${head}<div class="ex">${binkoSays(esc(s.intro))}
+      <div class="chat">${shown.map((l, j) => `<div class="msg ${l[2] === 'n' ? 'them' : 'me'}"><div class="small" style="opacity:.75">${esc(who(l))}</div><div style="font-weight:700">${esc(l[0])}</div>${ST.en[j] ? `<div class="tr">${esc(l[1])}</div>` : `<button class="linkbtn" data-en="${j}" ${l[2] === 'n' ? '' : 'style="color:inherit"'}>English</button>`} ${hasVoice(l[0]) ? `<button class="play sm" data-vs="${esc(l[0])}" aria-label="Play">${I.play}</button>` : ''}</div>`).join('')}</div>
+      ${last ? binkoSays(esc(s.outro)) : ''}</div>
+      <div class="foot"><button class="btn primary block" id="nx">${!ST.at ? 'Start the story' : last ? 'Quiz time!' : 'Next line'}</button></div>`;
+    document.querySelectorAll('[data-en]').forEach(b => b.onclick = () => { ST.en[+b.dataset.en] = 1; render(); });
+    document.querySelectorAll('[data-vs]').forEach(b => b.onclick = () => playSentence(b.dataset.vs, b));
+    $('#nx').onclick = () => { if (last) { ST.phase = 'quiz'; return render(); } ST.at++; render(); const l = s.lines[ST.at - 1]; if (l) playSentence(l[0]); const m = document.querySelectorAll('.chat .msg'); if (m.length) m[m.length - 1].scrollIntoView({ block: 'nearest' }); };
+  } else if (ST.phase === 'quiz' && ST.qi < s.q.length) {
+    const q = s.q[ST.qi], opts = shuffle(q.a.map((t, i) => ({ t, ok: i === 0 })));
+    $('#app').innerHTML = `${head}<div class="ex"><div class="label">Question ${ST.qi + 1} of ${s.q.length}</div><div class="prompt">${esc(q.q)}</div><div class="opts">${opts.map((o, i) => `<button class="opt" data-i="${i}">${esc(o.t)}</button>`).join('')}</div></div><div class="foot" id="foot"></div>`;
+    document.querySelectorAll('.opt').forEach(b => b.onclick = () => {
+      const o = opts[+b.dataset.i]; logAnswer(o.ok); if (o.ok) ST.right++;
+      document.querySelectorAll('.opt').forEach((x, i) => { x.disabled = true; if (opts[i].ok) x.classList.add('right'); else if (x === b) x.classList.add('wrong'); });
+      foot(`<button class="btn primary block" id="cont">${ST.qi + 1 < s.q.length ? 'Next question' : 'Finish'}</button>`); $('#cont').onclick = () => { ST.qi++; render(); };
+    });
+  } else {
+    S.storyDone = S.storyDone || {}; S.storyDone[ST.i] = 1; save();
+    $('#app').innerHTML = `${head}<div class="ex">${binkoSays(ST.right === s.q.length ? `PERFECT! ${ST.right} of ${s.q.length}! Binko binks you understood every single word!` : `${ST.right} of ${s.q.length}! Binko is proud. Read it again any time!`, true)}</div><div class="foot"><button class="btn primary block" id="nx">More stories</button></div>`;
+    $('#nx').onclick = () => go('stories');
+  }
+  $('#quit').onclick = () => go('stories');
+};
+/* ---------- "Sounds wrong?" ----------
+   Anyone can flag a card. It's kept with their progress and shared with the family list (Firestore "flags",
+   when the database allows it), so a native speaker can fix meanings, spellings, audio and examples. */
+const FLAG_WHY = [['meaning', 'The meaning is wrong'], ['bisaya', 'The Bisaya is wrong or misspelled'], ['audio', "The audio doesn't match"], ['example', 'The example sounds wrong'], ['other', 'Something else']];
+function flagBtn(id) { return id && id[0] !== 'r' ? `<button class="linkbtn flagbtn" data-flag="${id}">⚑ Sounds wrong?</button>` : ''; }
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-flag]'); if (!b) return;
+  const id = b.dataset.flag, c = card(id); if (!c) return;
+  const box = document.createElement('div'); box.className = 'panel flagbox';
+  box.innerHTML = `<b>What's wrong with “${esc(firstAlt(c.ceb))}”?</b>${FLAG_WHY.map(([k, l]) => `<label class="flagopt"><input type="radio" name="fw" value="${k}"> ${l}</label>`).join('')}
+    <input class="field" id="flagnote" placeholder="What should it be? (optional)"><div class="row"><button class="btn primary" id="flagsend">Send to the family list</button><button class="btn ghost" id="flagx">Cancel</button></div>`;
+  b.replaceWith(box);
+  box.querySelector('#flagx').onclick = () => box.replaceWith(b);
+  box.querySelector('#flagsend').onclick = async () => {
+    const why = (box.querySelector('input[name=fw]:checked') || {}).value || 'other', note = box.querySelector('#flagnote').value.trim().slice(0, 300);
+    S.flags = S.flags || {}; S.flags[id] = { why, note, d: today() }; save();
+    box.innerHTML = '<span class="small">Thanks! Binko wrote it down. ⚑</span>';
+    try { if (Sync.user && window.firebase) await firebase.firestore().collection('flags').add({ id, ceb: firstAlt(c.ceb), en: firstAlt(c.en), why, note, by: displayName(), uid: Sync.user.uid, at: Date.now() }); } catch (err) { }
+  };
+}, true);
+let FLAGS_ALL = null;
+async function loadFlags() { try { if (!Sync.user || !window.firebase) return null; const q = await firebase.firestore().collection('flags').orderBy('at', 'desc').limit(200).get(); FLAGS_ALL = q.docs.map(d => d.data()); } catch (e) { FLAGS_ALL = null; } return FLAGS_ALL; }
+function flagsHtml() {
+  const mine = Object.entries(S.flags || {}).sort((x, y) => y[1].d - x[1].d);
+  const fam = FLAGS_ALL && FLAGS_ALL.length ? FLAGS_ALL : null;
+  const rows = fam ? fam.map(f => [f.id, f.why, f.note, f.by]) : mine.map(([id, f]) => [id, f.why, f.note, '']);
+  if (!rows.length) return '';
+  const label = k => (FLAG_WHY.find(x => x[0] === k) || [, k])[1];
+  return `<section class="panel"><h2>Flagged cards</h2><p class="small muted" style="margin:0">${fam ? 'Everyone in the family' : 'Cards you flagged'}. Fixes go in the next update.</p>
+    <div>${rows.slice(0, 40).map(([id, why, note, by]) => { const c = card(id); return c ? `<div class="weak"><span class="n">⚑</span><div style="min-width:0"><b>${esc(firstAlt(c.ceb))}</b> <span class="muted small">· ${esc(firstAlt(c.en))}</span><div class="small muted">${esc(label(why))}${note ? ': “' + esc(note) + '”' : ''}${by ? ' · ' + esc(by) : ''}</div></div></div>` : ''; }).join('')}</div></section>`;
+}
+/* ---------- placement check: test out of words you already know ----------
+   Rounds walk up the path in growing steps. Each round asks 6 meanings from that stretch; 5 right marks the
+   whole stretch (and everything before it) as known, so heritage speakers skip what they already have. */
+const PLACE_CUTS = [0, 30, 80, 150, 260, 420, 650, 950, 1350, 1900, 2600, 3400, 99999];
+let PL = null;
+function startPlacement() {
+  const ids = PATH.flatMap(s => s.ids).filter(id => { const c = card(id); return c && !['r', 'c'].includes(c.kind) && firstAlt(c.en); });
+  PL = { ids, k: 0, qs: [], qi: 0, right: 0, marked: 0, done: false };
+  plRound(); go('place');
+}
+function plRound() {
+  const lo = PLACE_CUTS[PL.k], hi = Math.min(PL.ids.length, PLACE_CUTS[PL.k + 1]);
+  if (lo >= PL.ids.length) { PL.done = true; return; }
+  const range = PL.ids.slice(lo, hi);
+  PL.qs = shuffle(range.filter(id => !S.cards[id] || S.cards[id].b < 2)).slice(0, 6); PL.qi = 0; PL.right = 0; PL.range = [lo, hi];
+  if (PL.qs.length < 3) { plPass(); }
+}
+function plPass() {
+  // everything up to the end of this stretch counts as known
+  PL.ids.slice(0, PL.range[1]).forEach(id => { if (!S.cards[id] || S.cards[id].b < 2) { S.cards[id] = { b: 2, d: today() + 3 + Math.floor(Math.random() * 12), r: 2, w: 0 }; PL.marked++; } });
+  S.placed = today(); save(); PL.k++; plRound();
+}
+VIEWS.place = function () {
+  const head = `<div class="sbar"><button class="x" id="quit" aria-label="Stop">${I.x}</button><div class="prog"><i style="width:${Math.min(100, PL.k / (PLACE_CUTS.length - 1) * 100)}%"></i></div><span class="muted small tnum">Round ${PL.k + 1}</span></div>`;
+  if (PL.done || PL.qi >= PL.qs.length && PL.right < 5) {
+    const st = pathState().cur;
+    $('#app').innerHTML = `${head}<div class="ex">${binkoSays(PL.marked ? `BINKO REPORTING! You already know <b>${PL.marked}</b> words and phrases, so Binko marked them as learned. You're starting in <b>Stage ${st + 1}: ${esc(PATH[st].name)}</b>. They'll still come back now and then as quick reviews.` : "Binko binks we'll start from the beginning. That's great, every word will be new and fun!", true)}</div><div class="foot"><button class="btn primary block" id="pldone">Done</button></div>`;
+    $('#pldone').onclick = () => go('home'); $('#quit').onclick = () => go('home'); return;
+  }
+  if (PL.qi >= PL.qs.length) { plPass(); return render(); }
+  const c = card(PL.qs[PL.qi]), pool = PL.ids.slice(Math.max(0, PL.range[0] - 40), PL.range[1] + 40).filter(id => id !== c.id).map(card).filter(Boolean);
+  const opts = [c]; for (const d of shuffle(pool)) { if (opts.length >= 4) break; if (!opts.some(o => norm(o.en) === norm(d.en) || sameMeaning(o.en, d.en))) opts.push(d); }
+  const o = shuffle(opts);
+  $('#app').innerHTML = `${head}<div class="ex"><div class="label">Placement check · question ${PL.qi + 1} of ${PL.qs.length}</div><div class="ceb">${esc(firstAlt(c.ceb))}</div>
+    ${canHear(c) ? `<div class="playrow"><button class="play sm" id="pl" aria-label="Play">${I.play}</button><span class="muted small">What does it mean?</span></div>` : '<div class="muted small">What does it mean?</div>'}
+    <div class="opts">${o.map((x, i) => `<button class="opt" data-i="${i}">${esc(optText(x, 'en'))}</button>`).join('')}</div>
+    <button class="btn ghost block" id="pldk">I don't know this one</button></div>`;
+  if ($('#pl')) { $('#pl').onclick = e => play(c.id, 1, e.currentTarget); play(c.id, 1, $('#pl')); }
+  const answer = ok => { if (ok) PL.right++; PL.qi++;
+    // stop early once the round can't be passed, or once it's already passed
+    if (PL.qi - PL.right > PL.qs.length - 5) { PL.qi = PL.qs.length; }
+    else if (PL.right >= 5) { PL.qi = PL.qs.length; }
+    setTimeout(render, 250); };
+  document.querySelectorAll('.opt').forEach(b => b.onclick = () => { const ok = o[+b.dataset.i].id === c.id; b.classList.add(ok ? 'right' : 'wrong'); answer(ok); });
+  $('#pldk').onclick = () => answer(false);
+  $('#quit').onclick = () => { if (PL.marked) toast(PL.marked + ' words marked as known'); go('home'); };
+};
 /* ---------- the guide: shown once to everyone after a big update (bump GUIDE_V), and any time from Me ---------- */
-const GUIDE_V = 2;
+const GUIDE_V = 3;
 const GUIDE = [
   { t: 'Maayong pag-abot!', b: "Binko rebuilt Padayon! Here's a quick tour of how everything works now. It takes about a minute.", i: 'home' },
-  { t: 'Today: your daily session', b: "Start is your daily session, about 15 to 20 minutes of reviews and new words. Every new word comes with a picture, a <b>sounds like</b> guide, and an example sentence made only of words you already know. Your plan lists everything else for the day; finished items fold away. Finish the daily session to keep your streak, and Binko announces it in #streaks.", i: 'home' },
+  { t: 'Today: your daily session', b: "Start is your daily session, about 15 to 20 minutes of reviews and new words. Every new word comes with a picture, a <b>sounds like</b> guide, and an example sentence made only of words you already know. Your plan lists everything else for the day; finished items fold away. Finish the daily session to keep your streak, and Binko announces it in #streaks. Miss a day? A <b>streak freeze</b> covers one missed day a week, automatically. And each day there's a <b>phrase of the day</b> to say to someone in the family.", i: 'home' },
   { t: 'Grammar, one rule a day', b: "A new grammar rule shows up inside your daily session, like a new word. Binko explains it, then it keeps coming back with harder questions: pick the right sentence, then <b>which rule is this?</b>, then <b>what's wrong with this sentence?</b>", i: 'practice' },
-  { t: 'When you miss one', b: "The wrong answers are look-alikes on purpose (ko / ka, mo- / ni-). When you miss, Binko shows what your pick means and which word made the difference, like <b>Kinsa = who, but Unsa = what</b>. Missed cards come back later in the session.", i: 'practice' },
-  { t: 'Practice', b: "Extra practice any time, grouped by skill. <b>Listen:</b> speed round and dictation. <b>Speak:</b> shadowing, conversations (8 new family ones) and talking with family. <b>Build and read:</b> grammar, the rule book, and Real Bisaya clips, posts and songs. <b>Your words:</b> another session and gap words.", i: 'practice' },
+  { t: 'When you miss one', b: "The wrong answers are look-alikes on purpose (ko / ka, mo- / ni-). When you miss, Binko shows what your pick means and which word made the difference, like <b>Kinsa = who, but Unsa = what</b>. Missed cards come back later in the session. If a card ever looks or sounds wrong, tap <b>⚑ Sounds wrong?</b> and Binko writes it down for the family to fix.", i: 'practice' },
+  { t: 'Practice', b: "Extra practice any time, grouped by skill. <b>Listen:</b> speed round and dictation. <b>Speak:</b> shadowing, conversations (8 new family ones) and talking with family. <b>Build and read:</b> grammar, the rule book, Real Bisaya clips, posts and songs, and <b>Binko's stories</b>: short, silly family stories that open as you learn their words. <b>Your words:</b> another session and gap words.", i: 'practice' },
   { t: 'Rush 🏆', b: 'The golden trophy is Padayon Rush: every word in the app, easiest first, getting harder and faster. One miss ends the run. Your best shows on the trophy, and the family best runs are right there too.', i: 'rushhome' },
-  { t: 'Ranks', b: 'The family leaderboard: streak, accuracy, words learned, listening speed and Rush. Sign in with Google in Me to show up on it and to keep your progress on all your devices.', i: 'board' },
+  { t: 'Ranks', b: 'The family leaderboard, one box per ranking: streak, best streak, accuracy (every answer, right and wrong), words learned, listening speed and Rush. Sign in with Google in Me to show up on it and to keep your progress on all your devices.', i: 'board' },
   { t: 'Me, and your daily cards', b: 'Me has your path through the five stages, your stats, weak spots, every unit, and your settings. You can change how many new cards you get each day any time:', i: 'me', cards: true },
   { t: 'Music 🎵', b: "Lessons and practice have a calm background song, and Rush has an upbeat one that speeds up the longer your run goes. It goes quiet whenever a Bisaya word plays, and turns off when you're speaking. Want it?", i: 'me', music: true },
-  { t: "You're all set!", b: "On a computer: <b>Space</b> replays the audio, <b>S</b> plays it slowly, <b>1 to 4</b> picks an answer and <b>Enter</b> continues. You can open this guide again from Me. Padayon!", i: 'home' }
+  { t: "You're all set!", b: "On a computer: <b>Space</b> replays the audio, <b>S</b> plays it slowly, <b>1 to 4</b> picks an answer and <b>Enter</b> continues. You can open this guide again from Me. Already speak some Bisaya? Take the <b>placement check</b> on Today to skip ahead. Padayon!", i: 'home' }
 ];
 let guideAt = 0, guideBack = 'home';
 function openGuide(back) { guideAt = 0; guideBack = back || 'home'; go('guide'); }
@@ -927,7 +1115,7 @@ function result(c, item, ok, extra) {
   f.innerHTML = `<div class="row spread" style="gap:12px;align-items:flex-start"><div class="bx ${bxKind}"><img src="icon-192.png?v=full" alt="Binko">${bxKind === 'streak' ? `<span class="run">${sess.run}🔥</span>` : ''}</div><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
   <div class="ans">${c.kind !== 'r' ? picImg(picFile(c), 'in') : ''}<span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${phonHtml(c.ceb)}${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && c.kind !== 'r' && ruleFor(c.ceb) && ruleLearned(ruleFor(c.ceb).id) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
   ${canHear(c) ? `<button class="play sm" id="fplay" aria-label="Play">${I.play}</button>` : ''}</div>
-  ${cameoKind ? cameoHtml(cameoKind) : ''}<button class="btn primary block" id="cont">Continue</button>`;
+  ${cameoKind ? cameoHtml(cameoKind) : ''}<button class="btn primary block" id="cont">Continue</button>${c.kind !== 'r' && !sentenceOnly ? `<div style="text-align:center">${flagBtn(c.id)}</div>` : ''}`;
   if (canHear(c)) { const hear = btn => sentenceOnly ? playSentence(c.ceb, btn) : play(c.id, 1, btn); $('#fplay').onclick = e => hear(e.currentTarget); if (!['listen', 'tiles', 'dict', 'pron', 'say', 'rid'].includes(item.type)) hear(); }
   $('#cont').onclick = next; $('#cont').focus({ preventScroll: true });
 }
@@ -1091,7 +1279,7 @@ const EX = {
       ${usedIn(c)}
       <div id="tipslot"></div>
       ${(x => x ? `<div class="panel"><div class="label">Example</div><div class="row" style="gap:8px;align-items:center"><b>${esc(x[0])}</b>${hasVoice(x[0]) ? `<button class="play sm" data-vs="${esc(x[0])}" aria-label="Play example">${I.play}</button>` : ''}</div><span class="muted small">${esc(x[1])}</span></div>` : '')(knownExample(c))}
-      ${canHear(c) ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">${voiceNote(c)}</span></div>` : `<p class="muted small">Say it out loud twice.</p>`}`;
+      ${canHear(c) ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">${voiceNote(c)}</span></div>` : `<p class="muted small">Say it out loud twice.</p>`}${flagBtn(c.id)}`;
     if (canHear(c)) wirePlay(c, 1);
     document.querySelectorAll('#ex [data-vs]').forEach(b => b.onclick = () => playSentence(b.dataset.vs, b));
     wireTip(c, '#tipslot');
@@ -1285,7 +1473,7 @@ VIEWS.convos = function () {
   DL = { d: p.d, idx: p.i, m: p.unknown.length ? 'learn' : 'read', i: 0, show: {}, right: 0, unknown: p.unknown };
   view = 'convo'; render();
 };
-const lineSay = (t, btn) => { const u = voiceUrl(t); if (u) playUrl(u, 1, btn); };
+const lineSay = async (t, btn) => { const u = await voiceUrlA(t); if (u) playUrl(u, 1, btn); };
 function bubble(d, l, j, opts = {}) {
   const me = l[0] === 'b', showEn = opts.en || DL.show[j];
   return `<div class="msg ${me ? 'me' : 'them'}"><div class="small" style="opacity:.75">${esc(me ? d.b : d.a)}</div><div style="font-weight:700">${esc(l[1])}</div>
@@ -1424,7 +1612,7 @@ function ruleOpts(r, ceb) {
   const others = RULES.filter(x => !hits.has(x.id)), mine = shuffle(others.filter(x => ruleLearned(x.id))), rest = shuffle(others.filter(x => !ruleLearned(x.id)));
   return shuffle([r, ...mine.concat(rest).slice(0, 3)]);
 }
-const playSentence = (s, btn) => { const u = voiceUrl(s); if (u) playUrl(u, 1, btn); };
+const playSentence = async (s, btn) => { const u = await voiceUrlA(s); if (u) playUrl(u, 1, btn); };
 const sayBtn = s => hasVoice(s) ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><span class="muted small">Computer voice</span></div>` : '';
 function ruleChoice(c, item, opts, rightId, shown, extra) {
   let sel = null;
@@ -1593,14 +1781,14 @@ VIEWS.build = function () {
       <p class="muted small" style="margin:0">Step ${BD.step + 1} of ${r.steps.length}. Say the examples out loud.</p></div><div class="foot" id="foot"></div>`;
     foot(`<button class="btn primary block" id="nx">${BD.step < r.steps.length - 1 ? 'Next' : 'Drill it'}</button>`);
     $('#nx').onclick = () => { if (BD.step < r.steps.length - 1) BD.step++; else BD.phase = 'drill'; render(); };
-    document.querySelectorAll('[data-vs]').forEach(b => b.onclick = () => playUrl(voiceUrl(b.dataset.vs), 1, b));
+    document.querySelectorAll('[data-vs]').forEach(b => b.onclick = () => playSentence(b.dataset.vs, b));
   } else if (BD.phase === 'drill') {
     if (BD.qi >= BD.quiz.length) return drillDone(head);
     const q = BD.quiz[BD.qi], r = q.r || BD.nr, opts = shuffle(q.a.map((x, j) => ({ x, ok: j === 0 })));
     $('#app').innerHTML = `${head}<div class="ex"><div class="label">${BD.nr ? 'Drill' : 'Quick review'} · rule ${r.n}, ${esc(r.title)}</div><div class="prompt">${esc(q.q)}</div><div class="opts">${opts.map((o, j) => `<button class="opt cebopt" data-o="${j}">${esc(o.x)}</button>`).join('')}</div></div><div class="foot" id="foot"></div>`;
     foot('<div class="small muted">Pick the one that sounds right.</div>');
     document.querySelectorAll('[data-o]').forEach(b => b.onclick = () => {
-      const j = +b.dataset.o, ok = opts[j].ok; if (ok) { BD.qRight++; addXP(4); }
+      const j = +b.dataset.o, ok = opts[j].ok; logAnswer(ok); if (ok) { BD.qRight++; addXP(4); }
       document.querySelectorAll('[data-o]').forEach((x, k) => { x.disabled = true; if (opts[k].ok) x.classList.add('right'); else if (k === j) x.classList.add('wrong'); });
       const f = $('#foot'); f.className = 'foot ' + (ok ? 'good' : 'bad');
       f.innerHTML = `<div class="verdict">${ok ? 'Tama!' : 'Dili pa.'}</div><div class="small">${esc(q.why)}</div><button class="btn primary block" id="cont">Continue</button>`;
@@ -1644,7 +1832,7 @@ function buildTiles(head) {
   document.querySelectorAll('#bank .tile').forEach(b => b.onclick = () => { if (!chosen.includes(b.dataset.k)) { chosen.push(b.dataset.k); draw(); } });
   $('#chk').onclick = () => {
     const got = chosen.map(k => bank.find(b => b.k === k).t).join(' '), want = cap(toks.join(' ')), ok = norm(got) === norm(want);
-    if (ok) { BD.right++; addXP(6); }
+    logAnswer(ok); if (ok) { BD.right++; addXP(6); }
     const f = $('#foot'); f.className = 'foot ' + (ok ? 'good' : 'bad');
     f.innerHTML = `<div class="verdict">${ok ? 'Tama!' : 'Dili pa. Not yet.'}</div><div class="ans"><span>${esc(want)}</span> <span class="muted" style="font-weight:400">· ${esc(en)}</span></div>
       ${ok ? '' : `<div class="small">You built "${esc(got)}"</div>`}<div class="small"><b>Rule ${r.n}, ${esc(r.title)}:</b> ${esc(r.short)}</div>
@@ -1767,7 +1955,7 @@ VIEWS.real = function () {
       const opts = shuffle(g.a.map((x, j) => ({ x, ok: j === 0 })));
       $('#step').innerHTML = `<div class="panel"><div class="label">${esc(g.q)}</div><div class="opts">${opts.map((o, j) => `<button class="opt" data-o="${j}">${esc(o.x)}</button>`).join('')}</div></div>`;
       foot('<div class="small muted">Use the words you caught.</div>');
-      document.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { const j = +b.dataset.o; document.querySelectorAll('[data-o]').forEach((x, k) => { x.disabled = true; if (opts[k].ok) x.classList.add('right'); else if (k === j) x.classList.add('wrong'); }); foot(`<button class="btn primary block" id="nx">Next: answer in Bisaya</button>`); $('#nx').onclick = () => respond(g.say, g.ex); });
+      document.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { const j = +b.dataset.o; logAnswer(!!opts[j].ok); document.querySelectorAll('[data-o]').forEach((x, k) => { x.disabled = true; if (opts[k].ok) x.classList.add('right'); else if (k === j) x.classList.add('wrong'); }); foot(`<button class="btn primary block" id="nx">Next: answer in Bisaya</button>`); $('#nx').onclick = () => respond(g.say, g.ex); });
     };
     words();
   } else {
@@ -1779,7 +1967,7 @@ VIEWS.real = function () {
     $('#step').innerHTML = `<div class="panel"><div class="label">${esc(c.q)}</div><div class="opts">${opts.map((o, j) => `<button class="opt" data-o="${j}">${esc(o.x)}</button>`).join('')}</div><div id="key"></div></div>`;
     foot('<div class="small muted">Pick an answer after you watch.</div>');
     document.querySelectorAll('[data-o]').forEach(b => b.onclick = () => {
-      const j = +b.dataset.o; document.querySelectorAll('[data-o]').forEach((x, k) => { x.disabled = true; if (opts[k].ok) x.classList.add('right'); else if (k === j) x.classList.add('wrong'); });
+      const j = +b.dataset.o; logAnswer(!!opts[j].ok); document.querySelectorAll('[data-o]').forEach((x, k) => { x.disabled = true; if (opts[k].ok) x.classList.add('right'); else if (k === j) x.classList.add('wrong'); });
       $('#key').innerHTML = `<div class="label" style="margin-top:8px">What they said (the show's subtitles)</div>${c.en.map(l => `<div class="small">${esc(l)}</div>`).join('')}`;
       foot(`<button class="btn primary block" id="nx">Next: answer in Bisaya</button>`); $('#nx').onclick = () => respond(c.say, c.ex);
     });
@@ -1803,12 +1991,12 @@ async function loadBoard() {
   boardAt = Date.now();
   try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => Object.assign({ uid: d.id }, d.data())).map(r => (r.streakReset || 0) < STREAK_RESET ? Object.assign(r, { streak: 1, best: 1 }) : r); boardErr = ''; }
   catch (e) { boardErr = 'The leaderboard needs a Firebase rule update first.'; }
-  if (view === 'home' || view === 'board') { const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }
+  if (view === 'board') return render(); if (view === 'home') { const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }
 }
 const BOARD_TABS = [
   ['streak', 'Streak', r => r.streak, r => r.streak + ' day' + (r.streak === 1 ? '' : 's') + (r.best > r.streak ? ` · best ${r.best}` : '')],
   ['best', 'Best streak', r => r.best, r => r.best + ' day' + (r.best === 1 ? '' : 's')],
-  ['acc', 'Accuracy', r => r.accN >= 30 ? r.accR / r.accN : -1, r => r.accN >= 30 ? Math.round(r.accR / r.accN * 100) + '% · ' + r.accN + ' answers' : 'needs 30 answers this week'],
+  ['acc', 'Accuracy', r => r.accN >= 30 ? r.accR / r.accN : -1, r => r.accN >= 30 ? Math.round(r.accR / r.accN * 100) + '% · ' + r.accN + ' answers' : 'needs 30 answers in 7 days'],
   ['learned', 'Words', r => r.learned, r => r.learned + ' learned'],
   ['speed', 'Speed', r => r.speed, r => (+r.speed).toFixed(1) + '×'],
   ['rush', 'Rush', r => r.rush, r => r.rush + ' in a row']
@@ -1822,7 +2010,18 @@ function boardPanel() {
   const rows = BOARD.slice().sort((a, b) => tab[2](b) - tab[2](a));
   const me = Sync.user.uid;
   return head + `<div class="btabs">${BOARD_TABS.map(t => `<button class="btab ${t[0] === boardTab ? 'on' : ''}" data-btab="${t[0]}">${t[1]}</button>`).join('')}</div>
-    <ol class="blist">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span><b>${esc(r.name || 'Someone')}</b><span class="muted small">${esc(tab[3](r))}</span></li>`).join('')}</ol></section>`;
+    <ol class="blist">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span><b>${esc(capName(r.name) || 'Someone')}</b><span class="muted small">${esc(tab[3](r))}</span></li>`).join('')}</ol></section>`;
+}
+// the Ranks tab: every ranking in its own box, one under the other
+const BOARD_DESC = { streak: 'Days in a row with a finished daily session.', best: 'The longest streak ever.', acc: 'Every answer in the last 7 days, right and wrong: lessons, grammar, practice drills, Rush, Real Bisaya and stories.', learned: 'Words and phrases learned so far.', speed: 'Fastest listening speed reached.', rush: 'Longest Padayon Rush run.' };
+const BOARD_ICON = { streak: '🔥', best: '🏅', acc: '🎯', learned: '📚', speed: '⚡', rush: '🏆' };
+function boardBoxes() {
+  if (!Sync.user) return `<section class="panel"><p class="muted small" style="margin:0">Sign in with Google on the Me tab to join the leaderboard.</p></section>`;
+  if (boardErr) return `<section class="panel"><p class="muted small" style="margin:0">${esc(boardErr)}</p></section>`;
+  if (!BOARD) return `<section class="panel"><p class="muted small" style="margin:0">Loading…</p></section>`;
+  const me = Sync.user.uid;
+  return BOARD_TABS.map(tab => { const rows = BOARD.slice().sort((a, b) => tab[2](b) - tab[2](a));
+    return `<section class="panel rankbox"><h2>${BOARD_ICON[tab[0]] || ''} ${esc(tab[1])}</h2><p class="muted small" style="margin:0">${BOARD_DESC[tab[0]] || ''}</p><ol class="blist">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span><b>${esc(capName(r.name) || 'Someone')}</b><span class="muted small">${esc(tab[3](r))}</span></li>`).join('')}</ol></section>`; }).join('');
 }
 function wireBoard() { document.querySelectorAll('[data-btab]').forEach(b => b.onclick = () => { boardTab = b.dataset.btab; const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }); }
 
