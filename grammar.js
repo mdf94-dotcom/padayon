@@ -88,7 +88,7 @@ const RULES = [
       ['Bisaya doesn\'t say "I have". It says "there is, to me": naa (there is), then ko with a -y stuck on (koy), then the thing.', [['Naa koy kwarta', 'I have money', 'naa + koy + thing']]],
       ['For "I don\'t have", swap naa for wala.', [['Wala koy kwarta', "I don't have money", 'wala + koy + thing']]]],
     quiz: [
-      { q: '"I have money"', a: ['Naa koy kwarta', 'Naa ko kwarta y', 'Ko naa kwarta'], why: 'Naa, then koy (ko + y), then the thing.', w: ['naa', 'ko', 'kwarta'] },
+      { q: '"I have money"', a: ['Naa koy kwarta', 'Naa ko kwarta', 'Ko naa kwarta'], why: 'Naa, then koy (ko + y), then the thing.', w: ['naa', 'ko', 'kwarta'] },
       { q: '"I don\'t have money"', a: ['Wala koy kwarta', 'Dili koy kwarta', 'Wala ko kwarta naa'], why: "Don't have = wala + koy.", w: ['wala', 'ko', 'kwarta'] }] },
   { id: 'mark', title: 'Pointer words: sa, og, si, ang', short: 'Sa = to / at / in. Og = some / a. Si = before a name. Ang = the.',
     steps: [
@@ -139,5 +139,32 @@ const PATTERNS = [
   { id: 'state', rules: ['first'], rule: 'first', need: [], uses: 's', make: (p, s) => [[cap(s[0]), p[0]], `${cap(p[1])} ${p[2]} ${s[1]}`], decoy: (p, s) => [p[0] === 'ko' ? 'ako' : 'ko'] },
   { id: 'very', rules: ['first','little'], rule: 'little', need: ['kaayo'], uses: 's', make: (p, s) => [[cap(s[0]), 'kaayo', p[0]], `${cap(p[1])} ${p[2]} very ${s[1]}`], decoy: (p, s) => ['gyud'] },
   { id: 'notstate', rules: ['ko','neg'], rule: 'neg', need: ['dili'], uses: 's', make: (p, s) => [['Dili', p[0], s[0]], `${cap(p[1])} ${p[2]} not ${s[1]}`], decoy: (p, s) => ['wala'] },
-  { id: 'askstate', rules: ['ask'], rule: 'ask', need: ['ba'], uses: 's', pron: ['ka'], make: (p, s) => [[cap(s[0]), 'ka', 'ba?'], `Are you ${s[1]}?`], decoy: (p, s) => ['ko'] }
+  { id: 'askstate', rules: ['ask'], rule: 'ask', need: ['ba'], uses: 's', pron: ['ka'], make: (p, s) => [[cap(s[0]), 'ka', 'ba?'], `Are you ${s[1]}?`], decoy: (p, s) => ['ko'] },
+  // things you have, places you go, things you ate or bought, describing things
+  { id: 'have', rules: ['have'], rule: 'have', need: ['naa'], uses: 'n', pron: ['ko', 'ka', 'siya'], make: (p, n) => [['Naa', p[0] + 'y', n[0]], `${cap(p[1])} ${p[3] ? 'has' : 'have'} ${n[1]}`], decoy: (p, n) => [p[0]] },
+  { id: 'nohave', rules: ['have', 'neg'], rule: 'have', need: ['wala'], uses: 'n', pron: ['ko', 'ka', 'siya'], make: (p, n) => [['Wala', p[0] + 'y', n[0]], `${cap(p[1])} ${p[3] ? "doesn't" : "don't"} have ${n[1]}`], decoy: (p, n) => ['naa'] },
+  { id: 'goto', rules: ['time', 'ko', 'mark'], rule: 'mark', need: ['sa', 'moadto'], uses: 'pl', make: (p, pl) => [['Moadto', p[0], 'sa', pl[0]], `${cap(p[1])} will go to ${pl[1]}`], decoy: (p, pl) => ['og'] },
+  { id: 'went', rules: ['time', 'ko', 'mark'], rule: 'mark', need: ['sa', 'niadto'], uses: 'pl', make: (p, pl) => [['Niadto', p[0], 'sa', pl[0]], `${cap(p[1])} went to ${pl[1]}`], decoy: (p, pl) => ['si'] },
+  { id: 'gi', rules: ['nako', 'mark'], rule: 'nako', need: ['ang'], uses: 'gi', make: (p, x) => [[cap(x[0][0]), NAKO[p[0]], 'ang', x[1][0]], `${cap(p[1])} ${x[0][1]} ${x[1][1]}`], decoy: (p, x) => [p[0]] },
+  { id: 'descnga', rules: ['desc'], rule: 'desc', need: ['nga'], uses: 'adj', pron: ['ko'], make: (p, x) => [[cap(x[0][0]), 'nga', x[1][0]], `A ${x[0][1]} ${x[1][2]}`], decoy: (p, x) => ['kaayo'] },
+  { id: 'descvery', rules: ['desc', 'little', 'mark'], rule: 'desc', need: ['kaayo', 'ang'], uses: 'adj', pron: ['ko'], make: (p, x) => [[cap(x[0][0]), 'kaayo', 'ang', x[1][0]], `The ${x[1][2]} is very ${x[0][1]}`], decoy: (p, x) => ['nga'] }
 ];
+// "I" in gi- sentences: ko -> nako, ka -> nimo, and so on
+const NAKO = { ko: 'nako', ka: 'nimo', siya: 'niya', ta: 'nato', mi: 'namo', sila: 'nila' };
+// [Bisaya, English with a/an/some] things you can have
+const NOUNS = [['kwarta', 'money'], ['sakyanan', 'a car'], ['balay', 'a house'], ['iro', 'a dog'], ['iring', 'a cat'], ['libro', 'a book'], ['cellphone', 'a phone'], ['trabaho', 'a job'], ['uyab', 'a girlfriend / boyfriend'], ['igsoon', 'a brother or sister'], ['payong', 'an umbrella'], ['problema', 'a problem'], ['oras', 'time'], ['pagkaon', 'food'], ['bisita', 'a visitor']];
+// [Bisaya, English] places
+const PLACES = [['tindahan', 'the store'], ['merkado', 'the market'], ['simbahan', 'church'], ['eskwelahan', 'school'], ['opisina', 'the office'], ['ospital', 'the hospital'], ['baybayon', 'the beach'], ['mall', 'the mall'], ['Cebu', 'Cebu'], ['Manila', 'Manila'], ['kusina', 'the kitchen'], ['banyo', 'the bathroom'], ['plasa', 'the plaza'], ['balay', 'the house']];
+// gi- actions with things they go with: [[gi-form, English past], [thing, English]]
+const GI_ACT = [['gikaon', 'ate', 'f'], ['giinom', 'drank', 'd'], ['gipalit', 'bought', 't'], ['giluto', 'cooked', 'f'], ['gibasa', 'read', 'b'], ['gilabhan', 'washed', 'c']];
+const GI_OBJ = { f: [['kan-on', 'the rice'], ['isda', 'the fish'], ['mangga', 'the mango'], ['manok', 'the chicken'], ['pan', 'the bread'], ['saging', 'the banana'], ['itlog', 'the egg']],
+  d: [['tubig', 'the water'], ['kape', 'the coffee'], ['gatas', 'the milk'], ['juice', 'the juice']],
+  t: [['sinina', 'the shirt'], ['sapatos', 'the shoes'], ['libro', 'the book'], ['saging', 'the bananas'], ['tinapay', 'the bread']],
+  b: [['libro', 'the book'], ['sulat', 'the letter'], ['mensahe', 'the message']],
+  c: [['sinina', 'the shirt'], ['plato', 'the plate'], ['sapatos', 'the shoes']] };
+const GI = GI_ACT.flatMap(a => GI_OBJ[a[2]].map(o => [a, o]));
+// describing words with things they fit: [[word, English], [thing, English, English without "the"]]
+const ADJ = [['dako', 'big', 'h'], ['gamay', 'small', 'h'], ['nindot', 'nice', 'h'], ['bag-o', 'new', 'h'], ['daan', 'old', 'h'], ['lami', 'delicious', 'f'], ['init', 'hot', 'f'], ['bugnaw', 'cold', 'f'], ['limpyo', 'clean', 'h'], ['hugaw', 'dirty', 'h']];
+const ADJ_OBJ = { h: [['balay', 'the house', 'house'], ['sakyanan', 'the car', 'car'], ['iro', 'the dog', 'dog'], ['sinina', 'the shirt', 'shirt'], ['kwarto', 'the room', 'room']],
+  f: [['isda', 'the fish', 'fish'], ['kape', 'the coffee', 'coffee'], ['sabaw', 'the soup', 'soup'], ['mangga', 'the mango', 'mango']] };
+const ADJN = ADJ.flatMap(a => ADJ_OBJ[a[2]].map(o => [a, o]));

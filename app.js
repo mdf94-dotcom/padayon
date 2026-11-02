@@ -341,14 +341,17 @@ function sectionDone(label, line) {
 }
 
 /* ---------- cards & SRS ---------- */
+// little words get Binko's explanation and an example sentence (WORD_NOTE in fixes.js)
+function wn(c) { const x = WORD_NOTE[String(c.ceb).toLowerCase().replace(/[.!?]/g, '').trim()]; if (x && !c.note) { c.note = x.note; c.ex = c.ex || x.ex; c.exEn = c.exEn || x.exEn; } return c; }
 function card(id) {
   const k = id[0], n = +id.slice(1);
   if (HIDE.has(id)) return null;
+  if (k === 'r') { const r = RULES[n]; return r && { id, kind: 'r', ceb: r.title, en: r.short, audio: false, rule: r }; }
   if (k === 'p') return P[n] && { id, kind: 'p', ceb: CEB_FIX[id] || P[n][0], en: EN_FIX[id] || P[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
-  if (k === 'w') return W[n] && { id, kind: 'w', ceb: CEB_FIX[id] || W[n][0], en: EN_FIX[id] || W[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
+  if (k === 'w') return W[n] && wn({ id, kind: 'w', ceb: CEB_FIX[id] || W[n][0], en: EN_FIX[id] || W[n][1], note: NOTES[id], trick: TRICKS[id], audio: true });
   if (k === 'g') return G[n] && { id, kind: 'g', ceb: G[n][0], en: EN_FIX[id] || G[n][1], note: G[n][2], audio: false };
   if (k === 'd') { const [di, li] = id.slice(1).split('_').map(Number), d = DIALOGS[di], l = d && d.lines[li]; return l && { id, kind: 'd', ceb: l[1], en: l[2], note: l[3] || '', audio: false, convo: d.title }; }
-  if (k === 'm') return MEGA[n] && { id, kind: 'm', ceb: CEB_FIX[id] || MEGA[n][0], en: EN_FIX[id] || MEGA[n][1], audio: false };
+  if (k === 'm') return MEGA[n] && wn({ id, kind: 'm', ceb: CEB_FIX[id] || MEGA[n][0], en: EN_FIX[id] || MEGA[n][1], audio: false });
   if (k === 'e') return EXTRA[n] && { id, kind: 'p', ceb: EXTRA[n][0], en: EN_FIX[id] || EXTRA[n][1], note: EXTRA[n][2], audio: false };
   if (k === 'f') return F[n] && { id, kind: 'f', ceb: F[n].ceb, en: EN_FIX[id] || F[n].en, note: F[n].note, trick: F[n].trick, combos: F[n].combos, audio: false };
   const c = (S.custom || []).find(x => x.id === id);
@@ -412,23 +415,105 @@ function pathPanel() {
     ${binkoSays(gated ? `You've met every card in <b>${esc(PATH[cur].name)}</b>! Now we polish them. Stage ${cur + 2} opens when ${Math.round(PATH_GATE * 100)}% are learned (${Math.ceil(PATH_GATE * x.total) - x.learned} to go). Just reviews until then!`
       : `Stage ${cur + 1}: <b>${esc(PATH[cur].name)}</b>. ${esc(PATH[cur].can)}`)}
     <div>${PATH.map((st, i) => { const y = stats[i], st8 = i < cur ? 'done' : i === cur ? 'now' : 'later';
-      return `<div class="stage-row ${st8}"><div class="stage-dot">${i < cur ? I.check : i + 1}</div><div style="min-width:0;flex:1"><div class="row spread" style="gap:6px"><b>${esc(st.ceb)} · ${esc(st.name)}</b><span class="muted small">${esc(st.level)}</span></div>
+      return `<div class="stage-row ${st8}"><div class="stage-dot">${i < cur ? I.check : i + 1}</div><div style="min-width:0;flex:1"><div class="row spread" style="gap:6px"><b>${typeof PIC_X !== 'undefined' ? picImg(PIC_X.stage[i], 'in') : ''} ${esc(st.ceb)} · ${esc(st.name)}</b><span class="muted small">${esc(st.level)}</span></div>
         <div class="bar" style="margin:6px 0 4px"><i style="width:${y.frac * 100}%"></i></div>
         <div class="muted small">${y.learned} of ${y.total} learned · ${i < cur ? 'done' : i === cur ? (tl[i] ? 'expected around ' + dateIn(tl[i]) : '') : 'opens around ' + dateIn(tl[i - 1] || 0)}</div></div></div>`; }).join('')}</div>
     <p class="muted small" style="margin:0">Dates assume you finish the daily session every day. A stage opens once ${Math.round(PATH_GATE * 100)}% of the one before it is learned, so you never move on before you've got it.</p></section>`;
 }
+/* ---------- every new card comes with an example made only of words you already know ----------
+   The example pool is every sentence in the app (phrases, Mega-deck sentences, conversation lines, grammar examples,
+   sentences built from the grammar patterns). A word only opens once one of those sentences uses it with words you've
+   met. If a word on the path has no example yet, Binko first teaches the one or two missing words it needs. */
+let EXPOOL = null;
+function exPool() {
+  if (EXPOOL) return EXPOOL;
+  const out = [], seen = new Set(), add = (ceb, en) => { ceb = firstAlt(String(ceb || '')).trim(); const toks = tokens(ceb).map(lowTok).filter(Boolean); if (toks.length < 2 || toks.length > 9 || /→|_/.test(ceb)) return; const k = toks.join(' '); if (seen.has(k)) return; seen.add(k); out.push({ ceb, en: firstAlt(String(en || '')), toks, key: ' ' + k + ' ' }); };
+  allPatternSentences().forEach(x => add(x.ceb, x.en));
+  const ids = [...(hasPack() ? P.map((_, i) => 'p' + i) : []), ...M_ORDER, ...GRAM_ORDER, ...F_ORDER, ...D_ORDER];
+  ids.forEach(id => { const c = card(id); if (c) add(c.ceb, c.en); });
+  RULES.forEach(r => r.steps.forEach(st => st[1].forEach(x => add(x[0], x[1]))));
+  Object.values(WORD_NOTE).forEach(x => add(x.ex, x.exEn));
+  if (typeof EXAMPLES !== 'undefined') Object.values(EXAMPLES).forEach(x => add(x[0], x[1]));
+  const idx = new Map(); out.forEach(e => new Set(e.toks).forEach(t => { if (!idx.has(t)) idx.set(t, []); idx.get(t).push(e); }));
+  return (EXPOOL = { all: out, idx });
+}
+const needsExample = c => c && !['d', 'c', 'r'].includes(c.kind) && tokens(firstAlt(c.ceb)).length === 1;
+// a word counts as known if you know it, or its root with an action/describing front or ending (mokaon -> kaon), or ko/ka/siya + y (koy)
+const AFF_RE = /^(nag|mag|naka|maka|mo|mu|ni|mi|gi|na|ma|pag|ka)-?/, SUF_RE = /(on|an|a|i|hon|han|ha)$/;
+const rootOf = t => { const r = t.replace(AFF_RE, ''); return r.length >= 3 ? r : t; };
+const ROOTS = new WeakMap();
+function knownTok(t, known) {
+  if (!t || known.has(t)) return true; if (/y$/.test(t) && known.has(t.slice(0, -1))) return true;
+  // any form of a root you know counts (mokaon known -> nikaon, gikaon, kaon)
+  let rs = ROOTS.get(known); if (!rs || rs.n !== known.size) { rs = { n: known.size, s: new Set() }; known.forEach(w => { rs.s.add(rootOf(w)); rs.s.add(rootOf(w).replace(SUF_RE, '')); }); ROOTS.set(known, rs); }
+  const r = rootOf(t); return rs.s.has(r) || (r.replace(SUF_RE, '').length >= 3 && rs.s.has(r.replace(SUF_RE, '')));
+}
+// sentences that use this card, with how many words in them aren't known yet (not counting the card's own words)
+function exCandidates(c, known) {
+  const own = tokens(firstAlt(c.ceb)).map(lowTok).filter(Boolean); if (!own.length) return [];
+  const key = ' ' + own.join(' ') + ' ', ownSet = new Set(own);
+  const mine = typeof EXAMPLES !== 'undefined' && EXAMPLES[c.id] && EXAMPLES[c.id][0] ? [{ ceb: EXAMPLES[c.id][0], en: EXAMPLES[c.id][1], toks: tokens(EXAMPLES[c.id][0]).map(lowTok).filter(Boolean), key: '' }] : [];
+  return mine.concat((exPool().idx.get(own[own.length - 1]) || []).filter(e => e.key.includes(key) && e.toks.length > own.length))
+    .map(e => ({ e, miss: [...new Set(e.toks.filter(t => !ownSet.has(t) && !knownTok(t, known)))] }));
+}
+function exFor(c, known) {
+  const mine = typeof EXAMPLES !== 'undefined' && EXAMPLES[c.id], own = new Set(tokens(firstAlt(c.ceb)).map(lowTok));
+  if (mine && mine[0] && tokens(mine[0]).map(lowTok).every(t => own.has(t) || knownTok(t, known))) return { ceb: mine[0], en: mine[1] };
+  const ok = exCandidates(c, known).filter(x => !x.miss.length).map(x => x.e); if (!ok.length) return null;
+  // 3 to 6 words reads best
+  ok.sort((x, y) => Math.abs(x.toks.length - 4) - Math.abs(y.toks.length - 4)); return ok[0];
+}
+// the card that teaches a single word, preferring short cards on the path
+let WORDCARD = null;
+function cardForWord(w) {
+  if (!WORDCARD) { WORDCARD = new Map(); const ids = [...PATH.flatMap(s => s.ids)]; ids.forEach(id => { const c = card(id); if (!c || tokens(firstAlt(c.ceb)).length !== 1) return; const t = lowTok(firstAlt(c.ceb)); if (t && !WORDCARD.has(t)) WORDCARD.set(t, id); }); }
+  return WORDCARD.get(w) || null;
+}
+function prereqPlan(c, known, budget, depth, taken) {
+  if (budget < 0) return null;
+  const cands = exCandidates(c, known).filter(x => x.miss.length <= 2).sort((a, b) => a.miss.length - b.miss.length || Math.abs(a.e.toks.length - 4) - Math.abs(b.e.toks.length - 4)).slice(0, 12);
+  for (const x of cands) {
+    const plan = [], k2 = new Set(known); let ok = true;
+    const add = p => { plan.push(p); tokens(firstAlt(card(p).ceb)).forEach(t => k2.add(lowTok(t))); };
+    for (const w of x.miss) {
+      if (knownTok(w, k2)) continue;
+      const p = cardForWord(w); if (!p || S.cards[p] || taken.includes(p) || plan.includes(p)) { ok = false; break; }
+      const pc = card(p);
+      if (!needsExample(pc) || exFor(pc, k2)) { add(p); continue; }
+      if (depth <= 0) { ok = false; break; }
+      const sub = prereqPlan(pc, k2, budget - plan.length - 1, depth - 1, taken.concat(plan)); if (!sub) { ok = false; break; }
+      sub.forEach(add); add(p);
+    }
+    if (ok && plan.length <= budget) return plan;
+  }
+  return null;
+}
 function pickNew() {
   let left = newAllowance(); const out = [];
-  const take = (order, max) => { let n = Math.min(max, left); for (const id of order) { if (n <= 0) break; if (!S.cards[id] && !out.includes(id) && card(id)) { out.push(id); n--; left--; } } };
+  const known = new Set(knownWords());
+  const learn = id => { out.push(id); left--; tokens(firstAlt(card(id).ceb)).forEach(t => known.add(lowTok(t))); };
+  const ready = c => !needsExample(c) || !!exFor(c, known);
+  const take = (order, max) => { let n = Math.min(max, left); const blocked = [];
+    for (const id of order) { if (n <= 0) break; if (S.cards[id] || out.includes(id)) continue; const c = card(id); if (!c) continue;
+      if (ready(c)) { learn(id); n--; } else if (blocked.length < 40) blocked.push(id); }
+    // unblock: teach the few missing words an example needs (and theirs, two levels down), then the word itself
+    for (const id of blocked) {
+      if (n <= 0 || left <= 0) break; const c = card(id); if (ready(c)) { learn(id); n--; continue; }
+      const plan = prereqPlan(c, known, Math.min(n, left) - 1, 2, out); if (!plan) continue;
+      plan.forEach(p => learn(p)); n -= plan.length; if (ready(c) && n > 0) { learn(id); n--; }
+    } };
   take(S.custom.map(c => c.id), 3);
   // a unit the learner chose to focus on comes first, as long as its stage is open
   const { cur } = pathState(), open = PATH.slice(0, cur + 1).flatMap(st => st.ids), openSet = new Set(open);
   if (S.focus) { const map = { f: F_UNITS, g: GRAM_UNITS, u: UNITS, k: WORD_UNITS, m: M_UNITS }, u = (map[S.focus[0]] || [])[+S.focus.slice(1)]; if (u) take(u.ids.filter(id => openSet.has(id)), left); }
   take(open, left);
+  // still room: words from later on the path that already have an example
+  if (left > 0) take(PATH.slice(cur + 1).flatMap(st => st.ids).filter(id => { const c = card(id); return c && needsExample(c); }), left);
   return out;
 }
 function exType(id, isNew) {
   const c = card(id), b = isNew ? 0 : (S.cards[id] ? S.cards[id].b : 0);
+  if (c.kind === 'r') return b <= 0 ? 'rq' : b === 1 ? pick(['rid', 'rq', 'rid']) : pick(['rid', 'rfix', 'rq']);
   const n = tokens(c.ceb).length, multi = n >= 2 && n <= 9;
   if (c.kind === 'd') return isNew || b < 1 ? 'build' : pick(['build', 'mc', 'type']);
   if (c.kind === 'f') return isNew || b < 1 ? 'build' : b < 2 ? pick(['build', 'mc']) : pick(['build', 'type', 'speak']);
@@ -439,14 +524,19 @@ function exType(id, isNew) {
   return pick(multi ? ['dict', 'tiles', 'type', 'listen', 'speak', 'speak'] : ['type', 'dict', 'listen', 'speak']);
 }
 function buildSession() {
-  const q = dueIds().slice(0, 16).map(id => ({ id, type: exType(id) }));
+  ensureRuleCards();
+  const due = dueIds(), q = due.filter(id => id[0] !== 'r').slice(0, 16).concat(due.filter(id => id[0] === 'r').slice(0, 3)).map(id => ({ id, type: exType(id) }));
   shuffle(q);
-  const nw = pickNew();
+  const nw = pickNew(); let lastPos = 0;
   for (const id of nw) {
-    const pos = Math.floor(Math.random() * (Math.min(q.length, 8) + 1));
+    // new cards stay in the order they were picked, so the words an example needs are always taught first
+    const pos = Math.max(lastPos, Math.min(q.length, lastPos + Math.floor(Math.random() * 3))); lastPos = pos + 1;
     q.splice(pos, 0, { id, type: 'teach' });
     q.splice(Math.min(q.length, pos + 2 + Math.floor(Math.random() * 3)), 0, { id, type: exType(id, true) });
   }
+  // one new grammar rule a day, taught inside the session, then two quick questions on it
+  const nr = nextRule();
+  if (nr && !S.cards[ruleCardId(nr)]) { const id = ruleCardId(nr), pos = Math.min(q.length, 3 + Math.floor(Math.random() * 3)); q.splice(pos, 0, { id, type: 'rteach' }); q.splice(Math.min(q.length, pos + 2), 0, { id, type: 'rq' }); q.splice(Math.min(q.length, pos + 6), 0, { id, type: 'rq' }); }
   const sh = [...new Set(shuffle(Object.keys(S.cards).filter(id => id[0] === 'p' && card(id)).concat(nw.filter(id => id[0] === 'p'))))].slice(0, 2);
   sh.forEach((id, i) => q.splice(Math.floor(q.length * (0.45 + i * 0.4)), 0, { id, type: 'shadow' }));
   if (q.filter(x => x.type !== 'shadow').length < 4) shuffle(Object.keys(S.cards).filter(card)).slice(0, 10).forEach(id => q.push({ id, type: exType(id) }));
@@ -460,7 +550,7 @@ const urls = {}; const player = new Audio(); player.preservesPitch = true;
 let playToken = 0;
 /* ---------- computer voice: cards with no native recording ----------
    voice.bin holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
-const VOICE_V = 2; let VOICE = null, VOICE_BUF = null; const vurls = {};
+const VOICE_V = 3; let VOICE = null, VOICE_BUF = null; const vurls = {};
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
 function setVoice(buf) { const dv = new DataView(buf); if (String.fromCharCode(...new Uint8Array(buf, 0, 4)) !== 'PVOI') throw new Error('bad voice pack'); const hl = dv.getUint32(4, true); VOICE = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, hl))); VOICE_BUF = buf.slice(8 + hl); }
 async function loadVoice() {
@@ -506,6 +596,11 @@ document.addEventListener('keydown', e => {
     if (b) { e.preventDefault(); b.click(); }
   }
 });
+/* ---------- pictures (Twemoji, matched to each card by meaning; see pics.js) ---------- */
+const picFile = c => c && typeof PIC !== 'undefined' ? PIC[c.id] : null;
+const picImg = (f, cls) => f ? `<img class="epic ${cls || ''}" src="img/e/${f}.svg" alt="" aria-hidden="true" loading="lazy">` : '';
+const dlgPic = i => typeof PIC_X !== 'undefined' ? picImg(PIC_X.dlg[i], 'in') : '';
+const rulePic = (r, cls) => typeof PIC_X !== 'undefined' ? picImg(PIC_X.rule[r.id], cls || 'in') : '';
 /* ---------- views ---------- */
 let view = 'home';
 const VIEWS = {};
@@ -530,7 +625,7 @@ const TI = {
   practice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
   progress: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>',
-  rushhome: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>',
+  rushhome: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.5 2.5h11v6.5a5.5 5.5 0 0 1-11 0z"/><path d="M17.5 4.8h2.7v2.1a3.6 3.6 0 0 1-3.4 3.6M6.5 4.8H3.8v2.1a3.6 3.6 0 0 0 3.4 3.6" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><path fill="currentColor" d="M10.3 13.6h3.4v3.9h-3.4z"/><rect x="6.5" y="17.3" width="11" height="4.2" rx="1.4" fill="currentColor"/></svg>',
   chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
 };
 const TABS = [['home', 'Today'], ['practice', 'Practice'], ['rushhome', 'Rush'], ['progress', 'Progress'], ['me', 'Me']];
@@ -702,7 +797,7 @@ VIEWS.me = function () {
     <p class="small muted" style="margin:0">${hasPack() ? `Word pack loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Word pack not loaded yet.'}</p>
     <div class="row"><button class="btn" id="exp">Save a backup</button><button class="btn ghost" id="imp">Restore a backup</button></div>
     <div class="row"><button class="btn ghost" id="pack3">${hasPack() ? 'Reload word pack' : 'Download word pack'}</button><button class="btn ghost" id="pack2">Load pack from a file</button></div></section>
-  <section class="panel"><h2>About</h2><p class="small muted" style="margin:0">Made for the Balay Ta family. Computer voice: Meta MMS Cebuano (CC BY-NC 4.0).</p></section>
+  <section class="panel"><h2>About</h2><p class="small muted" style="margin:0">Made for the Balay Ta family. Computer voice: Meta MMS Cebuano (CC BY-NC 4.0). Pictures: Twemoji (CC BY 4.0).</p></section>
   </div>`);
   $('#syncset').onclick = () => Sync.user ? signOutSync() : signIn();
   $('#savename').onclick = () => { S.settings.name = $('#myname').value.trim(); save(); toast('Saved'); };
@@ -740,6 +835,8 @@ VIEWS.session = function () {
   <div class="ex" id="ex"></div><div class="foot" id="foot"></div>`;
   $('#quit').onclick = () => { if (qi > 0 && sess.total > 0) finishSession(); else goTab(); };
   EX[item.type](c, item);
+  // a picture on questions that already show the English (never on ones that ask for the meaning)
+  if (['mc', 'type', 'speak', 'say'].includes(item.type) && picFile(c)) { const pr = $('#ex .prompt'); if (pr && !$('#ex .epic')) pr.insertAdjacentHTML('beforebegin', picImg(picFile(c), 'md')); }
 };
 function foot(html) { $('#foot').className = 'foot'; $('#foot').innerHTML = html; }
 function next() { stopAudio(); qi++; VIEWS.session(); window.scrollTo(0, 0); }
@@ -757,15 +854,18 @@ function result(c, item, ok, extra) {
   const gap = sess.total - (sess.lastCameo || -9) >= 4;
   const cameoKind = !gap ? null : q > 0 && sess.run > 0 && sess.run % 3 === 0 ? 'streak' : q > 0 && prevWrong >= 1 && Math.random() < 0.4 ? 'comeback' : q === 0 && sess.wrongRun === 2 ? 'rough' : null;
   if (cameoKind) sess.lastCameo = sess.total;
-  if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push({ id: c.id, type: c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
+  if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push({ id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
   save();
+  // a swapped-in version of the card (build exercises) or a rule sentence plays its own sentence, not the card's recording
+  const base = c.kind === 'r' ? null : card(c.id), sentenceOnly = c.kind === 'r' || (base && norm(firstAlt(base.ceb)) !== norm(firstAlt(c.ceb)));
+  if (sentenceOnly) c = Object.assign({}, c, { audio: false });
   const f = $('#foot'); f.className = 'foot ' + (q > 0 ? 'good' : 'bad');
   const bxKind = q > 0 && sess.run >= 3 ? 'streak' : q > 0 ? 'right' : 'wrong';
   f.innerHTML = `<div class="row spread" style="gap:12px;align-items:flex-start"><div class="bx ${bxKind}"><img src="img/binko-face.webp" alt="Binko">${bxKind === 'streak' ? `<span class="run">${sess.run}🔥</span>` : ''}</div><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
-  <div class="ans"><span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${phonHtml(c.ceb)}${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && ruleFor(c.ceb) && ruleLearned(ruleFor(c.ceb).id) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
+  <div class="ans">${c.kind !== 'r' ? picImg(picFile(c), 'in') : ''}<span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${phonHtml(c.ceb)}${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && c.kind !== 'r' && ruleFor(c.ceb) && ruleLearned(ruleFor(c.ceb).id) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
   ${canHear(c) ? `<button class="play sm" id="fplay" aria-label="Play">${I.play}</button>` : ''}</div>
   ${cameoKind ? cameoHtml(cameoKind) : ''}<button class="btn primary block" id="cont">Continue</button>`;
-  if (canHear(c)) { $('#fplay').onclick = e => play(c.id, 1, e.currentTarget); if (!['listen', 'tiles', 'dict', 'pron', 'say'].includes(item.type)) play(c.id, 1); }
+  if (canHear(c)) { const hear = btn => sentenceOnly ? playSentence(c.ceb, btn) : play(c.id, 1, btn); $('#fplay').onclick = e => hear(e.currentTarget); if (!['listen', 'tiles', 'dict', 'pron', 'say', 'rid'].includes(item.type)) hear(); }
   $('#cont').onclick = next; $('#cont').focus({ preventScroll: true });
 }
 /* ---------- answer choices that can't be guessed by elimination ----------
@@ -811,7 +911,7 @@ function swapVariants(c) {
   });
   return shuffle([...out]);
 }
-const taughtIds = () => Object.keys(S.cards).filter(id => card(id));
+const taughtIds = () => Object.keys(S.cards).filter(id => id[0] !== 'r' && card(id));
 function distract(c, n, field) {
   // only cards this person has already been taught, so every option is something they've seen
   const pool = taughtIds();
@@ -829,6 +929,16 @@ function distract(c, n, field) {
 // show every option in the same style so punctuation and capitals don't give the answer away
 const optText = (o, field) => { let t = String(o[field] || '').trim().replace(/[.!]+$/, ''); return t ? t[0].toUpperCase() + t.slice(1) : t; };
 
+/* ---------- examples only use words you've already met ----------
+   An example sentence shows only if every other word in it was taught before. If the stored example has a new word,
+   Binko looks for another sentence with this word built only from words you know; if there isn't one yet, no example. */
+function knownOk(s, extra) { const kw = knownWords(); return tokens(s).every(t => { const w = lowTok(t); return !w || knownTok(w, kw) || (extra && extra.has(w)); }); }
+function knownExample(c) {
+  const own = new Set(tokens(c.ceb).map(lowTok));
+  if (c.ex && knownOk(c.ex, own)) return [c.ex, c.exEn || ''];
+  if (!needsExample(c)) return null;
+  const e = exFor(c, knownWords()); return e ? [e.ceb, e.en] : null;
+}
 /* ---------- word by word, memory tricks, where a word shows up ---------- */
 function glossOf(tok) {
   const t = lowTok(tok); if (!t) return null;
@@ -851,7 +961,7 @@ function usedIn(c) {
 const tipFor = c => c.trick ? { trick: c.trick } : (S.tips || {})[c.id] || null;
 function tipHtml(t, c) {
   if (!t) return '';
-  return `<div class="panel tip"><div class="label">Binko's memory trick</div><div>${esc(t.trick || '')}</div>${t.english ? `<div class="small"><b>English link:</b> ${esc(t.english)}</div>` : ''}${t.when && !(c && c.note) ? `<div class="small"><b>When to use it:</b> ${esc(t.when)}</div>` : ''}${t.example ? `<div class="small"><b>${esc(t.example)}</b> <span class="muted">· ${esc(t.example_en || '')}</span></div>` : ''}</div>`;
+  return `<div class="panel tip"><div class="label">Binko's memory trick</div><div>${esc(t.trick || '')}</div>${t.english ? `<div class="small"><b>English link:</b> ${esc(t.english)}</div>` : ''}${t.when && !(c && c.note) ? `<div class="small"><b>When to use it:</b> ${esc(t.when)}</div>` : ''}${t.example && knownOk(t.example, c ? new Set(tokens(c.ceb).map(lowTok)) : null) ? `<div class="small"><b>${esc(t.example)}</b> <span class="muted">· ${esc(t.example_en || '')}</span></div>` : ''}</div>`;
 }
 function wireTip(c, slot, auto) {
   const el = $(slot); if (!el) return;
@@ -885,17 +995,18 @@ const EX = {
   teach(c, item) {
     sess.newIds.add(c.id);
     if (!S.cards[c.id]) { S.cards[c.id] = { b: 0, d: today() + 1, r: 0, w: 0 }; const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; S.newDay.n++; save(); }
-    $('#ex').innerHTML = `<div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : c.kind === 'd' ? 'Line from a conversation: ' + esc(c.convo) : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
+    $('#ex').innerHTML = `${picImg(picFile(c), 'big')}<div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : c.kind === 'd' ? 'Line from a conversation: ' + esc(c.convo) : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
       <div class="ceb">${esc(c.ceb)}</div>${phonHtml(c.ceb)}<div class="prompt" style="font-weight:500">${esc(c.en)}</div>
       ${breakdown(c.ceb)}
       ${c.note ? `<div class="panel note">${castImg('binko', 'peek')}<div class="label">Binko explains · ${c.kind === 'p' || c.kind === 'w' ? 'when to use it' : 'how it fits together'}</div>${esc(c.note)}</div>` : ''}
       ${ruleChip(c.ceb)}
-      ${c.combos ? `<div><div class="label">Swap in other words</div>${c.combos.map(x => `<div class="small"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span></div>`).join('')}</div>` : ''}
+      ${(c.combos || []).some(x => knownOk(x[0], new Set(tokens(c.ceb).map(lowTok)))) ? `<div><div class="label">Swap in other words</div>${c.combos.filter(x => knownOk(x[0], new Set(tokens(c.ceb).map(lowTok)))).map(x => `<div class="small"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span></div>`).join('')}</div>` : ''}
       ${usedIn(c)}
       <div id="tipslot"></div>
-      ${c.ex ? `<div class="panel"><b>${esc(c.ex)}</b><span class="muted small">${esc(c.exEn || '')}</span></div>` : ''}
+      ${(x => x ? `<div class="panel"><div class="label">Example</div><div class="row" style="gap:8px;align-items:center"><b>${esc(x[0])}</b>${hasVoice(x[0]) ? `<button class="play sm" data-vs="${esc(x[0])}" aria-label="Play example">${I.play}</button>` : ''}</div><span class="muted small">${esc(x[1])}</span></div>` : '')(knownExample(c))}
       ${canHear(c) ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">${voiceNote(c)}</span></div>` : `<p class="muted small">Say it out loud twice.</p>`}`;
     if (canHear(c)) wirePlay(c, 1);
+    document.querySelectorAll('#ex [data-vs]').forEach(b => b.onclick = () => playSentence(b.dataset.vs, b));
     wireTip(c, '#tipslot');
     sess.xp += 2; addXP(2);
     foot(`<button class="btn primary block" id="cont">Got it</button>`); $('#cont').onclick = next;
@@ -1062,7 +1173,7 @@ let DL = null;
 /* One conversation a day, picked to fit what the learner already knows. Flow: new words → read and listen → your turn. */
 function knownWords() {
   const k = new Set();
-  Object.keys(S.cards).forEach(id => { const c = card(id); if (c) tokens(c.ceb).forEach(t => k.add(lowTok(t))); });
+  Object.keys(S.cards).forEach(id => { const c = card(id); if (c && c.kind !== 'r') tokens(c.ceb).forEach(t => k.add(lowTok(t))); });
   return k;
 }
 const dlgTokens = d => [...new Set(d.lines.flatMap(l => tokens(l[1]).map(lowTok)))].filter(t => t && !/^\d/.test(t));
@@ -1104,12 +1215,12 @@ VIEWS.convo = function () {
   const head = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><div class="prog"><i style="width:${(DL.m === 'order' ? DL.order.length : DL.i) / n * 100}%"></i></div><span class="muted small">${esc(d.ceb)}</span></div>`;
   const done = () => { const xp = DL.m === 'part' ? 4 * DL.right + 6 : 10; addXP(xp); if (DL.m === 'part' || DL.m === 'order') { tick('convo'); S.convoDone = S.convoDone || {}; S.convoDone[DL.idx] = (S.convoDone[DL.idx] || 0) + 1; } save(); view = 'done'; sectionDone('Conversation done', '+' + xp + ' XP · ' + esc(d.title)); };
   if (DL.m === 'learn') {
-    $('#app').innerHTML = `${head}<div class="ex">${binkoSays('Today\'s conversation: <b>' + esc(d.title) + '</b>. First, the words you haven\'t met yet. Binko binks you\'ll be fine!')}
+    $('#app').innerHTML = `${head}<div class="ex">${binkoSays('Today\'s conversation: ' + dlgPic(DL.idx) + ' <b>' + esc(d.title) + '</b>. First, the words you haven\'t met yet. Binko binks you\'ll be fine!')}
       <div class="panel"><div class="label">New words in this conversation</div>${DL.unknown.map(t => `<div class="gap"><span class="c">${esc(t)}</span><span class="small muted">${esc(glossOf(t) || 'see it in the conversation')}</span>${phonHtml(t, false)}</div>`).join('')}</div></div><div class="foot" id="foot"></div>`;
     foot(`<button class="btn primary block" id="nx">Start the conversation</button>`);
     $('#nx').onclick = () => { DL.m = 'read'; DL.i = 0; render(); };
   } else if (DL.m === 'read') {
-    $('#app').innerHTML = `${head}<div class="ex"><div class="label">${esc(d.title)}</div><div class="chat">${d.lines.slice(0, DL.i + 1).map((l, j) => bubble(d, l, j, { note: true })).join('')}</div></div><div class="foot" id="foot"></div>`;
+    $('#app').innerHTML = `${head}<div class="ex"><div class="label">${dlgPic(DL.idx)} ${esc(d.title)}</div><div class="chat">${d.lines.slice(0, DL.i + 1).map((l, j) => bubble(d, l, j, { note: true })).join('')}</div></div><div class="foot" id="foot"></div>`;
     foot(DL.i < n - 1 ? `<button class="btn primary block" id="nx">Next line</button>` : `<button class="btn primary block" id="nx">Your turn: say your lines</button>`);
     $('#nx').onclick = () => { if (DL.i < n - 1) { DL.i++; render(); lineSay(d.lines[DL.i][1]); } else { DL = Object.assign(DL, { m: 'part', i: 0, show: {}, right: 0, spoke: 0 }); render(); } };
     if (DL.i === 0 && !DL.spoke) { DL.spoke = 1; lineSay(d.lines[0][1]); }
@@ -1172,7 +1283,7 @@ let ruleOpen = null, ruleBack = 'home';
 VIEWS.rules = function () {
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Sentence rules</h2></div>
     ${binkoSays('Binko took a Bisaya sentence apart like an engine! You learn one part at a time in Build sentences: Binko explains it, you drill it, then you build with it. Rules you\'ve passed are open here to look back at.')}
-    ${RULES.map(r => { const ok = ruleLearned(r.id); return `<details class="panel rule ${ok ? '' : 'later'}" id="r-${r.id}" ${ruleOpen === r.id ? 'open' : ''}><summary><b>${r.n}. ${esc(r.title)}${ok ? ' ✓' : ''}</b><div class="small muted">${ok ? esc(r.short) : 'Not learned yet. It comes up in Build sentences.'}</div></summary>
+    ${RULES.map(r => { const ok = ruleLearned(r.id); return `<details class="panel rule ${ok ? '' : 'later'}" id="r-${r.id}" ${ruleOpen === r.id ? 'open' : ''}><summary><b>${rulePic(r)} ${r.n}. ${esc(r.title)}${ok ? ' ✓' : ''}</b><div class="small muted">${ok ? esc(r.short) : 'Not learned yet. It comes up in Build sentences.'}</div></summary>
       ${r.steps.map(st => `<p class="small" style="margin:8px 0 4px">${esc(st[0])}</p>${st[1].map(x => `<div class="small" style="margin:2px 0 2px 10px"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span><div class="muted" style="font-size:.85em">${esc(x[2])}</div></div>`).join('')}`).join('')}</details>`; }).join('')}
     <button class="btn primary block" id="tryb">Build sentences</button>`;
   $('#quit').onclick = () => { const b = ruleBack; ruleOpen = null; ruleBack = 'home'; go(b === 'rules' ? 'home' : b); };
@@ -1188,23 +1299,166 @@ function nextRule() {
   const roots = knownRoots();
   return RULES.find(r => !ruleLearned(r.id) && ruleQuiz(r, roots).length >= Math.min(3, r.quiz.length)) || null;
 }
+/* ---------- grammar rules inside the daily session ----------
+   A new rule shows up in the daily session like a new word: Binko explains it, then it comes back on a schedule.
+   Questions get harder as you get them right: pick the right sentence -> which rule is this (with English)
+   -> which rule is this (Bisaya only) and what's wrong with this sentence. */
+const RULE_IX = {}; RULES.forEach((r, i) => RULE_IX[r.id] = i);
+const ruleCardId = r => 'r' + RULE_IX[r.id];
+function ensureRuleCards() { Object.keys(S.rules || {}).forEach(id => { if (S.rules[id].ok && RULE_IX[id] != null && !S.cards['r' + RULE_IX[id]]) S.cards['r' + RULE_IX[id]] = { b: 1, d: today(), r: 1, w: 0 }; }); }
+// every rule a sentence shows (not just the main one), so a "which rule" question never has two right answers
+function ruleHits(ceb) {
+  const t = tokens(ceb || '').map(lowTok), out = new Set(); if (!t.length) return out;
+  const f = t[0];
+  if (['dili', 'di', 'wala', 'wa', 'ayaw'].includes(f) || t.includes('dili') || t.includes('wala')) out.add('neg');
+  if (QWORDS.has(f) || t.includes('ba')) out.add('ask');
+  if (t.some(x => ['gusto', 'ganahan', 'kinahanglan'].includes(x))) out.add('want');
+  if (t.some(x => /^(koy|kay|siyay|naay|way|walay|adunay|tay|miy|silay|moy)$/.test(x))) out.add('have');
+  if (t.some(x => /^gi\w{3,}/.test(x) || ['nako', 'nimo', 'niya', 'nato', 'namo', 'nila', 'ako', 'imo'].includes(x))) out.add('nako');
+  if (t.some(x => ['na', 'pa', 'ra', 'gyud', 'jud', 'kaayo', 'lang', 'man', 'sad', 'pud'].includes(x))) out.add('little');
+  if (t.some(x => /^(mo|ni|mi|nag|mag|maka|naka)\w{2,}/.test(x))) out.add('time');
+  if (t.includes('kaayo') || t.includes('nga')) out.add('desc');
+  if (t.some(x => SHORTP.has(x))) out.add('ko');
+  if (t.some(x => ['sa', 'og', 'si', 'ang', 'ug'].includes(x))) out.add('mark');
+  if (t.length >= 2 && !QWORDS.has(f) && !['dili', 'di', 'wala', 'wa', 'ayaw', 'gusto', 'ganahan', 'kinahanglan', 'naa', 'adunay'].includes(f)) out.add('first');
+  return out;
+}
+// sentences that show a rule: built from words you know, the rule's own examples, and cards you've learned
+function ruleSentences(r, knownOnly) {
+  const out = [], kw = knownWords(), known = s => tokens(s).every(t => kw.has(lowTok(t)));
+  allPatternSentences().filter(x => x.pt.rule === r.id).forEach(x => out.push([x.ceb, x.en]));
+  r.steps.forEach(st => st[1].forEach(x => { if (tokens(x[0]).length >= 2 && !/→/.test(x[0])) out.push([x[0], x[1]]); }));
+  r.quiz.forEach(q => out.push([q.a[0], qText(q.q)]));
+  Object.keys(S.cards).forEach(id => { if (id[0] === 'r' || S.cards[id].b < 1) return; const c = card(id); if (c && ruleFor(c.ceb) === r) out.push([firstAlt(c.ceb), firstAlt(c.en)]); });
+  const seen = new Set(); return out.filter(x => { const k = norm(x[0]); if (seen.has(k)) return false; seen.add(k); return !knownOnly || known(x[0]); });
+}
+function ruleOpts(r, ceb) {
+  const hits = ruleHits(ceb); hits.add(r.id);
+  const others = RULES.filter(x => !hits.has(x.id)), mine = shuffle(others.filter(x => ruleLearned(x.id))), rest = shuffle(others.filter(x => !ruleLearned(x.id)));
+  return shuffle([r, ...mine.concat(rest).slice(0, 3)]);
+}
+const playSentence = (s, btn) => { const u = voiceUrl(s); if (u) playUrl(u, 1, btn); };
+const sayBtn = s => hasVoice(s) ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><span class="muted small">Computer voice</span></div>` : '';
+function ruleChoice(c, item, opts, rightId, shown, extra) {
+  let sel = null;
+  $('#ex').querySelector('.opts').innerHTML = opts.map((o, i) => `<button class="opt ${o.ceb ? 'cebopt' : ''}" data-i="${i}">${esc(o.t)}</button>`).join('');
+  if ($('#pl')) { $('#pl').onclick = e => playSentence(shown.ceb, e.currentTarget); playSentence(shown.ceb, $('#pl')); }
+  foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
+  const btns = [...document.querySelectorAll('.opt')];
+  btns.forEach(b => b.onclick = () => { btns.forEach(x => x.classList.remove('sel')); b.classList.add('sel'); sel = +b.dataset.i; $('#chk').disabled = false; });
+  $('#chk').onclick = () => {
+    const ok = opts[sel].id === rightId;
+    btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === rightId) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); });
+    result({ id: c.id, kind: 'r', ceb: shown.ceb, en: shown.en, audio: false }, item, ok, extra);
+  };
+}
+// a rule step's examples, keeping only sentences made of words you've met (plus the rule's own little words)
+function ruleStepEx(r, st) {
+  const ruleWords = new Set(st[1].flatMap(x => tokens(x[0]).map(lowTok)).filter(w => w.length <= 5 || /^(mo|ni|nag|gi)/.test(w) === false));
+  const ok = st[1].filter(x => /→/.test(x[0]) || tokens(x[0]).length <= 1 || knownOk(x[0], new Set(tokens(x[0]).map(lowTok).filter(w => w.length <= 4))));
+  if (ok.length) return ok;
+  const gen = allPatternSentences(true).filter(x => x.pt.rule === r.id); return gen.length ? [[gen[0].ceb, gen[0].en, '']] : st[1].filter(x => tokens(x[0]).length <= 1);
+}
+const ruleHard = c => ((S.cards[c.id] || {}).b || 0) >= 2;
+const qText = q => { const m = String(q).match(/["“]([^"”]+)["”]/); return m ? m[1] : String(q).replace(/^how do you say\s*/i, '').replace(/\?$/, ''); };
+Object.assign(EX, {
+  rteach(c, item) {
+    const r = c.rule; sess.newIds.add(c.id);
+    if (!S.cards[c.id]) S.cards[c.id] = { b: 0, d: today() + 1, r: 0, w: 0 };
+    S.rules = S.rules || {}; if (!ruleLearned(r.id)) S.rules[r.id] = { ok: 1, d: today() }; S.ruleDay = today(); save();
+    $('#ex').innerHTML = `${rulePic(r, 'big')}<div class="label">New grammar rule · ${r.n} of ${RULES.length}</div><div class="ceb" style="font-size:1.7rem">${esc(r.title)}</div>
+      <div class="prompt" style="font-weight:500;font-size:1.05rem">${esc(r.short)}</div>
+      ${r.steps.map(st => `<div class="panel"><div>${esc(st[0])}</div>${ruleStepEx(r, st).map(x => `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b style="color:var(--sea)">${esc(x[0])}</b>${hasVoice(x[0]) ? `<button class="play sm" data-vs="${esc(x[0])}" aria-label="Play">${I.play}</button>` : ''}<span class="muted small">${esc(x[1])}${x[2] ? ' · ' + esc(x[2]) : ''}</span></div>`).join('')}</div>`).join('')}
+      ${binkoSays('This rule will come back in your sessions. Each time you get it right, Binko makes the questions a little harder!')}`;
+    document.querySelectorAll('[data-vs]').forEach(b => b.onclick = () => playSentence(b.dataset.vs, b));
+    foot(`<button class="btn primary block" id="cont">Got it</button>`); $('#cont').onclick = next;
+  },
+  rq(c, item) { // pick the sentence that follows the rule
+    const r = c.rule, hard = ruleHard(c), roots = knownRoots(); let qs = ruleQuiz(r, roots);
+    const gen = allPatternSentences(true).filter(x => x.pt.rule === r.id && x.decoys.length >= 2);
+    if (!qs.length && !gen.length) { qi++; return VIEWS.session(); }
+    const useGen = gen.length && (!qs.length || Math.random() < (hard ? 0.6 : 0.3));
+    const q = useGen ? (g => ({ q: g.en, a: [g.ceb, ...g.decoys.slice(0, 2)], why: r.short }))(pick(gen)) : pick(qs);
+    const opts = shuffle(q.a.map((a, i) => ({ id: i ? 'x' + i : 'ok', t: a, ceb: 1 })));
+    $('#ex').innerHTML = `<div class="label">${hard ? 'Pick the right one' : 'Rule ' + r.n + ' · ' + esc(r.title)}</div><div class="prompt">How do you say “${esc(qText(q.q))}”?</div><div class="opts"></div>`;
+    ruleChoice(c, item, opts, 'ok', { ceb: q.a[0], en: qText(q.q) }, `<b>Rule ${r.n}:</b> ${esc(q.why)}`);
+  },
+  rid(c, item) { // which rule is this?
+    const r = c.rule, hard = ruleHard(c), ss = ruleSentences(r, true);
+    const s = ss.length ? pick(ss) : null; if (!s) { qi++; return VIEWS.session(); }
+    const opts = ruleOpts(r, s[0]); if (opts.length < 3) return EX.rq(c, item);
+    $('#ex').innerHTML = `<div class="label">Which rule is this sentence using?</div><div class="ceb">${esc(s[0])}</div>${sayBtn(s[0])}${hard ? '' : `<div class="prompt" style="font-weight:500">${esc(s[1])}</div>`}<div class="opts"></div>`;
+    ruleChoice(c, item, opts.map(x => ({ id: x.id, t: x.title })), r.id, { ceb: s[0], en: s[1] }, `<b>Rule ${r.n}: ${esc(r.title)}.</b> ${esc(r.short)}`);
+  },
+  rfix(c, item) { // a sentence that breaks the rule: which rule fixes it?
+    const r = c.rule, q = pick(ruleQuiz(r, knownRoots()).filter(x => x.a.length > 1)); if (!q) return EX.rid(c, item);
+    const bad = pick(q.a.slice(1)), opts = ruleOpts(r, q.a[0]); if (opts.length < 3) return EX.rq(c, item);
+    $('#ex').innerHTML = `<div class="label">Something's off</div><div class="prompt">This is supposed to mean “${esc(qText(q.q))}”:</div><div class="ceb" style="text-decoration:line-through;text-decoration-color:var(--bad);text-decoration-thickness:2px">${esc(bad)}</div><div class="prompt" style="font-size:1rem">Which rule fixes it?</div><div class="opts"></div>`;
+    ruleChoice(c, item, opts.map(x => ({ id: x.id, t: x.title })), r.id, { ceb: q.a[0], en: qText(q.q) }, `<b>Rule ${r.n}:</b> ${esc(q.why)}`);
+  }
+});
 function ruleWaitHint() {
   const roots = knownRoots(), r = RULES.find(x => !ruleLearned(x.id)); if (!r) return '';
   const miss = [...new Set(r.quiz.flatMap(q => q.w))].filter(w => !roots.has(w)).slice(0, 4);
   return `Rule ${r.n}, "${r.title}", opens after you learn ${miss.join(', ')} in your daily sessions.`;
 }
+// the words a pattern fills in, and whether you know them
+const patItems = pt => ({ v: VERBS, s: STATES, n: NOUNS, pl: PLACES, gi: GI, adj: ADJN })[pt.uses] || [];
+function itemKnown(pt, w, has) {
+  if (pt.uses === 'v') return has(w[0]) || has(w[1]) || has(w[2]) || has('nag' + w[0]);
+  if (pt.uses === 'gi') return (has(w[0][0]) || has(w[0][0].slice(2))) && has(w[1][0]);
+  if (pt.uses === 'adj') return has(w[0][0]) && has(w[1][0]);
+  return has(w[0]);
+}
 function buildPool() {
-  const kw = knownWords(), has = w => kw.has(w.toLowerCase());
-  const verbs = VERBS.filter(v => has(v[0]) || has(v[1]) || has(v[2]) || has('nag' + v[0]));
+  const kw = knownWords(), has = w => kw.has(String(w).toLowerCase());
+  const verbs = VERBS.filter(v => itemKnown({ uses: 'v' }, v, has));
   const states = STATES.filter(x => has(x[0]));
   const prons = PRONS.filter(p => has(p[0]));
   const out = [];
   PATTERNS.forEach(pt => {
     if (!pt.need.every(has) || !pt.rules.every(ruleLearned)) return;
-    const ps = prons.filter(p => !pt.pron || pt.pron.includes(p[0])); if (!ps.length) return;
-    (pt.uses === 'v' ? verbs : states).forEach(w => ps.forEach(p => out.push({ pt, w, p })));
+    const ps = (pt.uses === 'adj' ? PRONS.slice(0, 1) : prons).filter(p => !pt.pron || pt.pron.includes(p[0])); if (!ps.length) return;
+    patItems(pt).filter(w => itemKnown(pt, w, has)).forEach(w => ps.forEach(p => out.push({ pt, w, p })));
   });
   return { out, verbs, states, prons };
+}
+/* Every sentence the patterns can make, with wrong versions that break the rule or change the meaning.
+   Used for grammar questions in the daily session, and voiced by the computer voice ahead of time. */
+let PAT_CACHE = null;
+const capTok = (toks, q) => { const t = toks.map((x, i) => i === 0 ? cap(x) : (/^[A-Z]/.test(x) && !['Cebu', 'Manila'].includes(x) ? x.toLowerCase() : x)); return t.join(' ').replace(/\?\s*$/, '') + (q ? '?' : ''); };
+function patWrong(pt, p, w, toks) {
+  const q = /\?$/.test(toks[toks.length - 1]), bare = toks.map(t => t.replace(/\?$/, '')), out = [];
+  const front = () => { const i = bare.findIndex((t, j) => j > 0 && t.toLowerCase() === p[0]); if (i > 0) out.push(capTok([bare[i], ...bare.filter((_, j) => j !== i)], q)); };
+  const swapAt = (i, to) => { if (i >= 0) { const t = bare.slice(); t[i] = to; out.push(capTok(t, q)); } };
+  const tense = () => { const i = bare.findIndex(t => /^(mo|ni)/i.test(t) && t.length > 4); if (i >= 0) swapAt(i, /^mo/i.test(bare[i]) ? bare[i].replace(/^mo/i, 'ni') : bare[i].replace(/^ni/i, 'mo')); };
+  switch (pt.id) {
+    case 'will': case 'did': case 'now': case 'want': case 'like': case 'where': case 'goto': case 'went': front(); tense(); break;
+    case 'wont': front(); swapAt(0, 'wala'); break;
+    case 'didnt': front(); swapAt(0, 'dili'); break;
+    case 'state': front(); out.push(capTok([bare[0], 'kaayo', ...bare.slice(1)], q)); break;
+    case 'very': front(); out.push(capTok(bare.filter(t => t !== 'kaayo'), q)); break;
+    case 'notstate': front(); out.push(capTok([bare[0], bare[2], bare[1]], q)); break;
+    case 'askstate': out.push(capTok(['ka', bare[0], 'ba'], true)); swapAt(1, 'ko'); break;
+    case 'have': swapAt(1, p[0]); out.push(capTok([p[0] + 'y', 'naa', bare[2]], q)); swapAt(0, 'wala'); break;
+    case 'nohave': swapAt(0, 'naa'); out.push(capTok([p[0] + 'y', 'wala', bare[2]], q)); break;
+    case 'gi': { out.push(capTok([bare[1], bare[0], ...bare.slice(2)], q)); const other = Object.values(NAKO).find(x => x !== bare[1]); swapAt(1, other); break; }
+    case 'descnga': { out.push(capTok([bare[0], bare[2]], q)); const o = ADJ.find(a => a[2] === w[0][2] && a[0] !== w[0][0]); if (o) swapAt(0, o[0]); break; }
+    case 'descvery': out.push(capTok(['kaayo', bare[0], ...bare.slice(2)], q)); out.push(capTok(bare.filter(t => t !== 'kaayo'), q)); break;
+  }
+  const right = norm(capTok(bare, q)); return [...new Set(out)].filter(x => norm(x) !== right);
+}
+function allPatternSentences(knownOnly) {
+  if (!PAT_CACHE) {
+    PAT_CACHE = [];
+    PATTERNS.forEach(pt => {
+      const ps = (pt.uses === 'adj' ? PRONS.slice(0, 1) : PRONS).filter(p => !pt.pron || pt.pron.includes(p[0]));
+      patItems(pt).forEach(w => ps.forEach(p => { const [toks, en] = pt.make(p, w); const q = /\?$/.test(toks[toks.length - 1]);
+        PAT_CACHE.push({ pt, w, p, toks, ceb: capTok(toks.map(t => t.replace(/\?$/, '')), q), en, decoys: patWrong(pt, p, w, toks) }); }));
+    });
+  }
+  if (!knownOnly) return PAT_CACHE;
+  const kw = knownWords(); return PAT_CACHE.filter(x => x.toks.every(t => kw.has(lowTok(t))) && x.pt.need.every(n => kw.has(n)));
 }
 function buildLock() {
   if (nextRule()) return null;
@@ -1271,7 +1525,7 @@ VIEWS.build = function () {
 function drillDone(head) {
   const n = BD.quiz.length, pass = BD.qRight >= Math.ceil(n * 0.75);
   if (BD.nr) {
-    if (pass) { S.rules = S.rules || {}; S.rules[BD.nr.id] = { ok: 1, d: today() }; S.ruleDay = today(); save(); }
+    if (pass) { S.rules = S.rules || {}; S.rules[BD.nr.id] = { ok: 1, d: today() }; S.ruleDay = today(); ensureRuleCards(); save(); }
     BD.qs = pickSentences(6, BD.nr.id);
   }
   const msg = !BD.nr ? `Review done: ${BD.qRight} of ${n}. Now let's build!`
@@ -1448,7 +1702,7 @@ function logAnswer(ok) { const t = today(); S.acc = S.acc || {}; const a = S.acc
 function acc7() { const t = today(); let r = 0, n = 0; Object.entries(S.acc || {}).forEach(([k, v]) => { if (+k > t - 7) { r += v.r; n += v.t; } }); return { r, n, pct: n ? Math.round(r / n * 100) : 0 }; }
 const weekStart = () => { const t = today(), dow = (t + 4) % 7; return t - ((dow + 6) % 7); }; // Monday
 const xpWeek = () => { const w = weekStart(); return Object.entries(S.xp).reduce((s, [k, v]) => s + (+k >= w ? v : 0), 0); };
-const learnedCount = () => Object.keys(S.cards).filter(id => S.cards[id].b >= 2 && card(id)).length;
+const learnedCount = () => Object.keys(S.cards).filter(id => id[0] !== 'r' && S.cards[id].b >= 2 && card(id)).length;
 // each signed-in person's public scoreboard row: board/{uid}. Nothing else of their progress is shared.
 function boardRow() { const a = acc7(); return { name: displayName(), streak: streakNow(), best: S.streak.best || 0, accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, updated: Date.now() }; }
 let boardTimer = null;

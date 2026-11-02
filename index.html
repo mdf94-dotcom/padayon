@@ -321,6 +321,10 @@ html.embed .toast{bottom:20px}
 .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px;background:none;border:0;border-radius:12px;color:var(--muted);font-size:.75rem;font-weight:700}
 .tab svg{width:24px;height:24px}
 .tab.on{color:var(--sea)}
+.tab[data-tab="rushhome"]{position:relative;color:#e8c547;gap:4px;justify-content:flex-end}
+.tab[data-tab="rushhome"] svg{box-sizing:border-box;width:64px;height:64px;padding:11px;margin-top:-30px;border-radius:50%;color:#3a2a05;background:radial-gradient(circle at 35% 30%,#fff3b0 0%,#f5d04a 38%,#d9a21b 75%,#b07d0e 100%);border:3px solid #121d20;box-shadow:0 0 0 2px #e8c547,0 6px 16px rgba(232,197,71,.35)}
+.tab[data-tab="rushhome"].on svg{box-shadow:0 0 0 3px #fff3b0,0 6px 20px rgba(245,208,74,.6)}
+.tab[data-tab="rushhome"].on{color:#f5d04a}
 .tabmain{display:flex;flex-direction:column;gap:16px}
 .brand-sm{font-weight:700;font-size:1.6rem;background:var(--iri);-webkit-background-clip:text;background-clip:text;color:transparent}
 .today-grid,.today-main,.today-side,.prog-grid,.prog-main,.prog-side,.me-grid{display:flex;flex-direction:column;gap:16px}
@@ -359,6 +363,8 @@ html.embed .toast{bottom:20px}
 .rush-best{display:flex;flex-direction:column}.rush-best b{font-family:var(--f-display);font-size:4rem;line-height:1;color:var(--mango)}
 .rush-hero .btn{min-height:56px;justify-content:center;font-size:1.25rem;background:var(--mango);color:#1a1a12;font-weight:700;box-shadow:0 3px 0 #8a8030}
 .rush-how{margin:0;padding-left:18px;color:var(--muted);font-size:.9rem;display:grid;gap:2px}
+.epic{display:block;flex:none}.epic.big{width:88px;height:88px;margin:4px 0 -4px}.epic.md{width:64px;height:64px}.epic.in{display:inline-block;width:1.25em;height:1.25em;vertical-align:-.25em;margin-right:6px}
+@media (min-width:960px){.app.lesson .epic.big{width:112px;height:112px}}
 .acct{flex-direction:row;align-items:center;gap:14px}.acct img{width:56px;height:56px;border-radius:50%;background:#f0e278;object-fit:cover;flex:none}
 @media (hover:hover){.prac:hover,.prow-main:not(:disabled):hover b,.donebar:hover b{color:var(--sea)}.prac:hover{background:var(--chip)}.tab:hover{color:var(--ink)}.opt:hover:not(:disabled){border-color:var(--sea)}}
 
@@ -372,6 +378,9 @@ html.embed .toast{bottom:20px}
   .tab{flex-direction:row;justify-content:flex-start;gap:12px;min-height:46px;padding:0 12px;font-size:1rem}
   .tab svg{width:22px;height:22px}
   .tab.on{background:var(--sea-soft)}
+  .tab[data-tab="rushhome"]{justify-content:flex-start;gap:12px}
+  .tab[data-tab="rushhome"] svg{width:30px;height:30px;padding:6px;margin:0 -4px;border:0;box-shadow:0 0 0 1px #e8c547}
+  .tab[data-tab="rushhome"].on{background:#2c301f}
   .tabs-me{margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px}
   .tabs-me:empty{display:none}
   .tabs-me img{width:36px;height:36px;border-radius:50%;background:#f0e278;object-fit:cover}
@@ -419,6 +428,8 @@ html.embed .toast{bottom:20px}
 <script src="mega.js"></script>
 <script src="path.js"></script>
 <script src="fixes.js"></script>
+<script src="pics.js"></script>
+<script src="examples.js"></script>
 <script src="cast.js"></script>
 <script src="grammar.js"></script>
 <script src="real.js"></script>

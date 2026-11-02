@@ -334,7 +334,64 @@ const DIALOGS = [
     ['b', 'Sige, Reyna.', 'Yes, my Queen.', ''],
     ['a', 'Ayaw abriha.', "Don't open it.", ''],
     ['b', 'Dili gyud!', 'Never!', 'Gyud makes it strong.']
-  ] }
+  ] },
+  // family everyday conversations, written for Padayon
+  { title: "Lunch at Lola's", ceb: 'Kaon na ta', a: 'Lola', b: 'You', lines: [
+    ['a', 'Nikaon na ka?', 'Have you eaten yet?', 'People ask this the way others say hello.'],
+    ['b', 'Wala pa, Lola.', 'Not yet, Lola.', 'Wala pa = not yet.'],
+    ['a', 'Kaon na ta! Naa koy giluto nga adobo.', "Let's eat! I cooked adobo.", 'Kaon na ta = let\'s eat now. Naa koy = I have.'],
+    ['b', 'Lami kaayo, Lola!', "It's really delicious, Lola!", 'Lami = tasty. Kaayo = very, right after the describing word.'],
+    ['a', 'Dugangi pa og kan-on.', 'Have some more rice.', 'Dugangi = add more to it. Og = some.'],
+    ['b', 'Busog na ko. Salamat kaayo!', "I'm full now. Thank you so much!", 'Busog = full.']] },
+  { title: 'Where are you headed?', ceb: 'Asa ka padulong?', a: 'Cousin', b: 'You', lines: [
+    ['a', 'Asa ka padulong?', 'Where are you headed?', 'Padulong = on the way to.'],
+    ['b', 'Moadto ko sa merkado.', "I'm going to the market.", 'Moadto ko sa = I will go to.'],
+    ['a', 'Unsay imong paliton?', 'What are you going to buy?', 'Imong = your. Paliton = the thing to buy.'],
+    ['b', 'Isda ug utan.', 'Fish and vegetables.', 'Ug = and.'],
+    ['a', 'Pwede ko mouban?', 'Can I come along?', 'Mouban = to go with someone.'],
+    ['b', 'Sige, dali na!', 'Sure, come on!', 'Dali na = hurry up, come on.']] },
+  { title: 'Not feeling well', ceb: 'Masakit akong ulo', a: 'Mom', b: 'You', lines: [
+    ['a', 'Ngano man? Masakit ba imong ulo?', "What's wrong? Does your head hurt?", 'Masakit = it hurts. Ulo = head.'],
+    ['b', 'Oo, ug gikapoy ko.', "Yes, and I'm tired.", 'Gikapoy = tired.'],
+    ['a', 'Pahulay sa. Inom og tubig.', 'Rest first. Drink some water.', 'Sa = first, for now.'],
+    ['b', 'Okay, Ma.', 'Okay, Mom.', ''],
+    ['a', 'Kung dili pa mawala, moadto ta sa doktor.', "If it doesn't go away, we'll go to the doctor.", 'Kung = if. Mawala = to go away.'],
+    ['b', 'Salamat, Ma. Gihigugma tika.', 'Thanks, Mom. I love you.', 'Tika = I-to-you in one word.']] },
+  { title: 'Calling Tito', ceb: 'Dugay na ta wala nagkita', a: 'Tito', b: 'You', lines: [
+    ['a', 'Hello? Kinsa ni?', "Hello? Who's this?", 'Kinsa = who.'],
+    ['b', 'Ako ni, Tito.', "It's me, Tito.", 'Ako ni = this is me.'],
+    ['a', 'Uy! Kumusta na ka? Dugay na ta wala nagkita.', "Hey! How are you? We haven't seen each other in a long time.", 'Dugay na = it has been long. Nagkita = saw each other.'],
+    ['b', 'Maayo man, Tito. Mobisita mi sa Pasko.', "I'm good, Tito. We'll visit at Christmas.", 'Mi = we, not including the person you talk to.'],
+    ['a', 'Nindot kaayo! Hulaton ko mo.', "That's great! I'll wait for you all.", 'Mo = you all.'],
+    ['b', 'Sige, Tito. Ingna si Tita, hi kuno.', 'Okay, Tito. Tell Tita I said hi.', 'Ingna = tell (someone). Kuno = so they say.']] },
+  { title: 'Riding the jeepney', ceb: 'Lugar lang!', a: 'You', b: 'Driver', lines: [
+    ['a', 'Manong, moagi ba ni sa Colon?', 'Sir, does this go through Colon?', 'Manong = polite for an older man. Moagi = pass by.'],
+    ['b', 'Oo, sakay na.', 'Yes, get on.', 'Sakay = get on, ride.'],
+    ['a', 'Pila ang plete?', 'How much is the fare?', 'Plete = fare.'],
+    ['b', 'Kinse.', 'Fifteen.', 'Prices use Spanish numbers.'],
+    ['a', 'Lugar lang, Manong!', 'Stop here, please!', 'Say this when you want to get off.'],
+    ['b', 'Sige, amping.', 'Okay, take care.', '']] },
+  { title: 'Birthday', ceb: 'Pila na imong edad?', a: 'Ate', b: 'You', lines: [
+    ['a', 'Happy birthday! Pila na imong edad?', 'Happy birthday! How old are you now?', 'Edad = age.'],
+    ['b', 'Bayente na ko!', "I'm twenty now!", 'Ages use Spanish numbers too.'],
+    ['a', 'Tigulang na diay ka!', "Oh, so you're old now!", 'Diay = oh, so (surprise). Teasing.'],
+    ['b', 'Dili uy! Bata pa ko.', "No way! I'm still young.", 'Pa = still.'],
+    ['a', 'Naa koy regalo para nimo.', 'I have a gift for you.', 'Para nimo = for you.'],
+    ['b', 'Salamat kaayo, Ate!', 'Thank you so much, Ate!', '']] },
+  { title: 'Rainy day', ceb: 'Nag-uwan na pud', a: 'Friend', b: 'You', lines: [
+    ['a', 'Nag-uwan na pud.', "It's raining again.", 'Nag- = happening now. Pud = again, also.'],
+    ['b', 'Naa kay payong?', 'Do you have an umbrella?', 'Naa kay = do you have (ka + y).'],
+    ['a', 'Wala. Nakalimot ko.', 'No. I forgot.', 'Nakalimot = forgot.'],
+    ['b', 'Ania, gamita ni akoa.', 'Here, use mine.', 'Gamita = use it. Akoa = mine.'],
+    ['a', 'Salamat! Ibalik nako ugma.', "Thanks! I'll give it back tomorrow.", 'Ibalik = give back.'],
+    ['b', 'Walay problema.', 'No problem.', '']] },
+  { title: 'Cooking with Tita', ceb: 'Tabangi ko', a: 'Tita', b: 'You', lines: [
+    ['a', 'Tabangi ko diri sa kusina.', 'Help me here in the kitchen.', 'Tabangi ko = help me.'],
+    ['b', 'Unsay akong buhaton?', 'What should I do?', 'Buhaton = the thing to do.'],
+    ['a', 'Hiwaa ang sibuyas.', 'Slice the onion.', 'Hiwaa = slice it.'],
+    ['b', 'Naghilak akong mata!', 'My eyes are watering!', 'Naghilak = crying.'],
+    ['a', 'Normal ra na. Padayon lang!', "That's normal. Just keep going!", 'Padayon = keep going.'],
+    ['b', 'Humot kaayo!', 'It smells so good!', 'Humot = smells nice.']] }
 ];
 
 /* ---------- extra phrases from the "Let's talk in Bisaya with loved ones" deck that the content pack doesn't have (no recording) ---------- */
