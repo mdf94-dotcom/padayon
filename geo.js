@@ -64,10 +64,17 @@ VIEWS.geo = async function () {
   const qi = $('#geoq'); qi.oninput = () => { GS.q = qi.value; const pos = qi.selectionStart; render(); const n = $('#geoq'); n.focus(); n.setSelectionRange(pos, pos); };
 };
 /* ---------- the games ---------- */
+// other names people use, accepted when typing
+const GEO_ALIAS = { 'Metro Manila': ['NCR', 'Manila', 'National Capital Region'], 'Davao de Oro': ['Compostela Valley'], 'Cotabato': ['North Cotabato'], 'Mountain Province': ['Mt Province'],
+  'Cebuano (Bisaya)': ['Binisaya', 'Sugbuanon', 'Visayan'], 'Ilocano': ['Ilokano', 'Iloko', 'Iloco'], 'Bikol': ['Bicol', 'Bikolano', 'Bicolano'], 'Kinaray-a': ['Karay-a', 'Kinaraya'],
+  'Tagalog': ['Filipino'], 'Masbateño': ['Masbatenyo'], 'Waray': ['Waray-Waray', 'Winaray'], 'Tausug': ['Bahasa Sug'], 'Sama': ['Sinama', 'Bajau', 'Badjao'], 'Kapampangan': ['Pampango'],
+  'Pangasinan': ['Pangasinense'], 'Maguindanaon': ['Maguindanao'], 'Hiligaynon (Ilonggo)': ['Ilongo'] };
+const nameAlts = s => [s, ...(s.match(/\(([^)]+)\)/) ? [s.replace(/\s*\(.*?\)/, ''), s.match(/\(([^)]+)\)/)[1]] : []), ...(GEO_ALIAS[s] || [])];
+const allLangs = () => [...new Set(Object.values(GEO_LANG).map(x => x.main))];
 let GG = null;
 async function startGeo(mode, practice) {
   await loadGeo(); if (!GEO) return toast('The map did not load. Check your connection.');
-  GG = { mode, practice: !!practice, n: 0, miss: 0, seen: new Set(), last: null };
+  GG = { mode, practice: !!practice, n: 0, miss: 0, seen: new Set(), last: null, how: rushTyped() ? 'type' : 'pick' };
   geoNext(); go('geogame');
 }
 function geoNext() {
@@ -92,42 +99,49 @@ VIEWS.geogame = function () {
   const t = GG.cur, best = (S.geoBest || {})[GG.mode] || 0, L = langOf(t.n);
   const title = GG.mode === 'prov' ? 'Province Rush' : 'Language Rush';
   // like Padayon Rush: a timer that gets shorter every 5 right (not in practice)
-  const secs = GG.practice ? 0 : Math.max(4, 10 - Math.floor(GG.n / 5) * 0.5);
+  const typed = GG.how === 'type', secs = GG.practice ? 0 : typed ? Math.max(8, 18 - Math.floor(GG.n / 5) * 0.5) : Math.max(4, 10 - Math.floor(GG.n / 5) * 0.5);
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End">${I.x}</button><h2 style="flex:1">${title}</h2><span class="speedchip tnum">${GG.practice ? 'Practice' : GG.n}</span></div>
     <div class="ex geo-ex">${secs ? '<div class="timer"><i id="tb"></i></div>' : ''}<div class="geo-wrap game">${mapSvg({ hi: t.n, zoom: true })}</div>
     <div class="prompt" style="font-size:1.1rem">${GG.mode === 'prov' ? 'Which province is lit up?' : `Which language do most people speak in <b>${esc(t.n)}</b>? ${sayBtn2(t.n)}`}</div>${GG.mode === 'lang' ? phonHtml(geoSay(t.n)) : ''}
-    <div class="opts geo-opts">${GG.opts.map((o, i) => `<button class="opt" data-i="${i}">${esc(o)}</button>`).join('')}</div>
-    ${GG.practice ? '<p class="muted small" style="margin:0">Practice: take your time, misses are fine.</p>' : `<p class="muted small" style="margin:0">${secs}s each. One miss or running out of time ends the run. Best: ${best}.</p>`}</div><div class="foot" id="foot" hidden></div>`;
+    ${typed ? typeBox(GG.mode === 'prov' ? 'Type the province' : 'Type the language') : `<div class="opts geo-opts">${GG.opts.map((o, i) => `<button class="opt" data-i="${i}">${esc(o)}</button>`).join('')}</div>`}
+    ${GG.practice ? `<p class="muted small" style="margin:0">Practice${typed ? ', typing' : ''}: take your time, misses are fine.</p>` : `<p class="muted small" style="margin:0">${typed ? 'Typing, small typos are fine. ' : ''}${secs}s each. One miss or running out of time ends the run. Best: ${best}${best ? ' (' + HOW((S.geoHow || {})[GG.mode]) + ')' : ''}.</p>`}</div><div class="foot" id="foot" hidden></div>`;
   $('#quit').onclick = () => { clearInterval(timerH); GG.practice ? go('rushhome') : geoOver(null); };
   wireSay(); if (GG.mode === 'lang') sayIt(t.n);
   const btns = [...document.querySelectorAll('.geo-opts .opt')];
   const t0 = Date.now(); clearInterval(timerH);
-  if (secs) timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / (secs * 1000), tb = $('#tb'); if (tb) tb.style.width = Math.max(0, f * 100) + '%'; if (f <= 0) answer(-1); }, 100);
-  const answer = i => {
-    if (GG.done) return; GG.done = true; clearInterval(timerH); const ok = i >= 0 && GG.opts[i] === GG.right;
+  if (secs) timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / (secs * 1000), tb = $('#tb'); if (tb) tb.style.width = Math.max(0, f * 100) + '%'; if (f <= 0) answer(-1, null); }, 100);
+  const answer = (i, text) => {
+    if (GG.done) return; GG.done = true; clearInterval(timerH);
+    const others = GG.mode === 'prov' ? GEO.p.map(p => p.n) : allLangs();
+    const ok = typed ? text != null && nameOk(text, nameAlts(GG.right), others) : i >= 0 && GG.opts[i] === GG.right;
     btns.forEach((x, j) => { x.disabled = true; if (GG.opts[j] === GG.right) x.classList.add('right'); else if (j === i) x.classList.add('wrong'); });
+    if (typed) { const ti = $('#tans'); if (ti) { ti.disabled = true; ti.classList.add(ok ? 'right' : 'wrong'); } const tg = $('#tgo'); if (tg) tg.disabled = true; }
+    const youTyped = typed && !ok && text ? `<div class="small">You typed <b>${esc(text)}</b>. The answer: <b>${esc(GG.right)}</b></div>` : '';
+    GG.typedText = typed && !ok ? text : null;
     const said = GG.mode === 'prov' ? t.n : L.main;
     const info = `<b>${esc(t.n)}</b> <span class="muted">· ${esc(t.r)}</span>${GG.mode === 'prov' ? phonHtml(geoSay(t.n)) : ''}${L ? `<div class="small">Mostly <b>${esc(L.main)}</b>${GG.mode === 'lang' ? phonHtml(geoSay(L.main)) : ''}${mixNote(L) ? ' ' + esc(mixNote(L)) : ''} ${esc(L.note || '')}</div>` : ''}`;
     const voice = sayIt(said);
     if (ok) GG.n++; else GG.miss++;
     const f = $('#foot'); f.hidden = false; f.className = 'foot ' + (ok ? 'good' : 'bad');
     if (GG.practice) {
-      f.innerHTML = `<div class="verdict">${ok ? pick(['Tama!', 'Sakto!', 'Nindot!']) : 'Dili pa.'}</div><div class="ans">${info}</div><button class="btn primary block" id="cont">Next</button>`;
+      f.innerHTML = `<div class="verdict">${ok ? pick(['Tama!', 'Sakto!', 'Nindot!']) : 'Dili pa.'}</div><div class="ans">${youTyped}${info}</div><button class="btn primary block" id="cont">Next</button>`;
       $('#cont').onclick = () => { geoNext(); render(); }; $('#cont').focus({ preventScroll: true });
     } else if (ok) {
       // show the answer and let the name play, then straight on to the next one
       f.innerHTML = `<div class="verdict">${pick(['Tama!', 'Sakto!', 'Nindot!'])}</div><div class="ans">${info}</div>`;
       Promise.all([voice, new Promise(r => setTimeout(r, 700))]).then(() => setTimeout(() => { if (view === 'geogame' && GG.done) { geoNext(); render(); } }, 150));
     }
-    else Promise.all([voice, new Promise(r => setTimeout(r, 900))]).then(() => geoOver(t, i < 0));
+    else Promise.all([voice, new Promise(r => setTimeout(r, 900))]).then(() => geoOver(t, typed ? text == null : i < 0));
   };
   btns.forEach((b, i) => b.onclick = () => answer(i));
+  if (typed) wireType(x => answer(-1, x));
 };
 function geoOver(t, timeUp) {
-  const n = GG.n, prev = (S.geoBest || {})[GG.mode] || 0, isBest = n > prev; S.geoBest = Object.assign({}, S.geoBest || {}); if (isBest) S.geoBest[GG.mode] = n; save(); view = 'summary';
+  const n = GG.n, prev = (S.geoBest || {})[GG.mode] || 0; S.geoBest = Object.assign({}, S.geoBest || {}); S.geoHow = Object.assign({}, S.geoHow || {});
+  const r = bestWith(prev, S.geoHow[GG.mode], n, GG.how), isBest = r.isBest; S.geoBest[GG.mode] = r.best; S.geoHow[GG.mode] = r.how; save(); view = 'summary';
   const L = t && langOf(t.n), name = GG.mode === 'prov' ? 'Province Rush' : 'Language Rush';
-  $('#app').innerHTML = `<section class="panel summary"><div class="label">${name}</div><h1 style="font-size:2.4rem;color:var(--sea)">${n}</h1><p class="muted">${isBest ? 'New personal best!' : 'Best: ' + prev}</p>
-    ${t ? `<div class="panel"><div class="small muted">${timeUp ? 'Time ran out. The answer was' : 'The answer was'}</div><b>${esc(GG.right)}</b> ${sayBtn2(GG.right)}${phonHtml(geoSay(GG.right))}${GG.mode === 'lang' ? ` <span class="muted">in ${esc(t.n)}</span>` : ` <span class="muted">· ${esc(t.r)}</span>`}${L && L.note ? `<div class="small">${esc(L.note)}</div>` : ''}</div>` : ''}
+  $('#app').innerHTML = `<section class="panel summary"><div class="label">${name}</div><h1 style="font-size:2.4rem;color:var(--sea)">${n}</h1><p class="muted">${HOW(GG.how)} · ${isBest ? 'New personal best!' : 'Best: ' + prev + ' (' + HOW(S.geoHow[GG.mode]) + ')'}</p>
+    ${t ? `<div class="panel">${GG.typedText ? `<div class="small">You typed <b>${esc(GG.typedText)}</b>.</div>` : ''}<div class="small muted">${timeUp ? 'Time ran out. The answer was' : 'The answer was'}</div><b>${esc(GG.right)}</b> ${sayBtn2(GG.right)}${phonHtml(geoSay(GG.right))}${GG.mode === 'lang' ? ` <span class="muted">in ${esc(t.n)}</span>` : ` <span class="muted">· ${esc(t.r)}</span>`}${L && L.note ? `<div class="small">${esc(L.note)}</div>` : ''}</div>` : ''}
     ${binkoSays(isBest ? 'NEW RECORD! Binko is drawing your name on his map in gold!' : n >= 15 ? 'Binko binks you could be a tour guide!' : 'Study the map a little, then try again. Binko believes in you!')}
     <button class="btn primary block" id="again">Go again</button><button class="btn ghost block" id="study">Study the map</button><button class="btn ghost block" id="home2">Back to games</button></section>`;
   wireSay();
