@@ -396,6 +396,30 @@ const DIALOGS = [
 
 /* ---------- extra phrases from the "Let's talk in Bisaya with loved ones" deck that the content pack doesn't have (no recording) ---------- */
 const EXTRA = [
-  ['Pagpahalipay sa imong kasal', 'Congratulations on your wedding', 'Pagpahalipay = congratulations. Sa imong = on your. Kasal = wedding.']
+  ['Pagpahalipay sa imong kasal', 'Congratulations on your wedding', 'Pagpahalipay = congratulations. Sa imong = on your. Kasal = wedding.'],
+  ["siro", "zero", "Siro is borrowed from Spanish \"cero\". For \"none\" people often just say wala."],
+  ["napulog usa", "eleven (native)", "11 to 19 are napulo (ten) + ug (and) + the number. Ug shortens onto napulo: napulog usa (11), napulog duha (12), up to napulog siyam (19)."],
+  ["napulog lima", "fifteen (native)", "Same pattern as 11: napulo + ug + lima, said napulog lima."],
+  ["kawhaan", "twenty (native)", "The native tens: kawhaan (20), katloan (30), kap-atan (40), kalim-an (50), kan-oman (60), kapitoan (70), kawaloan (80), kasiyaman (90)."],
+  ["kawhaag usa", "twenty-one (native)", "To add ones to a ten, ug (and) shortens onto the ten and its last n turns into g: kawhaan + ug + usa = kawhaag usa (21). Katloag lima = 35."],
+  ["katloan", "thirty (native)", ""],
+  ["kap-atan", "forty (native)", ""],
+  ["kalim-an", "fifty (native)", ""],
+  ["kan-oman", "sixty (native)", ""],
+  ["kapitoan", "seventy (native)", ""],
+  ["kawaloan", "eighty (native)", ""],
+  ["kasiyaman", "ninety (native)", ""],
+  ["usa ka gatos", "one hundred (native)", "Big numbers count up with ka: usa ka gatos (100), duha ka gatos (200). The rest is added with ug: usa ka gatos ug kawhaag lima (125)."],
+  ["duha ka gatos", "two hundred (native)", ""],
+  ["napulo ka libo", "ten thousand (native)", "Thousands work the same way: usa ka libo (1,000), napulo ka libo (10,000), usa ka gatos ka libo (100,000). Then milyon and bilyon."],
+  ["usa ka bilyon", "one billion", ""],
+  ["kwatro", "four (Spanish-based; for time, money)", "Spanish-based numbers are used for time, prices, ages and big amounts: uno, dos, tres, kwatro, singko, sais, siyete, otso, nuybe, diyes."],
+  ["trayntay singko", "thirty-five (Spanish-based)", "Spanish-based tens join their ones with -y: trayntay singko (35), kwarentay dos (42). The twenties are two words: baynte uno (21)."],
+  ["mil", "one thousand (Spanish-based)", "dos mil (2,000), diyes mil (10,000), siyento mil (100,000). A million is usa ka milyon either way."],
+  ["dos mil", "two thousand (Spanish-based)", ""],
+  ["alas dos kinse", "2:15 (quarter past two)", "Time uses Spanish-based numbers. Say the hour with alas (ala una for one o'clock), then the minutes: alas dos kinse = 2:15."],
+  ["alas dos y medya", "2:30 (half past two)", "y medya = and a half. Ala una y medya = 1:30."],
+  ["alas tres menos kinse", "2:45 (quarter to three)", "menos = minus: fifteen before three. Lots of people just say the minutes instead: alas dos kwarentay singko."],
+  ["alas siyete sa buntag", "seven in the morning", "Add the time of day: sa kaadlawon (before dawn), sa buntag (morning), sa udto (noon), sa hapon (afternoon), sa gabii (evening)."]
 ];
 const E_ORDER = EXTRA.map((_, i) => 'e' + i);

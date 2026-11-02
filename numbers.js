@@ -4,12 +4,40 @@
    number has an answer. Audio is put together from recordings of each part. */
 
 /* ---------- the generator (filled in from the rules spec) ---------- */
+/* Rules from Cebuano grammar references (Bunye & Yap, Cebuano Grammar Notes; Wiktionary's full 21-99 forms;
+   Wikipedia's Cebuano numerals; DLIFLC Cebuano). Where spellings vary, the most common is used.
+   Native: "ug" (and) joins parts and shortens onto the word before it: napulo + ug = napulog, kawhaan + ug = kawhaag.
+   Big numbers count up with "ka": duha ka gatos (200), napulo ka libo (10,000), usa ka milyon.
+   Spanish-based: used for time, money and big amounts: baynte uno, trayntay singko, dosentos, dos mil. */
+const NU = ['', 'usa', 'duha', 'tulo', 'upat', 'lima', 'unom', 'pito', 'walo', 'siyam'];
+const NT = { 2: 'kawhaan', 3: 'katloan', 4: "kap-atan", 5: 'kalim-an', 6: 'kan-oman', 7: 'kapitoan', 8: 'kawaloan', 9: 'kasiyaman' };
+const SPN = ['siro', 'uno', 'dos', 'tres', 'kwatro', 'singko', 'sais', 'siyete', 'otso', 'nuybe', 'diyes', 'onse', 'dose', 'trese', 'katorse', 'kinse', 'desisais', 'desisiyete', 'desiotso', 'desinuybe', 'baynte'];
+const STN = { 3: 'traynta', 4: 'kwarenta', 5: 'singkwenta', 6: 'saysenta', 7: 'setenta', 8: 'otsenta', 9: 'nobenta' };
+const SHN = { 1: 'siyento', 2: 'dosentos', 3: 'tresentos', 4: 'kwatrosentos', 5: 'kinyentos', 6: 'saysentos', 7: 'setesentos', 8: 'otsosentos', 9: 'nuybesentos' };
+const ugOnto = w => /[aeiou]$/.test(w) ? w + 'g' : /n$/.test(w) ? w.slice(0, -1) + 'g' : w + ' ug';
+const nat100 = n => n < 10 ? NU[n] : n === 10 ? 'napulo' : n < 20 ? 'napulog ' + NU[n - 10] : n % 10 ? ugOnto(NT[Math.floor(n / 10)]) + ' ' + NU[n % 10] : NT[n / 10];
+const nat1000 = n => { const h = Math.floor(n / 100), r = n % 100; if (!h) return nat100(r); return NU[h] + ' ka gatos' + (r ? ' ug ' + nat100(r) : ''); };
+const sp100 = n => n <= 20 ? SPN[n] : n < 30 ? 'baynte ' + SPN[n - 20] : n % 10 ? STN[Math.floor(n / 10)] + 'y ' + SPN[n % 10] : STN[n / 10];
+const sp1000 = n => { const h = Math.floor(n / 100), r = n % 100; if (!h) return sp100(r); return r ? SHN[h] + ' ' + sp100(r) : SHN[h]; };
 const NUM = {
-  ready: false,
-  native: n => String(n),
-  spanish: n => String(n),
-  time: (h, m) => h + ':' + String(m).padStart(2, '0'),
-  parts: s => s.split(/\s+/) // the pieces a phrase is built from, for tiles and audio
+  ready: true,
+  native(n) { if (n === 0) return 'siro'; if (n === 1e9) return 'usa ka bilyon';
+    const M = Math.floor(n / 1e6), T = Math.floor(n / 1000) % 1000, R = n % 1000, p = [];
+    if (M) p.push(nat1000(M) + ' ka milyon'); if (T) p.push(nat1000(T) + ' ka libo');
+    if (R) p.push(p.length && R < 100 ? 'ug ' + nat100(R) : nat1000(R)); return p.join(' '); },
+  spanish(n) { if (n === 0) return 'siro'; if (n === 1e9) return 'usa ka bilyon';
+    const M = Math.floor(n / 1e6), T = Math.floor(n / 1000) % 1000, R = n % 1000, p = [];
+    if (M) p.push(M === 1 ? 'usa ka milyon' : sp1000(M) + ' milyon'); if (T) p.push(T === 1 ? 'mil' : sp1000(T) + ' mil');
+    if (R) p.push(sp1000(R)); return p.join(' '); },
+  // 12-hour clock time (the drill shows a clock face, so no morning/afternoon part)
+  time(h, m) { const hh = h % 12 || 12; let s = hh === 1 ? 'ala una' : 'alas ' + SPN[hh];
+    if (m === 30) s += ' y medya'; else if (m >= 1 && m <= 9) s += ' y ' + SPN[m]; else if (m >= 10) s += ' ' + sp100(m); return s; },
+  // other ways people say the same time (shown after answering)
+  timeAlso(h, m) { const nx = (h % 12) + 1, hn = nx === 1 ? 'ala una' : 'alas ' + SPN[nx], out = [];
+    if (m === 30) out.push((h % 12 || 12) === 1 ? 'ala una traynta' : 'alas ' + SPN[h % 12 || 12] + ' traynta');
+    if (m >= 40) out.push(hn + ' menos ' + sp100(60 - m)); if (m === 45) out.push('menos kinse para ' + hn);
+    return out; },
+  parts: s => s.split(/\s+/).filter(Boolean)
 };
 
 /* ---------- drill state ---------- */
@@ -112,6 +140,7 @@ function numResult(q, ans, ok) {
   $('#foot').className = 'foot ' + (ok ? 'good' : 'bad');
   $('#foot').innerHTML = `<div class="verdict">${ok ? pick(['Tama!', 'Sakto!', 'Nindot!']) : 'Dili pa.'}</div>
     <div class="ans"><b>${esc(shown)}</b> <span class="muted">=</span> <span>${esc(ans)}</span> <button class="play sm" id="nplay" aria-label="Hear it">${I.play}</button></div>${phonHtml(ans)}
+    ${q.time && NUM.timeAlso(q.h, q.m).length ? `<div class="small muted">People also say: ${NUM.timeAlso(q.h, q.m).map(esc).join(' · ')}</div>` : ''}
     <button class="btn primary block" id="cont">Next</button>`;
   $('#nplay').onclick = e => sayNum(ans, e.currentTarget);
   $('#cont').onclick = () => { stopAudio(); NR.i++; render(); }; $('#cont').focus({ preventScroll: true });

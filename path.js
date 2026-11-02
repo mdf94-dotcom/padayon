@@ -12,7 +12,7 @@ const STAGES = [
     m: ['Pronouns', 'Demonstratives', 'Basic Greetings', 'Common Courtesies', 'Addressing Someone', 'Numbers 1'] },
   { ceb: 'Adlaw-adlaw', name: 'Everyday life', level: 'Beginner (A1)',
     can: 'Talk about family, food, likes and wants, ask simple questions, and handle days, months and time.',
-    f: [2, 3, 4], g: [1], p: [3, 4, 5, 6], d: [2, 3, 8, 9, 16, 21], w: [100, 300], e: [],
+    f: [2, 3, 4], g: [1], p: [3, 4, 5, 6], d: [2, 3, 8, 9, 16, 21], w: [100, 300], e: Array.from({ length: 24 }, (_, i) => i + 1), x: ['w457', 'w756', 'w499', 'w522', 'w652'],
     m: ['Visiting a Home', 'Asking Peers for Info', 'Meal Time', 'A1 - 100 Words', 'Everyday sayings', 'Common expressions 1', 'Family Relations',
       'Numbers 2', 'Days of the week', 'Months', 'Time', 'Conjunctions', 'Enclitics (little words)', 'Question words'] },
   { ceb: 'Sa gawas', name: 'Out and about', level: 'Elementary (A2)',

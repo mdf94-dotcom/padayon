@@ -455,6 +455,7 @@ function buildPath() {
     add(st.f.flatMap(i => (F_UNITS[i] || { ids: [] }).ids), [0, 0.6]);
     add(st.p.flatMap(i => (UNITS[i] || { ids: [] }).ids).concat(st.e.map(i => 'e' + i)), [0, 0.85]);
     add(st.g.flatMap(i => (GRAM_UNITS[i] || { ids: [] }).ids), [0.05, 0.8]);
+    if (st.x) add(st.x.filter(id => card(id)), [0.1, 0.8]); // single cards pulled into this stage on purpose (e.g. numbers)
     add(st.m[0] === '*' ? M_ORDER.slice() : st.m.flatMap(mUnit).flatMap(u => u.ids), [0.04, 0.96]);
     add(st.d.flatMap(i => (DIALOGS[i] ? DIALOGS[i].lines.map((_, j) => 'd' + i + '_' + j) : [])), [0.3, 0.7]);
     add(W.slice(st.w[0], st.w[1]).map((_, j) => 'w' + (st.w[0] + j)), [0.12, 0.88]);
@@ -626,7 +627,7 @@ let playToken = 0;
 /* ---------- computer voice: cards with no native recording ----------
    voice/ holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
-const VOICE_V = 7; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
+const VOICE_V = 8; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
 /* The computer voice comes in pieces: a small index, then one piece per stage. You only download the pieces for
    where you are on the path (plus the next one); the rest arrive when a sentence from them is first played. */
 async function loadVoice() {
@@ -640,8 +641,10 @@ async function loadVoice() {
 function loadShard(n) {
   if (SHARD[n]) return Promise.resolve(); if (shardLoading[n]) return shardLoading[n];
   return (shardLoading[n] = (async () => {
-    let b = null; try { b = await idbGet('vs' + n + '_' + VOICE_V); } catch (e) { }
-    if (!b) { const r = await fetch('voice/s' + n + '.bin?v=' + VOICE_V); if (!r.ok) throw new Error('voice piece'); b = await r.arrayBuffer(); try { await idbSet('vs' + n + '_' + VOICE_V, b); } catch (e) { } }
+    // each piece has its own version, so an update only re-downloads the pieces that changed
+    const sv = (VIDX && VIDX.sv && VIDX.sv[n]) || VOICE_V;
+    let b = null; try { b = await idbGet('vs' + n + '_' + sv); } catch (e) { }
+    if (!b) { const r = await fetch('voice/s' + n + '.bin?v=' + sv); if (!r.ok) throw new Error('voice piece'); b = await r.arrayBuffer(); try { await idbSet('vs' + n + '_' + sv, b); } catch (e) { } }
     SHARD[n] = b;
   })().catch(() => { }).finally(() => { delete shardLoading[n]; }));
 }
@@ -1150,7 +1153,7 @@ const GUIDE = [
   { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
   { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'One new rule a day, inside your session'], ['📈', 'Questions get harder each time'], ['🤔', 'Miss one? See exactly why']] },
-  { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya']] },
+  { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
   { t: 'Ranks', tab: 'board', art: '📊', pts: [['📊', 'See how the family is doing'], ['🎯', 'Streaks, accuracy, words, games'], ['⌨️', 'Game scores say if they were typed or multiple choice'], ['🔑', 'Sign in on <b>Me</b> to join']] },
   { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day'], ['🎵', 'Background music on or off, or tap the speaker in the top corner of any screen']], set: true },
