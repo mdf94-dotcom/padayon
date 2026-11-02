@@ -690,7 +690,7 @@ VIEWS.home = function () {
   <section class="hero">
     <div class="hero-guide">${binkoSays(BINKO_NEXT[nextUp ? nextUp.k : 'done'], true)}</div>
     <div class="hero-text"><div class="label">Karon nga adlaw · Today</div><h2>${nextUp ? esc(nextUp.name) : 'All done today. Padayon!'}</h2>
-      <p>${nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${due} review${due === 1 ? '' : 's'}, ${nw} new` : nextUp.d) : xp + ' XP today. Come back tomorrow, or do another session.'}</p></div>
+      <p>${nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${due} review${due === 1 ? '' : 's'}, ${nw} new` : nextUp.d) : 'Come back tomorrow, or do another session.'}</p></div>
     <div class="hero-actions"><button class="btn" id="start">${nextUp ? (nextUp.manual ? 'I did it' : 'Start') : 'Do another session'}<kbd>Enter</kbd></button></div>
     <div class="hero-foot"><span>${sinceShort()}</span><span>Best streak ${S.streak.best || 0}</span></div>
   </section>
@@ -808,21 +808,51 @@ VIEWS.me = function () {
     <p class="small muted" style="margin:0">Binko uses this when he announces your finished lessons in the family Discord, and on the leaderboard.</p>
     <div class="keybox"><input class="field" id="myname" placeholder="${esc(displayName())}" value="${esc(S.settings.name || '')}"><button class="btn primary" id="savename">Save</button></div></section>
   <section class="panel"><h2>Daily cards</h2>
-    ${[['newPerDay', 'New cards per day', [5, 8, 10, 15]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}
+    ${[['newPerDay', 'New cards per day', [5, 8, 10, 15]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}
     <p class="muted small" style="margin:0">8 a day is about 15 to 20 minutes with reviews. More moves you along the path faster but makes reviews pile up.</p></section>
   <section class="panel"><h2>Your data</h2>
     <p class="small muted" style="margin:0">${hasPack() ? `Word pack loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Word pack not loaded yet.'}</p>
     <div class="row"><button class="btn" id="exp">Save a backup</button><button class="btn ghost" id="imp">Restore a backup</button></div>
     <div class="row"><button class="btn ghost" id="pack3">${hasPack() ? 'Reload word pack' : 'Download word pack'}</button><button class="btn ghost" id="pack2">Load pack from a file</button></div></section>
+  <section class="panel"><h2>How Padayon works</h2><p class="small muted" style="margin:0">A quick tour of every part of the app.</p><div class="row"><button class="btn ghost" id="guidego">Show the guide</button></div></section>
   <section class="panel"><h2>About</h2><p class="small muted" style="margin:0">Made for the Balay Ta family. Computer voice: Meta MMS Cebuano (CC BY-NC 4.0). Pictures: Twemoji (CC BY 4.0).</p></section>
   </div>`);
   wireProgress();
+  $('#guidego').onclick = () => openGuide('me');
   $('#syncset').onclick = () => Sync.user ? signOutSync() : signIn();
   $('#savename').onclick = () => { S.settings.name = $('#myname').value.trim(); save(); toast('Saved'); };
   document.querySelectorAll('[data-set]').forEach(g => g.querySelectorAll('button').forEach(b => b.onclick = () => { S.settings[g.dataset.set] = +b.dataset.v; save(); render(); }));
   $('#pack2').onclick = importPack; $('#pack3').onclick = () => { go('home'); autoPack(); };
   $('#exp').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' })); a.download = 'padayon-progress-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); };
   $('#imp').onclick = () => { const fi = $('#filein'); fi.accept = '.json,application/json'; fi.value = ''; fi.onchange = async () => { try { const s = JSON.parse(await fi.files[0].text()); if (s.v !== 1) throw 0; S = migrate(s); save(); toast('Progress loaded'); go('home'); } catch (e) { toast('That is not a Padayon backup file.'); } }; fi.click(); };
+};
+/* ---------- the guide: shown once to everyone after a big update (bump GUIDE_V), and any time from Me ---------- */
+const GUIDE_V = 1;
+const GUIDE = [
+  { t: 'Maayong pag-abot!', b: "Binko rebuilt Padayon! Here's a quick tour of how everything works now. It takes about a minute.", i: 'home' },
+  { t: 'Today: your daily session', b: "Start is your daily session, about 15 to 20 minutes of reviews and new words. Every new word comes with a picture, a <b>sounds like</b> guide, and an example sentence made only of words you already know. Your plan lists everything else for the day; finished items fold away. Finish the daily session to keep your streak, and Binko announces it in #streaks.", i: 'home' },
+  { t: 'Grammar, one rule a day', b: "A new grammar rule shows up inside your daily session, like a new word. Binko explains it, then it keeps coming back with harder questions: pick the right sentence, then <b>which rule is this?</b>, then <b>what's wrong with this sentence?</b>", i: 'practice' },
+  { t: 'When you miss one', b: "The wrong answers are look-alikes on purpose (ko / ka, mo- / ni-). When you miss, Binko shows what your pick means and which word made the difference, like <b>Kinsa = who, but Unsa = what</b>. Missed cards come back later in the session.", i: 'practice' },
+  { t: 'Practice', b: "Extra practice any time, grouped by skill. <b>Listen:</b> speed round and dictation. <b>Speak:</b> shadowing, conversations (8 new family ones) and talking with family. <b>Build and read:</b> grammar, the rule book, and Real Bisaya clips, posts and songs. <b>Your words:</b> another session and gap words.", i: 'practice' },
+  { t: 'Rush 🏆', b: 'The golden trophy is Padayon Rush: every word in the app, easiest first, getting harder and faster. One miss ends the run. Your best shows on the trophy, and the family best runs are right there too.', i: 'rushhome' },
+  { t: 'Ranks', b: 'The family leaderboard: streak, accuracy, words learned, listening speed and Rush. Sign in with Google in Me to show up on it and to keep your progress on all your devices.', i: 'board' },
+  { t: 'Me, and your daily cards', b: 'Me has your path through the five stages, your stats, weak spots, every unit, and your settings. You can change how many new cards you get each day any time:', i: 'me', cards: true },
+  { t: "You're all set!", b: "On a computer: <b>Space</b> replays the audio, <b>S</b> plays it slowly, <b>1 to 4</b> picks an answer and <b>Enter</b> continues. You can open this guide again from Me. Padayon!", i: 'home' }
+];
+let guideAt = 0, guideBack = 'home';
+function openGuide(back) { guideAt = 0; guideBack = back || 'home'; go('guide'); }
+VIEWS.guide = function () {
+  const g = GUIDE[guideAt], last = guideAt === GUIDE.length - 1, per = S.settings.newPerDay || 8;
+  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Close">${I.x}</button><div class="gdots">${GUIDE.map((_, i) => `<i class="${i === guideAt ? 'on' : i < guideAt ? 'done' : ''}"></i>`).join('')}</div><button class="linkbtn" id="gskip">Skip</button></div>
+    <div class="ex guide-page"><div class="gicon">${TI[g.i] || ''}</div><h1 class="gtitle">${g.t}</h1>${binkoSays(g.b, guideAt === 0)}
+    ${g.cards ? `<div class="panel"><div class="label">New cards per day</div><div class="seg" id="gseg">${[5, 8, 10, 15].map(n => `<button class="${per === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div><p class="muted small" style="margin:0">8 a day is about 15 to 20 minutes with reviews. Fewer keeps it light; more moves you along faster but means more reviews.</p></div>` : ''}</div>
+    <div class="foot"><div class="row" style="gap:10px">${guideAt ? '<button class="btn ghost" id="gprev">Back</button>' : ''}<button class="btn primary block" id="gnext" style="flex:1">${last ? "Let's go!" : 'Next'}</button></div></div>`;
+  const done = () => { S.guideV = GUIDE_V; save(); go(guideBack); };
+  $('#quit').onclick = done; $('#gskip').onclick = done;
+  $('#gnext').onclick = () => { if (last) return done(); guideAt++; render(); };
+  if ($('#gprev')) $('#gprev').onclick = () => { guideAt--; render(); };
+  if ($('#gseg')) $('#gseg').querySelectorAll('button').forEach(b => b.onclick = () => { S.settings.newPerDay = +b.dataset.v; save(); render(); });
+  $('#gnext').focus({ preventScroll: true });
 };
 VIEWS.again = function () {
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Another session?</h2></div>
@@ -1142,9 +1172,9 @@ VIEWS.summary = function () {
   const acc = sess.total ? Math.round(sess.right / sess.total * 100) : 0;
   $('#app').innerHTML = `<section class="panel summary"><div class="label">${sess.mode === 'speed' ? 'Speed round done' : sess.mode === 'dict' ? 'Dictation done' : 'Session done'}</div>
     <h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1>
-    <div class="sumgrid"><div><b class="tnum">${sess.xp}</b><span class="small muted">XP</span></div><div><b class="tnum">${acc}%</b><span class="small muted">correct</span></div>
+    <div class="sumgrid"><div><b class="tnum">${sess.mode === 'daily' ? sess.newIds.size : sess.total}</b><span class="small muted">${sess.mode === 'daily' ? 'new' : 'answered'}</span></div><div><b class="tnum">${acc}%</b><span class="small muted">correct</span></div>
     <div><b class="tnum">${sess.mode === 'speed' ? sess.peak.toFixed(1) + '×' : streakNow()}</b><span class="small muted">${sess.mode === 'speed' ? 'top speed' : 'day streak'}</span></div></div>
-    ${sess.mode === 'speed' ? `<p class="muted">Your listening speed is now <b>${S.speed.toFixed(1)}×</b>.</p>` : `<p class="muted">${sess.newIds.size} new · ${sess.graded.size} practiced.</p>`}
+    ${sess.mode === 'speed' ? `<p class="muted">Your listening speed is now <b>${S.speed.toFixed(1)}×</b>.</p>` : `<p class="muted">${sess.graded.size} cards practiced.</p>`}
     ${cameoHtml('done')}${binkoSays(planNext() ? BINKO_NEXT[planNext().k] : BINKO_NEXT.done)}
     ${nextBtnHtml()}<button class="btn ghost block" id="home">Home</button></section>`;
   wireNext(); $('#home').onclick = () => goTab();
@@ -1765,7 +1795,6 @@ const BOARD_TABS = [
   ['best', 'Best streak', r => r.best, r => r.best + ' day' + (r.best === 1 ? '' : 's')],
   ['acc', 'Accuracy', r => r.accN >= 30 ? r.accR / r.accN : -1, r => r.accN >= 30 ? Math.round(r.accR / r.accN * 100) + '% · ' + r.accN + ' answers' : 'needs 30 answers this week'],
   ['learned', 'Words', r => r.learned, r => r.learned + ' learned'],
-  ['xp', 'XP this week', r => r.week === weekStart() ? r.xpWeek : 0, r => (r.week === weekStart() ? r.xpWeek : 0) + ' XP'],
   ['speed', 'Speed', r => r.speed, r => (+r.speed).toFixed(1) + '×'],
   ['rush', 'Rush', r => r.rush, r => r.rush + ' in a row']
 ];
@@ -1915,5 +1944,6 @@ document.addEventListener('keydown', e => {
 });
 initSync();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
+if ((S.guideV || 0) < GUIDE_V) { guideAt = 0; guideBack = 'home'; view = 'guide'; }
 render();
 loadStoredPack().then(ok => { if (ok) { if (view === 'home') render(); } else autoPack(); }); loadVoice();
