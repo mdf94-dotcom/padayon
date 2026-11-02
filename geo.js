@@ -40,6 +40,9 @@ const mixNote = L => L ? (L.unsure && L.also && L.also.length ? `Mixed: ${L.main
 function wireSay() { document.querySelectorAll('[data-say]').forEach(b => b.onclick = e => { e.stopPropagation(); sayIt(b.dataset.say, b); }); }
 /* ---------- study the map ---------- */
 let GS = { by: 'region', sel: null, q: '' };
+const geoList = (groups, q) => Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length).map(k => { const ps = groups[k].filter(p => !q || p.n.toLowerCase().includes(q)); if (!ps.length) return '';
+      return `<section class="panel"><div class="row spread"><b><span class="langdot" style="background:${GS.by === 'lang' ? langColor(k) : regColor(k)}"></span>${esc(k)}</b><span class="muted small">${ps.length}</span></div>
+        <div class="geo-list">${ps.sort((a, b) => a.n.localeCompare(b.n)).map(p => `<button class="geo-chip ${p.n === GS.sel ? 'on' : ''}" data-pick="${esc(p.n)}">${esc(p.n)}${GS.by === 'region' && langOf(p.n) ? ` <span class="muted">· ${esc(langOf(p.n).main)}</span>` : ''}</button>`).join('')}</div></section>`; }).join('');
 VIEWS.geo = async function () {
   if (!GEO) { $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Study the map</h2></div><p class="muted">Loading the map…</p>`; $('#quit').onclick = () => goTab(); await loadGeo(); if (view === 'geo') render(); return; }
   const sel = GS.sel && GEOI[GS.sel], L = sel && langOf(sel.n);
@@ -53,16 +56,16 @@ VIEWS.geo = async function () {
     <section class="panel geo-info">${sel ? `<div class="row" style="gap:8px;align-items:center"><b style="font-size:1.2rem">${esc(sel.n)}</b>${sayBtn2(sel.n)}</div>${phonHtml(geoSay(sel.n))}<div class="small muted">${esc(sel.r)}</div>
       ${L ? `<div class="row" style="gap:8px;align-items:center"><span><span class="langdot" style="background:${langColor(L.main)}"></span><b>${esc(L.main)}</b></span>${sayBtn2(L.main)}</div>${phonHtml(geoSay(L.main))}${mixNote(L) ? `<div class="small">${esc(mixNote(L))}</div>` : ''}${L.note ? `<div class="small muted">${esc(L.note)}</div>` : ''}` : ''}` : '<span class="muted">Tap a province on the map.</span>'}</section>
     <input class="field" id="geoq" placeholder="Find a province" value="${esc(GS.q)}">
-    ${Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length).map(k => { const ps = groups[k].filter(p => !q || p.n.toLowerCase().includes(q)); if (!ps.length) return '';
-      return `<section class="panel"><div class="row spread"><b><span class="langdot" style="background:${GS.by === 'lang' ? langColor(k) : regColor(k)}"></span>${esc(k)}</b><span class="muted small">${ps.length}</span></div>
-        <div class="geo-list">${ps.sort((a, b) => a.n.localeCompare(b.n)).map(p => `<button class="geo-chip ${p.n === GS.sel ? 'on' : ''}" data-pick="${esc(p.n)}">${esc(p.n)}${GS.by === 'region' && langOf(p.n) ? ` <span class="muted">· ${esc(langOf(p.n).main)}</span>` : ''}</button>`).join('')}</div></section>`; }).join('')}`;
+    <div id="geolist">${geoList(groups, q)}</div>`;
   $('#quit').onclick = () => goTab();
   document.querySelectorAll('[data-by]').forEach(b => b.onclick = () => { GS.by = b.dataset.by; render(); });
   document.querySelectorAll('.geo-p.tap').forEach(p => p.onclick = () => { GS.sel = p.dataset.n; render(); window.scrollTo(0, 0); sayIt(GS.sel); });
-  document.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { GS.sel = b.dataset.pick; render(); window.scrollTo(0, 0); sayIt(GS.sel); });
+  const wirePicks = () => document.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { GS.sel = b.dataset.pick; render(); window.scrollTo(0, 0); sayIt(GS.sel); });
+  wirePicks();
   wireSay();
   // search keeps your place on the page instead of jumping to the top on every letter
-  const qi = $('#geoq'); qi.oninput = () => { GS.q = qi.value; const pos = qi.selectionStart, y = window.scrollY; render(); window.scrollTo(0, y); const n = $('#geoq'); n.focus({ preventScroll: true }); n.setSelectionRange(pos, pos); };
+  // search only redraws the list below the box: the map, your place on the page and the box itself stay put
+  const qi = $('#geoq'); qi.oninput = () => { GS.q = qi.value; $('#geolist').innerHTML = geoList(groups, GS.q.trim().toLowerCase()); wirePicks(); };
 };
 /* ---------- the games ---------- */
 // other names people use, accepted when typing

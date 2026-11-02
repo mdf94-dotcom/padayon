@@ -341,6 +341,8 @@ function streakNow() { const s = S.streak, t = calDay(); return (s.last === t ||
 const freezePending = () => { const s = S.streak, t = calDay(); return s.last === t - 2 && s.count > 0 && freezeOk(t); };
 function planDay() { const t = today(); if (!S.plan[t]) S.plan = { [t]: {} }; return S.plan[t]; }
 /* Today's plan is every activity, in order. The hero ring fills as they tick, and finishing one offers the next. */
+const WIDE = window.matchMedia ? matchMedia('(min-width:960px)') : { matches: true };
+try { WIDE.addEventListener('change', () => { if (view === 'home') render(); }); } catch (e) { }
 function planItems() {
   return [
     { k: 'session', name: 'Daily session', d: 'Reviews, new words, and building blocks.', run: () => startSession() },
@@ -851,7 +853,7 @@ VIEWS.home = function () {
     <div class="plist">${open.map(row).join('')}${showDone ? done.map(row).join('') : ''}</div>
     ${done.length ? `<button class="donebar" id="showdone">${I.check}<span>Done: ${esc(done.map(i => i.name.replace("Today's ", '')).join(', '))}</span><b>${showDone ? 'Hide' : 'Show'}</b></button>` : ''}
   </section></div>
-  <div class="today-side">${statTrio()}${stageMini()}${boardPanel()}</div></div>`);
+  <div class="today-side">${WIDE.matches ? statTrio() + stageMini() + boardPanel() : ''}</div></div>`);
   $('#start').onclick = () => { if (!nextUp) return planDay().session ? go('again') : binkoBump(startSession); if (nextUp.manual) { tick(nextUp.k); return render(); } binkoBump(() => nextUp.run()); };
   startSpecials();
   document.querySelectorAll('[data-run]').forEach(b => b.onclick = () => planItems().find(i => i.k === b.dataset.run).run());
@@ -2329,3 +2331,11 @@ loadStoredPack().then(ok => { if (ok) { if (view === 'home') render(); } else au
 { const _pickNew = pickNew; let memo = null;
   pickNew = function () { const k = S.updated + '|' + today() + '|' + PATH.length + '|' + Object.keys(IDX || {}).length + '|' + Object.keys(S.cards).length + '|' + (S.settings.newPerDay || 8) + '|' + (S.focus ? JSON.stringify(S.focus) : '');
     if (!memo || memo.k !== k) memo = { k, v: _pickNew.apply(this, arguments) }; return memo.v.slice(); }; }
+
+/* The same idea for two more things the Today and Practice pages ask for many times per draw: the list of today's
+   plan items, and the set of words you know. Both are remembered until progress changes. */
+const progressKey = () => S.updated + '|' + today() + '|' + PATH.length + '|' + Object.keys(IDX || {}).length + '|' + Object.keys(S.cards).length;
+{ const _planItems = planItems; let memo = null;
+  planItems = function () { const k = progressKey() + '|' + JSON.stringify(planDay()); if (!memo || memo.k !== k) memo = { k, v: _planItems() }; return memo.v.slice(); }; }
+{ const _knownWords = knownWords; let memo = null;
+  knownWords = function () { const k = progressKey(); if (!memo || memo.k !== k) memo = { k, v: _knownWords() }; return new Set(memo.v); }; }
