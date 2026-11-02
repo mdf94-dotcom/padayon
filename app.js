@@ -764,6 +764,7 @@ function binkoPlan() {
   if (!plan.session) {
     const parts = []; if (due) parts.push(`<b>${due}</b> review${due === 1 ? '' : 's'}`); if (nw) parts.push(`<b>${nw}</b> new word${nw === 1 ? '' : 's'}`);
     s += parts.length ? ` Today's session has ${list(parts)}` : ' Today\'s session is ready'; s += nr && !S.cards[ruleCardId(nr)] ? `, plus a new grammar rule: <b>${esc(nr.title)}</b>.` : '.';
+    if (nw) s += ' Ooh, new words! Binko can\'t wait to find out what they mean with you!';
     if (weak.length) s += ` Last time, ${list(weak)} gave you trouble, so Binko put ${weak.length === 1 ? 'it' : 'them'} first today. Watch closely!`;
     else if (Object.keys(S.cards).length) s += ' Nothing tripped you up last time. SUPER DUPER!';
     else s += ' This is your very first lesson. Binko is SO excited!';
