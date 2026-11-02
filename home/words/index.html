@@ -12,6 +12,9 @@
 <style>
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 html.embed:root{padding-bottom:0}
+html.embed:root{padding-top:0!important}
+html.embed body::before{display:none!important}
+html.embed .sbar{top:0!important}
 html.embed .foot{padding-bottom:14px}
 html.embed .toast{bottom:20px}
 body{margin:0}
