@@ -23,6 +23,20 @@ const BINKO_NEXT = {
   input: 'Ten minutes of real Bisaya! Put on a vlog or the radio and let it flow. No pausing to translate!',
   done: 'ALL DONE! Binko is SO proud of you. That is it for today. BINKO OUT!'
 };
+// more things Binko says on Today; a new one each time you come back to the Today tab
+const BINKO_MORE = {
+  session: ['BINKO REPORTING! Your daily session is fueled up and ready to launch!', 'Binko polished every new word himself. Some of them sparkle. Let\'s go!', 'Today\'s session has new words AND old friends. Binko loves a reunion!', 'Binko binks today is a GREAT day to learn Bisaya. Binko binks that every day.', 'Ding ding ding! Session time! Binko already did his warm-up stretches.', 'Fun fact from Binko: little words like ko and na make Bisaya sound real. Watch for them today!'],
+  convo: ['Binko found a new conversation! Pretend Binko is the other person. Binko is very good at pretending.', 'Talk time! Say your lines out loud, even if the cat is listening.'],
+  speed: ['VROOOM! The speed round is warmed up. Can your ears keep up with Binko\'s engine?', 'Fast Bisaya is real Bisaya. Lola talks at 2× speed, so let\'s practice!'],
+  dict: ['Dictation! Binko\'s ears are tiny microphones. Let\'s see if yours are better!', 'Type every word you hear. The little ones are sneaky. Binko caught three yesterday!'],
+  shadow: ['Shadowing! Say it WITH the voice, like singing along to a song in the car.'],
+  build: ['Binko has a new grammar gadget for you! Learn the rule, then build your own sentences.', 'Building sentences is like building robots. Binko would know!'],
+  real: ['Real Bisaya from the internet! Binko only picks ones where you know every word.'],
+  talk: ['Call someone and say something in Bisaya! Even "Kumusta ka?" counts. Binko believes in you!'],
+  done: ['You finished EVERYTHING! Binko is doing a happy little spin.', 'All done for today! Want more? Rush is waiting, and Binko bets you can beat your best.', 'Mission complete! Binko filed it under AMAZING.', 'Done and done! Say today\'s phrase to someone before bed. Binko dares you!']
+};
+const BINKO_ANY = ['Psst. Tap ⚑ Sounds wrong? if a card ever looks off. Binko will tell the family!', 'Binko\'s stories are in Practice. Binko is the hero of all of them. Obviously.', 'Missed a day? Your streak freeze has your back once a week. Binko made it out of ice cubes.', 'Try Rush on the golden trophy! One miss and it\'s over, so focus like a robot.'];
+function binkoToday(k, n) { const list = [BINKO_NEXT[k] || BINKO_NEXT.done].concat(BINKO_MORE[k] || [], BINKO_ANY); return list[(n || 0) % list.length]; }
 const BINKO_DONE = ['Log complete! Binko writes this one in the journal with a little doodle.', 'Woohoo! Another part tinkered and fixed!', 'Binko binks that went GREAT. Onward!'];
 const CHEERS = {
   streak: [

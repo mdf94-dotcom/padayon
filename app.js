@@ -656,7 +656,8 @@ function musicFor() {
   return ['speedrun', 'build', 'real', 'story', 'stories'].includes(view) ? 'calm' : 'off';
 }
 function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); if (typeof Music !== 'undefined') Music.set(musicFor()); }
-function go(v) { view = v; render(); }
+let BINKO_N = (() => { try { const n = (+localStorage.getItem('padayon-binko') || 0) + 1; localStorage.setItem('padayon-binko', n); return n; } catch (e) { return Math.floor(Math.random() * 20); } })();
+function go(v) { if (v === 'home' && view !== 'home') { BINKO_N++; try { localStorage.setItem('padayon-binko', BINKO_N); } catch (e) { } } view = v; render(); }
 function ringSvg(v, goal) { const r = 36, c = 2 * Math.PI * r, f = Math.min(1, v / goal); return `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - f)}" transform="rotate(-90 42 42)"/></svg>`; }
 function unitRow(u, key) {
   const n = u.ids.length, l = learned(u.ids), s = seen(u.ids);
@@ -747,13 +748,13 @@ VIEWS.home = function () {
   </section>` : ''}
   <div class="today-grid"><div class="today-main">
   <section class="hero">
-    <div class="hero-guide">${binkoSays(BINKO_NEXT[nextUp ? nextUp.k : 'done'], true)}</div>
+    <div class="hero-guide">${binkoSays(binkoToday(nextUp ? nextUp.k : 'done', BINKO_N), true)}</div>
     <div class="hero-text"><div class="label">Karon nga adlaw · Today</div><h2>${nextUp ? esc(nextUp.name) : 'All done today. Padayon!'}</h2>
       <p>${nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${due} review${due === 1 ? '' : 's'}, ${nw} new` : nextUp.d) : 'Come back tomorrow, or do another session.'}</p></div>
     <div class="hero-actions"><button class="btn" id="start">${nextUp ? (nextUp.manual ? 'I did it' : 'Start') : 'Do another session'}<kbd>Enter</kbd></button></div>
     <div class="hero-foot"><span>${sinceShort()}</span><span>${freezePending() ? `🧊 Freeze ready: finish today to keep your ${S.streak.count}-day streak` : freezeOk(calDay() + 1) ? '🧊 Streak freeze ready' : `Best streak ${S.streak.best || 0}`}</span></div>
   </section>
-  ${!S.placed && learnedCount() < 40 ? `<section class="banner"><b>Already know some Bisaya?</b><div class="small">Take the 5-minute placement check and skip the words you already know.</div><div class="row"><button class="btn primary" id="placego2">Take the check</button><button class="btn ghost" id="placeno">I'm new to Bisaya</button></div></section>` : ''}
+  ${!S.placed && learnedCount() < 40 ? `<section class="banner"><b>Already know some Bisaya?</b><div class="small">Take the 5-minute placement check and skip the words you already know.</div><div class="row"><button class="btn primary" id="placego2">Take the check</button><button class="btn ghost" id="placeno">No thanks</button></div></section>` : ''}
   ${podHtml()}
   <section class="panel plan"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${doneN} of ${items.length} done</span></div>
     <div class="bar"><i style="width:${doneN / items.length * 100}%"></i></div>
@@ -1002,6 +1003,7 @@ function plPass() {
 VIEWS.place = function () {
   const head = `<div class="sbar"><button class="x" id="quit" aria-label="Stop">${I.x}</button><div class="prog"><i style="width:${Math.min(100, PL.k / (PLACE_CUTS.length - 1) * 100)}%"></i></div><span class="muted small tnum">Round ${PL.k + 1}</span></div>`;
   if (PL.done || PL.qi >= PL.qs.length && PL.right < 5) {
+    if (!S.placed) { S.placed = today(); save(); }
     const st = pathState().cur;
     $('#app').innerHTML = `${head}<div class="ex">${binkoSays(PL.marked ? `BINKO REPORTING! You already know <b>${PL.marked}</b> words and phrases, so Binko marked them as learned. You're starting in <b>Stage ${st + 1}: ${esc(PATH[st].name)}</b>. They'll still come back now and then as quick reviews.` : "Binko binks we'll start from the beginning. That's great, every word will be new and fun!", true)}</div><div class="foot"><button class="btn primary block" id="pldone">Done</button></div>`;
     $('#pldone').onclick = () => go('home'); $('#quit').onclick = () => go('home'); return;
