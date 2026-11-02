@@ -810,6 +810,7 @@ function binkoPlan() {
   const weak = needsWork().filter(id => card(id)).slice(0, 3).map(id => `<b>${esc(cardLabel(id))}</b>`);
   const list = x => x.length < 2 ? x.join('') : x.slice(0, -1).join(', ') + ' and ' + x[x.length - 1];
   let s = 'Binko here!';
+  const rs = loadResume(); if (rs) return [s + ` You stopped at question <b>${rs.qi + 1} of ${rs.Q.length}</b> last time. Binko saved your spot, so tap Continue and we'll pick right back up!`, `${hi}${name}!`];
   if (!plan.session) {
     const parts = []; const dueN = Math.min(due, 16); if (dueN) parts.push(`<b>${dueN}</b> review${dueN === 1 ? '' : 's'}`); if (nw) parts.push(`<b>${nw}</b> new word${nw === 1 ? '' : 's'}`);
     s += parts.length ? ` Today's session has ${list(parts)}` : ' Today\'s session is ready'; s += nr && !S.cards[ruleCardId(nr)] ? `, plus a new grammar rule: <b>${esc(nr.title)}</b>.` : '.';
@@ -825,6 +826,7 @@ VIEWS.home = function () {
   if (!HOME_SPK) HOME_SPK = { who: 'binko' };
   const t = today(), xp = S.xp[t] || 0, due = dueIds().length, nw = Math.min(newAllowance(), pickNew().length), plan = planDay();
   const items = planItems(), nextUp = planNext(), doneN = items.filter(i => isDone(i, plan)).length;
+  const resumeAt = (!nextUp || nextUp.k === 'session') ? loadResume() : null;
   const open = items.filter(i => !isDone(i, plan)), done = items.filter(i => isDone(i, plan));
   const mins = Math.max(5, Math.round((Math.min(due, 16) + nw * 2 + 2) * 0.6));
   const SHORT = { session: 'Reviews and new words', convo: 'Read it, then say your part', speed: 'Listening at ' + S.speed.toFixed(1) + '×', dict: 'Type what you hear', shadow: 'Speak along with one unit', talk: 'Call or chat with family, then tick it' };
@@ -842,8 +844,8 @@ VIEWS.home = function () {
   <section class="hero h-${HOME_SPK.who}">
     <div class="hero-guide">${HOME_SPK.who === 'binko' ? (p => cloverSays('binko', p[0], true, p[1]))(binkoPlan()) : cloverSays(HOME_SPK.who, HOME_SPK.html, true, HOME_SPK.kick)}</div>
     <div class="hero-text"><div class="label">Karon nga adlaw · Today</div><h2>${nextUp ? esc(nextUp.name) : 'All done today. Padayon!'}</h2>
-      <p>${nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${due} review${due === 1 ? '' : 's'}, ${nw} new` : nextUp.d) : 'Come back tomorrow, or do another session.'}</p></div>
-    <div class="hero-actions"><button class="btn" id="start">${nextUp ? (nextUp.manual ? 'I did it' : 'Start') : 'Do another session'}<kbd>Enter</kbd></button></div>
+      <p>${resumeAt ? `Picking up where you left off · question ${resumeAt.qi + 1} of ${resumeAt.Q.length}` : nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${Math.min(due, 16)} review${Math.min(due, 16) === 1 ? '' : 's'}, ${nw} new` : nextUp.d) : 'Come back tomorrow, or do another session.'}</p></div>
+    <div class="hero-actions"><button class="btn" id="start">${resumeAt ? 'Continue' : nextUp ? (nextUp.manual ? 'I did it' : 'Start') : 'Do another session'}<kbd>Enter</kbd></button></div>
     <div class="hero-foot"><span>${sinceShort()}</span><span>${freezePending() ? `🧊 Freeze ready: finish today to keep your ${S.streak.count}-day streak` : freezeOk(calDay() + 1) ? '🧊 Streak freeze ready' : `Best streak ${S.streak.best || 0}`}</span></div>
   </section>
   ${false ? `<section class="banner"><b>Already know some Bisaya?</b><div class="small">Take the 5-minute placement check and skip the words you already know.</div><div class="row"><button class="btn primary" id="placego2">Take the check</button><button class="btn ghost" id="placeno">No thanks</button></div></section>` : ''}
@@ -854,7 +856,7 @@ VIEWS.home = function () {
     ${done.length ? `<button class="donebar" id="showdone">${I.check}<span>Done: ${esc(done.map(i => i.name.replace("Today's ", '')).join(', '))}</span><b>${showDone ? 'Hide' : 'Show'}</b></button>` : ''}
   </section></div>
   <div class="today-side">${WIDE.matches ? statTrio() + stageMini() + boardPanel() : ''}</div></div>`);
-  $('#start').onclick = () => { if (!nextUp) return planDay().session ? go('again') : binkoBump(startSession); if (nextUp.manual) { tick(nextUp.k); return render(); } binkoBump(() => nextUp.run()); };
+  $('#start').onclick = () => { if (resumeAt) return binkoBump(startSession); if (!nextUp) return planDay().session ? go('again') : binkoBump(startSession); if (nextUp.manual) { tick(nextUp.k); return render(); } binkoBump(() => nextUp.run()); };
   startSpecials();
   document.querySelectorAll('[data-run]').forEach(b => b.onclick = () => planItems().find(i => i.k === b.dataset.run).run());
   if ($('#showdone')) $('#showdone').onclick = () => { showDone = !showDone; render(); };
@@ -1135,7 +1137,7 @@ const GUIDE_V = 4;
 /* The guide: short, visual pages. Each page has a picture, a few short points, and shows where to find it. */
 const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
-  { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
+  { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
   { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'One new rule a day, inside your session'], ['📈', 'Questions get harder each time'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya']] },
@@ -1184,7 +1186,17 @@ VIEWS.again = function () {
 /* ---------- session engine ---------- */
 let Q = [], qi = 0, sess = null, timerH = null;
 const newSess = mode => ({ xp: 0, right: 0, total: 0, graded: new Set(), requeued: new Set(), newIds: new Set(), mode, peak: S.speed });
-function startSession() { Q = buildSession(); qi = 0; sess = newSess('daily'); go('session'); }
+/* An unfinished daily session is saved after every question, so leaving (the X button, switching apps, closing the
+   app) and coming back later picks up on the same question instead of building a new lesson. It lasts for the day. */
+const RESUME_K = 'padayon-resume';
+function saveResume() { if (!sess || sess.mode !== 'daily' || qi >= Q.length) return;
+  try { localStorage.setItem(RESUME_K, JSON.stringify({ d: today(), qi, Q, sess: Object.assign({}, sess, { graded: [...sess.graded], requeued: [...sess.requeued], newIds: [...sess.newIds] }) })); } catch (e) { } }
+function loadResume() { try { const r = JSON.parse(localStorage.getItem(RESUME_K)); if (r && r.d === today() && Array.isArray(r.Q) && r.qi < r.Q.length) return r; } catch (e) { } return null; }
+function clearResume() { try { localStorage.removeItem(RESUME_K); } catch (e) { } }
+function startSession() {
+  const r = loadResume();
+  if (r) { Q = r.Q; qi = r.qi; sess = Object.assign(newSess('daily'), r.sess, { graded: new Set(r.sess.graded), requeued: new Set(r.sess.requeued), newIds: new Set(r.sess.newIds) }); return go('session'); }
+  Q = buildSession(); qi = 0; sess = newSess('daily'); go('session'); }
 /* The Daily Practice home calls this to start today's session; it does nothing until the content pack is loaded. */
 window.startFromHome = () => { try { if (P && P.length && view !== 'session') startSession(); } catch (e) { } };
 function startDictation() {
@@ -1194,11 +1206,12 @@ function startDictation() {
 }
 VIEWS.session = function () {
   if (qi >= Q.length) return finishSession();
+  saveResume();
   const item = Q[qi], c = card(item.id);
   if (!c || ((item.type === 'pron' || item.type === 'dict' || item.type === 'listen' || item.type === 'tiles' || item.type === 'shadow') && !c.audio)) { qi++; return VIEWS.session(); }
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End session">${I.x}</button><div class="prog"><i style="width:${(qi / Q.length) * 100}%"></i></div><span class="muted small tnum qcount">${qi + 1} of ${Q.length}</span><span class="speedchip">${S.speed.toFixed(1)}×</span></div>
   <div class="ex" id="ex"></div><div class="foot" id="foot"></div>`;
-  $('#quit').onclick = () => { if (qi > 0 && sess.total > 0) finishSession(); else goTab(); };
+  $('#quit').onclick = () => { if (sess.mode === 'daily') { stopAudio(); saveResume(); goTab(); if (qi > 0) toast('Saved your place. Tap Continue on Today to pick up where you left off.'); return; } if (qi > 0 && sess.total > 0) finishSession(); else goTab(); };
   if (typeof Music !== 'undefined') Music.set(musicFor());
   EX[item.type](c, item);
   // a picture on questions that already show the English (never on ones that ask for the meaning)
@@ -1485,7 +1498,7 @@ const EX = {
     if (qi === tok) document.querySelectorAll('.stage span').forEach(s => s.className = 'done');
   }
 };
-function finishSession() { stopAudio(); const full = qi >= Q.length; if (full && sess.mode === 'daily') { tick('session'); try{ if (window.parent !== window) window.parent.postMessage({practice:'done', app:'bisaya'}, location.origin); }catch(e){} } if (full && sess.mode === 'dict') tick('dict'); save(); go('summary'); }
+function finishSession() { stopAudio(); const full = qi >= Q.length; if (full && sess.mode === 'daily') clearResume(); if (full && sess.mode === 'daily') { tick('session'); try{ if (window.parent !== window) window.parent.postMessage({practice:'done', app:'bisaya'}, location.origin); }catch(e){} } if (full && sess.mode === 'dict') tick('dict'); save(); go('summary'); }
 VIEWS.summary = function () {
   const acc = sess.total ? Math.round(sess.right / sess.total * 100) : 0;
   $('#app').innerHTML = `<section class="panel summary"><div class="label">${sess.mode === 'speed' ? 'Speed round done' : sess.mode === 'dict' ? 'Dictation done' : 'Session done'}</div>

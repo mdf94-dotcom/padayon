@@ -1,5 +1,5 @@
 // Network first for app files so updates arrive; cache as an offline fallback.
-const CACHE = 'padayon-v81';
+const CACHE = 'padayon-v82';
 const SHELL = ['./', 'index.html', 'learn.js', 'mega.js', 'path.js', 'fixes.js', 'pics.js', 'examples.js', 'stories.js', 'music.js', 'cast.js', 'grammar.js', 'real.js', 'app.js', 'geo_lang.js', 'geo.js', 'map.json', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
   'img/darkness.webp', 'img/binko.webp', 'img/binko-face.webp', 'img/green-face.webp', 'img/ollie-face.webp', 'img/quickare-face.webp', 'img/triton-face.webp'];
 // cache: 'reload' skips the browser's own short-term cache, so an update never mixes old and new files
