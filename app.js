@@ -345,7 +345,10 @@ function tick(k) { const p = planDay(); if (!p[k]) { p[k] = true; if (k === 'ses
    The webhook link lives in Firestore (config/discord, field "webhook"), readable only by signed-in users,
    so it never sits in this public code. */
 const capName = s => { s = String(s || '').trim(); return s ? s[0].toUpperCase() + s.slice(1) : s; };
-const displayName = () => capName((S.settings.name || (Sync.user && Sync.user.displayName) || '').trim().split(/\s+/)[0]) || 'Someone';
+// names fixed by account, so they stay the same everywhere no matter what the Google account or name setting says
+const NAME_BY_UID = { NB6NEkBWqkQ0mfggPTAot5fPbJ43: 'Mykha' };
+const displayName = () => (typeof Sync !== 'undefined' && Sync.user && NAME_BY_UID[Sync.user.uid]) || capName((S.settings.name || (Sync.user && Sync.user.displayName) || '').trim().split(/\s+/)[0]) || 'Someone';
+const rowName = r => NAME_BY_UID[r.uid] || rowName(r);
 let hookCache = null;
 async function discordHook() {
   if (hookCache !== null) return hookCache;
@@ -858,7 +861,7 @@ VIEWS.practice = function () {
 /* The Games tab: Padayon Rush, the two map games, and Study the map */
 VIEWS.rushhome = function () {
   const me = Sync.user && Sync.user.uid, gb = S.geoBest || {};
-  const top = (f, unit) => { if (!Sync.user || !BOARD) return ''; const rows = BOARD.filter(r => (r[f] || 0) > 0).sort((a, b) => b[f] - a[f]).slice(0, 3); return rows.length ? `<ol class="blist mini">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i]}</span><b>${esc(capName(r.name) || 'Someone')}</b><span class="muted small">${r[f]} ${unit} · ${HOW(r[f + 'How'])}</span></li>`).join('')}</ol>` : '<p class="muted small" style="margin:0">Nobody has a score yet. Be the first!</p>'; };
+  const top = (f, unit) => { if (!Sync.user || !BOARD) return ''; const rows = BOARD.filter(r => (r[f] || 0) > 0).sort((a, b) => b[f] - a[f]).slice(0, 3); return rows.length ? `<ol class="blist mini">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i]}</span><b>${esc(rowName(r))}</b><span class="muted small">${r[f]} ${unit} · ${HOW(r[f + 'How'])}</span></li>`).join('')}</ol>` : '<p class="muted small" style="margin:0">Nobody has a score yet. Be the first!</p>'; };
   const gh = S.geoHow || {}, howOf = { rush: S.rushHow, geoP: gh.prov, geoL: gh.lang };
   const card = (id, emoji, name, desc, best, f, extra) => `<section class="game-card"><div class="row" style="gap:12px;align-items:center"><span class="game-emo">${emoji}</span><div style="flex:1;min-width:0"><b class="game-name">${name}</b><div class="small muted">${desc}</div></div><div class="game-best"><span class="label">Best</span><b class="tnum">${best}</b>${best ? `<span class="howtag">${HOW(howOf[f]) === 'typed' ? 'typed' : 'choice'}</span>` : ''}</div></div>
     <div class="row">${extra || ''}<button class="btn primary" id="${id}">Play</button></div><div class="small muted" style="margin-top:2px">Family best</div>${top(f, 'in a row')}</section>`;
@@ -2045,7 +2048,7 @@ const learnedCount = () => Object.keys(S.cards).filter(id => id[0] !== 'r' && S.
 // each signed-in person's public scoreboard row: board/{uid}. Nothing else of their progress is shared.
 function boardRow() { const a = acc7(); return { name: displayName(), streakReset: STREAK_RESET, streak: streakNow(), best: S.streak.best || 0, accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, rushHow: S.rushHow || 'pick', newMax: S.newMax || 0, geoP: (S.geoBest || {}).prov || 0, geoL: (S.geoBest || {}).lang || 0, geoPHow: (S.geoHow || {}).prov || 'pick', geoLHow: (S.geoHow || {}).lang || 'pick', updated: Date.now() }; }
 let boardTimer = null;
-function pushBoard() { if (!Sync.user || !window.firebase) return; if (S.reannounce && DONE_ON_RESET[Sync.user.uid] === calDay()) S.reannounce = 0; if (S.reannounce && planDay().session) { S.reannounce = 0; announceLesson(); } clearTimeout(boardTimer); boardTimer = setTimeout(() => { firebase.firestore().collection('board').doc(Sync.user.uid).set(boardRow()).catch(() => { }); }, 3000); }
+function pushBoard() { if (!Sync.user || !window.firebase) return; if (NAME_BY_UID[Sync.user.uid] && S.settings.name !== NAME_BY_UID[Sync.user.uid]) S.settings.name = NAME_BY_UID[Sync.user.uid]; if (S.reannounce && DONE_ON_RESET[Sync.user.uid] === calDay()) S.reannounce = 0; if (S.reannounce && planDay().session) { S.reannounce = 0; announceLesson(); } clearTimeout(boardTimer); boardTimer = setTimeout(() => { firebase.firestore().collection('board').doc(Sync.user.uid).set(boardRow()).catch(() => { }); }, 3000); }
 let BOARD = null, boardAt = 0, boardTab = 'streak', boardErr = '';
 async function loadBoard() {
   if (!Sync.user || !window.firebase || Date.now() - boardAt < 60000) return;
@@ -2075,7 +2078,7 @@ function boardPanel() {
   const rows = BOARD.slice().sort((a, b) => tab[2](b) - tab[2](a));
   const me = Sync.user.uid;
   return head + `<div class="btabs">${BOARD_TABS.map(t => `<button class="btab ${t[0] === boardTab ? 'on' : ''}" data-btab="${t[0]}">${t[1]}</button>`).join('')}</div>
-    <ol class="blist">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span><b>${esc(capName(r.name) || 'Someone')}</b><span class="muted small">${esc(tab[3](r))}</span></li>`).join('')}</ol></section>`;
+    <ol class="blist">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span><b>${esc(rowName(r))}</b><span class="muted small">${esc(tab[3](r))}</span></li>`).join('')}</ol></section>`;
 }
 // the Ranks tab: every ranking in its own box, one under the other
 const BOARD_DESC = { streak: 'Days in a row with a finished daily session.', best: 'The longest streak ever.', acc: 'Every answer in the last 7 days, right and wrong: lessons, grammar, practice drills, Rush, Real Bisaya and stories.', learned: 'Words and phrases learned so far.', newMax: 'Most new words learned in a single day.', speed: 'Fastest listening speed reached.', rush: 'Longest Padayon Rush run.', geoP: 'Longest Province Rush run.', geoL: 'Longest Language Rush run.' };
@@ -2086,7 +2089,7 @@ function boardBoxes() {
   if (!BOARD) return `<section class="panel"><p class="muted small" style="margin:0">Loading…</p></section>`;
   const me = Sync.user.uid;
   return BOARD_TABS.map(tab => { const rows = BOARD.slice().sort((a, b) => tab[2](b) - tab[2](a));
-    return `<section class="panel rankbox"><h2>${BOARD_ICON[tab[0]] || ''} ${esc(tab[1])}</h2><p class="muted small" style="margin:0">${BOARD_DESC[tab[0]] || ''}</p><ol class="blist">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span><b>${esc(capName(r.name) || 'Someone')}</b><span class="muted small">${esc(tab[3](r))}</span></li>`).join('')}</ol></section>`; }).join('');
+    return `<section class="panel rankbox"><h2>${BOARD_ICON[tab[0]] || ''} ${esc(tab[1])}</h2><p class="muted small" style="margin:0">${BOARD_DESC[tab[0]] || ''}</p><ol class="blist">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span><b>${esc(rowName(r))}</b><span class="muted small">${esc(tab[3](r))}</span></li>`).join('')}</ol></section>`; }).join('');
 }
 function wireBoard() { document.querySelectorAll('[data-btab]').forEach(b => b.onclick = () => { boardTab = b.dataset.btab; const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }); }
 
