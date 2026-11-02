@@ -200,6 +200,20 @@ function resetStreak(st) {
   st.streakReset = STREAK_RESET;
 }
 resetStreak(S);
+/* Streaks started on the reset day, so no streak can be longer than the days since then (finishing the reset day = 1).
+   An older copy of the app on another device can't push a bigger number back: anything impossible gets trimmed here,
+   on every load and every sync. */
+function capStreak(st) {
+  if (!st || !st.streak) return st; const s = st.streak, rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5);
+  const maxNow = Math.max(0, (s.last || 0) - STREAK_BASE + 1);
+  const doneToday = !!(st.plan && st.plan[rt] && st.plan[rt].session);
+  if (s.count > maxNow) s.count = maxNow;
+  // on the reset day itself a streak of 1 means today's session is done
+  if (s.last === rt && rt === STREAK_BASE && !doneToday) { s.count = 0; s.last = 0; }
+  const maxEver = Math.max(0, rt - STREAK_BASE + (doneToday ? 1 : 0));
+  s.best = Math.max(s.count, Math.min(s.best || 0, maxEver)); return st;
+}
+capStreak(S);
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
 function save() { S.updated = Date.now(); DAY_SHIFT = S.dayShift || 0; localSave(); schedulePush(); if (typeof pushBoard === 'function') pushBoard(); }
 
@@ -255,6 +269,7 @@ function mergeState(a, b) {
   out.flags = Object.assign({}, b.flags || {}, a.flags || {}); out.storyDone = Object.assign({}, b.storyDone || {}, a.storyDone || {}); out.placed = Math.max(a.placed || 0, b.placed || 0);
   out.realDone = {}; [a.realDone || {}, b.realDone || {}].forEach(x => Object.keys(x).forEach(k => out.realDone[k] = Math.max(out.realDone[k] || 0, x[k])));
   out.updated = Math.max(a.updated || 0, b.updated || 0);
+  capStreak(out);
   return out;
 }
 function schedulePush() { if (!Sync.user) return; clearTimeout(Sync.timer); Sync.timer = setTimeout(pushNow, 2000); }
@@ -2088,7 +2103,7 @@ let BOARD = null, boardAt = 0, boardTab = 'streak', boardErr = '';
 async function loadBoard() {
   if (!Sync.user || !window.firebase || Date.now() - boardAt < 60000) return;
   boardAt = Date.now();
-  try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => Object.assign({ uid: d.id }, d.data())).map(r => (r.updated && Date.now() - r.updated > 2.5 * 864e5 && (r.streakReset || 0) >= STREAK_RESET) ? Object.assign(r, { streak: 0 }) : r).map(r => (r.streakReset || 0) < STREAK_RESET
+  try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => Object.assign({ uid: d.id }, d.data())).map(r => Object.assign(r, { streak: Math.min(r.streak || 0, Math.max(0, calDay() - STREAK_BASE + 1)), best: Math.min(r.best || 0, Math.max(0, calDay() - STREAK_BASE + 1)) })).map(r => (r.updated && Date.now() - r.updated > 2.5 * 864e5 && (r.streakReset || 0) >= STREAK_RESET) ? Object.assign(r, { streak: 0 }) : r).map(r => (r.streakReset || 0) < STREAK_RESET
       ? Object.assign(r, { streak: DONE_ON_RESET[r.uid] === calDay() ? 1 : 0, best: DONE_ON_RESET[r.uid] ? 1 : 0, accR: 0, accN: 0, newMax: 0, speed: 1, rush: 0, geoP: 0, geoL: 0 }) : r); boardErr = ''; }
   catch (e) { boardErr = 'The leaderboard needs a Firebase rule update first.'; }
   if (view === 'board') return render(); if (view === 'home') { const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }
