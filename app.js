@@ -231,7 +231,7 @@ function mergeState(a, b) {
   out.started = Math.min(...[a.started, b.started].filter(Boolean).concat([out.started || Infinity])) || 0; if (!isFinite(out.started)) out.started = 0;
   out.rules = Object.assign({}, b.rules || {}, a.rules || {}); out.ruleDay = Math.max(a.ruleDay || 0, b.ruleDay || 0);
   out.acc = Object.assign({}, b.acc || {}, a.acc || {}); [a.acc || {}, b.acc || {}].forEach(x => Object.keys(x).forEach(k => { const o = out.acc[k], v = x[k]; if (!o || v.t > o.t) out.acc[k] = v; }));
-  out.rushBest = Math.max(a.rushBest || 0, b.rushBest || 0);
+  out.rushBest = Math.max(a.rushBest || 0, b.rushBest || 0); out.newMax = Math.max(a.newMax || 0, b.newMax || 0);
   out.geoBest = { prov: Math.max((a.geoBest || {}).prov || 0, (b.geoBest || {}).prov || 0), lang: Math.max((a.geoBest || {}).lang || 0, (b.geoBest || {}).lang || 0) };
   out.freezeWk = Math.max(a.freezeWk || 0, b.freezeWk || 0); out.freezeDay = Math.max(a.freezeDay || 0, b.freezeDay || 0);
   out.pod = (a.pod && b.pod) ? (a.pod.d >= b.pod.d ? a.pod : b.pod) : (a.pod || b.pod);
@@ -878,7 +878,7 @@ VIEWS.me = function () {
   <section class="panel"><h2>Daily cards</h2>
     ${[['newPerDay', 'New cards per day', [5, 8, 10, 15]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}
     <div><div class="label">Background music</div><div class="seg" id="musicseg"><button class="${S.settings.music !== false ? 'on' : ''}" data-m="1">On</button><button class="${S.settings.music === false ? 'on' : ''}" data-m="0">Off</button></div></div>
-    <p class="muted small" style="margin:0">8 a day is about 15 to 20 minutes with reviews. More moves you along the path faster but makes reviews pile up.</p></section>
+    <p class="muted small" style="margin:0">${minsText(st.newPerDay || 8)} More moves you along the path faster but brings more reviews.</p><p class="muted small" style="margin:0">🎵 ${IPHONE_MUSIC}</p></section>
   <section class="panel"><h2>Your data</h2>
     <p class="small muted" style="margin:0">${hasPack() ? `Word pack loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Word pack not loaded yet.'}</p>
     <div class="row"><button class="btn" id="exp">Save a backup</button><button class="btn ghost" id="imp">Restore a backup</button></div>
@@ -889,7 +889,7 @@ VIEWS.me = function () {
   <section class="panel"><h2>About</h2><p class="small muted" style="margin:0">Made for the Balay Ta family. Computer voice: Meta MMS Cebuano (CC BY-NC 4.0). Pictures: Twemoji (CC BY 4.0).</p></section>
   </div>`);
   wireProgress();
-  document.querySelectorAll('#musicseg button').forEach(b => b.onclick = () => { S.settings.music = b.dataset.m === '1'; save(); render(); toast(S.settings.music ? 'Music on in lessons and Rush' : 'Music off'); });
+  document.querySelectorAll('#musicseg button').forEach(b => b.onclick = () => { S.settings.music = b.dataset.m === '1'; save(); render(); toast(S.settings.music ? 'Music on. On iPhone, turn off silent mode to hear it.' : 'Music off'); });
   $('#guidego').onclick = () => openGuide('me');
   $('#placego').onclick = startPlacement;
   if (FLAGS_ALL === null && Sync.user && !window.__flagsTried) (window.__flagsTried = 1, loadFlags()).then(r => { if (r && view === 'me') render(); });
@@ -1030,6 +1030,10 @@ VIEWS.place = function () {
   $('#pldk').onclick = () => answer(false);
   if ($('#quit')) $('#quit').onclick = () => { if (PL.marked) toast(PL.marked + ' words marked as known'); go('home'); };
 };
+// how long a day takes with N new words (new words plus the reviews they bring back)
+const MINS = { 5: 10, 8: 15, 10: 20, 15: 30 };
+const minsText = n => `${n} new words a day is about ${MINS[n] || Math.round(n * 2)} minutes a day, with reviews.`;
+const IPHONE_MUSIC = 'On iPhone, music only plays when your phone is not on silent (ring switch or Action button set to ring). The Bisaya audio always plays.';
 /* ---------- the guide: shown once to everyone after a big update (bump GUIDE_V), and any time from Me ---------- */
 const GUIDE_V = 4;
 /* The guide: short, visual pages. Each page has a picture, a few short points, and shows where to find it. */
@@ -1056,7 +1060,7 @@ VIEWS.guide = function () {
       <ul class="gpts">${g.pts.map(([e, t]) => `<li><span class="gemo">${e}</span><span>${t}</span></li>`).join('')}</ul>
       ${g.set ? `<div class="gset"><div class="label">New words per day</div><div class="seg" id="gseg">${[5, 8, 10, 15].map(n => `<button class="${per === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div>
         <div class="label" style="margin-top:12px">Background music</div><div class="seg" id="gmusic"><button class="${S.settings.music !== false ? 'on' : ''}" data-m="1">On</button><button class="${S.settings.music === false ? 'on' : ''}" data-m="0">Off</button></div>
-        <p class="muted small" style="margin:8px 0 0">8 a day is about 15 minutes. You can change both later in Me.</p></div>` : ''}
+        <p class="small" style="margin:8px 0 0">${minsText(per)}</p><p class="muted small" style="margin:6px 0 0">🎵 ${IPHONE_MUSIC}</p><p class="muted small" style="margin:6px 0 0">You can change both later in Me.</p></div>` : ''}
       ${g.tab ? `<div class="gwhere"><div class="label">Find it here</div>${tabPreview(g.tab)}</div>` : ''}
     </div>
     <div class="foot"><div class="row" style="gap:10px">${guideAt ? '<button class="btn ghost" id="gprev">Back</button>' : ''}<button class="btn primary block" id="gnext" style="flex:1">${last ? (S.placed ? "Let's go!" : 'Start the check') : guideAt ? 'Next' : "Let's start"}</button></div></div>`;
@@ -1282,7 +1286,7 @@ function typedCheck(c, item, inp, tolFrac, dictMode) {
 const EX = {
   teach(c, item) {
     sess.newIds.add(c.id);
-    if (!S.cards[c.id]) { S.cards[c.id] = { b: 0, d: today() + 1, r: 0, w: 0 }; const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; S.newDay.n++; save(); }
+    if (!S.cards[c.id]) { S.cards[c.id] = { b: 0, d: today() + 1, r: 0, w: 0 }; const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; S.newDay.n++; const rd = calDay(); if (!S.newReal || S.newReal.d !== rd) S.newReal = { d: rd, n: 0 }; S.newReal.n++; S.newMax = Math.max(S.newMax || 0, S.newReal.n); save(); }
     $('#ex').innerHTML = `${picImg(picFile(c), 'big')}<div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : c.kind === 'd' ? 'Line from a conversation: ' + esc(c.convo) : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
       <div class="ceb">${esc(c.ceb)}</div>${phonHtml(c.ceb)}<div class="prompt" style="font-weight:500">${esc(c.en)}</div>
       ${breakdown(c.ceb)}
@@ -1995,7 +1999,7 @@ const weekStart = () => { const t = today(), dow = (t + 4) % 7; return t - ((dow
 const xpWeek = () => { const w = weekStart(); return Object.entries(S.xp).reduce((s, [k, v]) => s + (+k >= w ? v : 0), 0); };
 const learnedCount = () => Object.keys(S.cards).filter(id => id[0] !== 'r' && S.cards[id].b >= 2 && card(id)).length;
 // each signed-in person's public scoreboard row: board/{uid}. Nothing else of their progress is shared.
-function boardRow() { const a = acc7(); return { name: displayName(), streakReset: STREAK_RESET, streak: streakNow(), best: S.streak.best || 0, accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, geoP: (S.geoBest || {}).prov || 0, geoL: (S.geoBest || {}).lang || 0, updated: Date.now() }; }
+function boardRow() { const a = acc7(); return { name: displayName(), streakReset: STREAK_RESET, streak: streakNow(), best: S.streak.best || 0, accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, newMax: S.newMax || 0, geoP: (S.geoBest || {}).prov || 0, geoL: (S.geoBest || {}).lang || 0, updated: Date.now() }; }
 let boardTimer = null;
 function pushBoard() { if (!Sync.user || !window.firebase) return; clearTimeout(boardTimer); boardTimer = setTimeout(() => { firebase.firestore().collection('board').doc(Sync.user.uid).set(boardRow()).catch(() => { }); }, 3000); }
 let BOARD = null, boardAt = 0, boardTab = 'streak', boardErr = '';
@@ -2011,6 +2015,7 @@ const BOARD_TABS = [
   ['best', 'Best streak', r => r.best, r => r.best + ' day' + (r.best === 1 ? '' : 's')],
   ['acc', 'Accuracy', r => r.accN >= 30 ? r.accR / r.accN : -1, r => r.accN >= 30 ? Math.round(r.accR / r.accN * 100) + '% · ' + r.accN + ' answers' : 'needs 30 answers in 7 days'],
   ['learned', 'Words', r => r.learned, r => r.learned + ' learned'],
+  ['newMax', 'Most in one day', r => r.newMax || 0, r => (r.newMax || 0) + ' new words'],
   ['speed', 'Speed', r => r.speed, r => (+r.speed).toFixed(1) + '×'],
   ['rush', 'Rush', r => r.rush, r => r.rush + ' in a row'],
   ['geoP', 'Province Rush', r => r.geoP || 0, r => (r.geoP || 0) + ' in a row'],
@@ -2028,8 +2033,8 @@ function boardPanel() {
     <ol class="blist">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span><b>${esc(capName(r.name) || 'Someone')}</b><span class="muted small">${esc(tab[3](r))}</span></li>`).join('')}</ol></section>`;
 }
 // the Ranks tab: every ranking in its own box, one under the other
-const BOARD_DESC = { streak: 'Days in a row with a finished daily session.', best: 'The longest streak ever.', acc: 'Every answer in the last 7 days, right and wrong: lessons, grammar, practice drills, Rush, Real Bisaya and stories.', learned: 'Words and phrases learned so far.', speed: 'Fastest listening speed reached.', rush: 'Longest Padayon Rush run.', geoP: 'Longest Province Rush run.', geoL: 'Longest Language Rush run.' };
-const BOARD_ICON = { streak: '🔥', best: '🏅', acc: '🎯', learned: '📚', speed: '⚡', rush: '🏆', geoP: '🗺️', geoL: '🗣️' };
+const BOARD_DESC = { streak: 'Days in a row with a finished daily session.', best: 'The longest streak ever.', acc: 'Every answer in the last 7 days, right and wrong: lessons, grammar, practice drills, Rush, Real Bisaya and stories.', learned: 'Words and phrases learned so far.', newMax: 'Most new words learned in a single day.', speed: 'Fastest listening speed reached.', rush: 'Longest Padayon Rush run.', geoP: 'Longest Province Rush run.', geoL: 'Longest Language Rush run.' };
+const BOARD_ICON = { streak: '🔥', best: '🏅', acc: '🎯', learned: '📚', newMax: '🚀', speed: '⚡', rush: '🏆', geoP: '🗺️', geoL: '🗣️' };
 function boardBoxes() {
   if (!Sync.user) return `<section class="panel"><p class="muted small" style="margin:0">Sign in with Google on the Me tab to join the leaderboard.</p></section>`;
   if (boardErr) return `<section class="panel"><p class="muted small" style="margin:0">${esc(boardErr)}</p></section>`;
