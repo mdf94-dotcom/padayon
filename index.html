@@ -475,6 +475,22 @@ details>summary{cursor:pointer}
 .cface.bumped{animation:bumped .4s cubic-bezier(.2,.7,.3,1) forwards!important}
 @keyframes bumped{0%{transform:translate(0,0) rotate(0)}100%{transform:translate(110vw,-80px) rotate(540deg);opacity:.9}}
 @media (prefers-reduced-motion:reduce){.cface .pt,.cface .popword,.cface .hat,.cface .ghost,.cface .smokering,.rainbow-ring{display:none}}
+
+/* ---------- layout: the face sits on the bubble's top-left corner like a badge; text wraps around it ---------- */
+.hero-guide .clover{display:block;position:relative;padding-top:26px}
+.hero-guide .clover .cface{position:absolute;left:0;top:0;margin:0;z-index:2}
+.hero-guide .clover .cface .art.face{width:80px;height:80px}
+.hero-guide .clover .bubble{padding:12px 18px 14px;line-height:1.45}
+.hero-guide .clover .bhead{margin-left:72px;min-height:44px;display:flex;flex-direction:column;justify-content:center;gap:2px;margin-bottom:8px}
+.hero-guide .clover .bubble .who{margin:0}
+.hero-guide .clover .kick{font-family:var(--f-display);font-weight:700;font-size:1.02rem;line-height:1.2}
+.c-binko .kick{color:#1f7d6f}.c-green .kick{color:#f0d27a}.c-ollie .kick{color:#ffc46b}.c-quickare .kick{color:#f2c94c}.c-penn .kick{color:#221a16}.c-triton .kick{color:#e0bf86}.c-cat .kick{color:#ffd9a0}
+.hero-guide .c-penn .bubble{padding:12px 18px 22px 30px}.hero-guide .c-penn .bhead{margin-left:60px}
+.hero-guide .c-quickare .bubble::before{left:auto;right:6px;top:4px;transform:none}
+.hero-guide .c-quickare .bubble::after{right:auto;left:6px;bottom:4px;transform:rotate(180deg)}
+.hero-guide .c-quickare .bubble .who{display:inline-block;align-self:flex-start}
+.hero-guide .c-green .fx{inset:-5px}
+@keyframes sp-hat{0%{transform:translate(-50%,0) rotate(0)}45%{transform:translate(-50%,-40px) rotate(540deg)}90%{transform:translate(-50%,-4px) rotate(720deg);opacity:1}100%{transform:translate(-50%,0) rotate(720deg);opacity:0}}
 </style>
 <style>
 /* ---------- tabs layout (Today / Practice / Progress / Me) ---------- */

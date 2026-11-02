@@ -760,7 +760,7 @@ function binkoPlan() {
   const plan = planDay(), nx = planNext(), due = dueIds().length, nw = Math.min(newAllowance(), pickNew().length), nr = nextRule();
   const weak = needsWork().filter(id => card(id)).slice(0, 3).map(id => `<b>${esc(cardLabel(id))}</b>`);
   const list = x => x.length < 2 ? x.join('') : x.slice(0, -1).join(', ') + ' and ' + x[x.length - 1];
-  let s = `${hi}${name}! Binko here!`;
+  let s = 'Binko here!';
   if (!plan.session) {
     const parts = []; if (due) parts.push(`<b>${due}</b> review${due === 1 ? '' : 's'}`); if (nw) parts.push(`<b>${nw}</b> new word${nw === 1 ? '' : 's'}`);
     s += parts.length ? ` Today's session has ${list(parts)}` : ' Today\'s session is ready'; s += nr && !S.cards[ruleCardId(nr)] ? `, plus a new grammar rule: <b>${esc(nr.title)}</b>.` : '.';
@@ -768,7 +768,7 @@ function binkoPlan() {
     else if (Object.keys(S.cards).length) s += ' Nothing tripped you up last time. SUPER DUPER!';
     else s += ' This is your very first lesson. Binko is SO excited!';
   } else s += nx ? ` Today's session is done! Next up: <b>${esc(nx.name)}</b>.` : ' You finished everything today! Binko is doing a happy little spin.';
-  return s;
+  return [s, `${hi}${name}!`];
 }
 let HOME_SPK = null;
 VIEWS.home = function () {
@@ -790,7 +790,7 @@ VIEWS.home = function () {
   </section>` : ''}
   <div class="today-grid"><div class="today-main">
   <section class="hero h-${HOME_SPK.who}">
-    <div class="hero-guide">${cloverSays(HOME_SPK.who, HOME_SPK.who === 'binko' ? binkoPlan() : HOME_SPK.html, true)}</div>
+    <div class="hero-guide">${HOME_SPK.who === 'binko' ? (p => cloverSays('binko', p[0], true, p[1]))(binkoPlan()) : cloverSays(HOME_SPK.who, HOME_SPK.html, true, HOME_SPK.kick)}</div>
     <div class="hero-text"><div class="label">Karon nga adlaw · Today</div><h2>${nextUp ? esc(nextUp.name) : 'All done today. Padayon!'}</h2>
       <p>${nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${due} review${due === 1 ? '' : 's'}, ${nw} new` : nextUp.d) : 'Come back tomorrow, or do another session.'}</p></div>
     <div class="hero-actions"><button class="btn" id="start">${nextUp ? (nextUp.manual ? 'I did it' : 'Start') : 'Do another session'}<kbd>Enter</kbd></button></div>
