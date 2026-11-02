@@ -184,6 +184,8 @@ const STREAK_RESET = 4;
 /* Full leaderboard reset on Nov 2, 2026 (day 20759): streaks start that day. Finishing that day's session makes it 1.
    The game bests, accuracy, most-in-a-day and speed records start over too. Words learned is real progress and stays. */
 const STREAK_BASE = 20759;
+// people who finished on reset day before their phone got the update: already announced by hand, shown as 1 until their app reports in
+const DONE_ON_RESET = { NB6NEkBWqkQ0mfggPTAot5fPbJ43: 20759 };
 function resetStreak(st) {
   if ((st.streakReset || 0) >= STREAK_RESET) return;
   const rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5), done = !!(st.plan && Object.keys(st.plan).some(k => +k >= rt && st.plan[k].session));
@@ -193,7 +195,7 @@ function resetStreak(st) {
   st.acc = st.acc && st.acc[rt] ? { [rt]: st.acc[rt] } : {};
   st.freezeWk = 0; st.freezeDay = 0;
   // anyone who already finished today gets announced again with the new count
-  if (done) { st.announced = 0; st.reannounce = 1; }
+  if (done && !(typeof Sync !== 'undefined' && Sync.user && DONE_ON_RESET[Sync.user.uid] === rt)) { st.announced = 0; st.reannounce = 1; }
   st.streakReset = STREAK_RESET;
 }
 resetStreak(S);
@@ -2043,13 +2045,13 @@ const learnedCount = () => Object.keys(S.cards).filter(id => id[0] !== 'r' && S.
 // each signed-in person's public scoreboard row: board/{uid}. Nothing else of their progress is shared.
 function boardRow() { const a = acc7(); return { name: displayName(), streakReset: STREAK_RESET, streak: streakNow(), best: S.streak.best || 0, accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, rushHow: S.rushHow || 'pick', newMax: S.newMax || 0, geoP: (S.geoBest || {}).prov || 0, geoL: (S.geoBest || {}).lang || 0, geoPHow: (S.geoHow || {}).prov || 'pick', geoLHow: (S.geoHow || {}).lang || 'pick', updated: Date.now() }; }
 let boardTimer = null;
-function pushBoard() { if (!Sync.user || !window.firebase) return; if (S.reannounce && planDay().session) { S.reannounce = 0; announceLesson(); } clearTimeout(boardTimer); boardTimer = setTimeout(() => { firebase.firestore().collection('board').doc(Sync.user.uid).set(boardRow()).catch(() => { }); }, 3000); }
+function pushBoard() { if (!Sync.user || !window.firebase) return; if (S.reannounce && DONE_ON_RESET[Sync.user.uid] === calDay()) S.reannounce = 0; if (S.reannounce && planDay().session) { S.reannounce = 0; announceLesson(); } clearTimeout(boardTimer); boardTimer = setTimeout(() => { firebase.firestore().collection('board').doc(Sync.user.uid).set(boardRow()).catch(() => { }); }, 3000); }
 let BOARD = null, boardAt = 0, boardTab = 'streak', boardErr = '';
 async function loadBoard() {
   if (!Sync.user || !window.firebase || Date.now() - boardAt < 60000) return;
   boardAt = Date.now();
   try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => Object.assign({ uid: d.id }, d.data())).map(r => (r.streakReset || 0) < STREAK_RESET
-      ? Object.assign(r, { streak: 0, best: 0, accR: 0, accN: 0, newMax: 0, speed: 1, rush: 0, geoP: 0, geoL: 0 }) : r); boardErr = ''; }
+      ? Object.assign(r, { streak: DONE_ON_RESET[r.uid] === calDay() ? 1 : 0, best: DONE_ON_RESET[r.uid] ? 1 : 0, accR: 0, accN: 0, newMax: 0, speed: 1, rush: 0, geoP: 0, geoL: 0 }) : r); boardErr = ''; }
   catch (e) { boardErr = 'The leaderboard needs a Firebase rule update first.'; }
   if (view === 'board') return render(); if (view === 'home') { const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }
 }
