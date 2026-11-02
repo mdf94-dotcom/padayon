@@ -348,7 +348,7 @@ function card(id) {
   if (k === 'w') return W[n] && { id, kind: 'w', ceb: CEB_FIX[id] || W[n][0], en: EN_FIX[id] || W[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
   if (k === 'g') return G[n] && { id, kind: 'g', ceb: G[n][0], en: EN_FIX[id] || G[n][1], note: G[n][2], audio: false };
   if (k === 'd') { const [di, li] = id.slice(1).split('_').map(Number), d = DIALOGS[di], l = d && d.lines[li]; return l && { id, kind: 'd', ceb: l[1], en: l[2], note: l[3] || '', audio: false, convo: d.title }; }
-  if (k === 'm') return MEGA[n] && { id, kind: 'm', ceb: MEGA[n][0], en: EN_FIX[id] || MEGA[n][1], audio: false };
+  if (k === 'm') return MEGA[n] && { id, kind: 'm', ceb: CEB_FIX[id] || MEGA[n][0], en: EN_FIX[id] || MEGA[n][1], audio: false };
   if (k === 'e') return EXTRA[n] && { id, kind: 'p', ceb: EXTRA[n][0], en: EN_FIX[id] || EXTRA[n][1], note: EXTRA[n][2], audio: false };
   if (k === 'f') return F[n] && { id, kind: 'f', ceb: F[n].ceb, en: EN_FIX[id] || F[n].en, note: F[n].note, trick: F[n].trick, combos: F[n].combos, audio: false };
   const c = (S.custom || []).find(x => x.id === id);
@@ -460,7 +460,7 @@ const urls = {}; const player = new Audio(); player.preservesPitch = true;
 let playToken = 0;
 /* ---------- computer voice: cards with no native recording ----------
    voice.bin holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
-const VOICE_V = 1; let VOICE = null, VOICE_BUF = null; const vurls = {};
+const VOICE_V = 2; let VOICE = null, VOICE_BUF = null; const vurls = {};
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
 function setVoice(buf) { const dv = new DataView(buf); if (String.fromCharCode(...new Uint8Array(buf, 0, 4)) !== 'PVOI') throw new Error('bad voice pack'); const hl = dv.getUint32(4, true); VOICE = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, hl))); VOICE_BUF = buf.slice(8 + hl); }
 async function loadVoice() {
@@ -549,7 +549,7 @@ VIEWS.home = function () {
     <button class="drill" id="dictgo"><span class="label">Fast speech</span><span class="big">Dictation</span><b>Type what you hear</b><span class="muted small">Catch every little word.</span></button>
     <button class="drill" data-go="shadow"><span class="label">Fluency</span><span class="big">Shadow</span><b>Speak along</b><span class="muted small">Hands-free. Repeat with the speaker.</span></button>
     <button class="drill" data-go="convos"><span class="label">Chaining</span><span class="big">Istorya</span><b>Today's conversation</b><span class="muted small">Picked to match what you know. Play your part out loud.</span></button>
-    <button class="drill" id="rushgo"><span class="label">Game</span><span class="big tnum">${S.rushBest || 0}</span><b>Padayon Rush</b><span class="muted small">Every word in the app. Keep going until you miss.</span></button>
+    <button class="drill" id="rushgo"><span class="label">Game</span><span class="big tnum">${S.rushBest || 0}</span><b>Padayon Rush</b><span class="muted small">Every word, easy to hard. Go until you miss.</span></button>
     <button class="drill" id="buildgo"><span class="label">Grammar</span><span class="big">Himo</span><b>Build sentences</b><span class="muted small">Your own sentences from words you know.</span></button>
     <button class="drill" data-go="rules"><span class="label">Grammar</span><span class="big">${RULES.length}</span><b>Sentence rules</b><span class="muted small">Where ko goes, dili vs wala, mo- vs ni-, and more.</span></button>
     <button class="drill" data-go="real"><span class="label">Real life</span><span class="big">Tinuod</span><b>Real Bisaya</b><span class="muted small">Tweets and show clips, once you know the words.</span></button>
@@ -903,7 +903,7 @@ VIEWS.speed = function () {
   <section class="panel"><p style="margin:0">20 clips. Each plays once at your speed, then you get 7 seconds to answer. Two right in a row speeds it up by 0.1×. A miss slows it down.</p>
     <div class="row"><span class="label">Starting speed</span><span class="speedchip">${S.speed.toFixed(1)}×</span><span class="muted small">Best ${S.bestSpeed.toFixed(1)}×</span></div>
     <button class="btn primary block" id="go">Start</button></section>
-  <section class="panel"><b>Padayon Rush</b><p class="small" style="margin:0">Endless mode with every recorded word in the app, not just the ones you've learned. Keep going until you miss. Best: ${S.rushBest || 0}.</p><button class="btn ghost block" id="rush">Play Rush</button></section>`;
+  <section class="panel"><b>Padayon Rush</b><p class="small" style="margin:0">Endless mode with every recorded word in the app, not just the ones you&rsquo;ve learned, starting easy and getting harder. Keep going until you miss. Best: ${S.rushBest || 0}.</p><button class="btn ghost block" id="rush">Play Rush</button></section>`;
   $('#quit').onclick = () => go('home'); $('#go').onclick = startSpeed; $('#rush').onclick = startRush;
 };
 let SP = null;
@@ -1385,7 +1385,23 @@ function wireBoard() { document.querySelectorAll('[data-btab]').forEach(b => b.o
 /* Padayon Rush: every recorded word and phrase, not just learned ones. Hear it, pick the meaning, keep going until a miss.
    The time to answer shrinks as the run gets longer. */
 let RU = null;
-function rushPool() { return Object.keys(IDX).filter(id => card(id)); }
+/* Rush goes from easiest to hardest: each word gets a difficulty from where it sits on the learning path
+   (common, early words first) blended with how long it is to hear and parse. Question n draws from a small
+   window that slides up the sorted list, reaching the hardest words around 80 in a row. */
+function rushPool() {
+  const ids = Object.keys(IDX).filter(id => card(id)); if (!ids.length) return ids;
+  const pos = {}; PATH.flatMap(st => st.ids).forEach((id, i) => { if (!(id in pos)) pos[id] = i; });
+  const byPath = ids.slice().sort((a, b) => (pos[a] ?? 1e9) - (pos[b] ?? 1e9)), pr = {}; byPath.forEach((id, i) => pr[id] = i / ids.length);
+  const len = id => { const t = card(id).ceb; return t.length + t.split(/\s+/).length * 4; };
+  const byLen = ids.slice().sort((a, b) => len(a) - len(b)), lr = {}; byLen.forEach((id, i) => lr[id] = i / ids.length);
+  return ids.map(id => [0.6 * pr[id] + 0.4 * lr[id], id]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+}
+function rushPick() {
+  const L = RU.pool.length, at = Math.floor((L - 1) * Math.min(1, RU.n / 80));
+  const lo = Math.max(0, at - 15), hi = Math.min(L, at + 25); let id;
+  for (let k = 0; k < 30; k++) { id = RU.pool[lo + Math.floor(Math.random() * (hi - lo))]; if (!RU.seen.has(id)) break; }
+  return id;
+}
 function rushOptions(c, pool) {
   const out = [c], used = new Set([norm(c.en)]);
   const near = shuffle(pool.slice()).slice(0, 60).map(card).filter(Boolean).map(d => [simScore(c, d) + (d.kind === c.kind ? 3 : 0) + Math.random() * 2, d]).sort((a, b) => b[0] - a[0]);
@@ -1394,12 +1410,12 @@ function rushOptions(c, pool) {
 }
 function startRush() { if (!hasPack()) { toast('Load the content pack first.'); return go('home'); } RU = { pool: rushPool(), n: 0, seen: new Set() }; sess = newSess('rush'); view = 'rush'; rushQ(); }
 async function rushQ() {
-  let id; for (let k = 0; k < 20; k++) { id = pick(RU.pool); if (!RU.seen.has(id)) break; } RU.seen.add(id);
+  const id = rushPick(); RU.seen.add(id);
   const c = card(id), opts = rushOptions(c, RU.pool), secs = Math.max(3, 8 - Math.floor(RU.n / 5) * 0.5);
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End">${I.x}</button><h2 style="flex:1">Padayon Rush</h2><span class="speedchip tnum">${RU.n}</span></div>
     <div class="ex"><div class="playrow"><button class="play playing" id="pl" aria-label="Play">${I.play}</button><span class="muted small" id="st">Listen…</span></div>
     <div class="timer"><i id="tb"></i></div><div class="opts">${opts.map((o, i) => `<button class="opt" data-i="${i}" disabled>${esc(optText(o, 'en'))}</button>`).join('')}</div>
-    <p class="muted small" style="margin:0">Every recorded word in the app, learned or not. One miss ends the run. Best: ${S.rushBest || 0}.</p></div><div class="foot" id="foot" hidden></div>`;
+    <p class="muted small" style="margin:0">Every recorded word in the app, learned or not, easiest first and getting harder. One miss ends the run. Best: ${S.rushBest || 0}.</p></div><div class="foot" id="foot" hidden></div>`;
   $('#quit').onclick = () => { clearInterval(timerH); stopAudio(); rushOver(null, c); };
   const myN = RU.n; await play(c.id, 1, $('#pl')); if (view !== 'rush' || RU.n !== myN) return;
   $('#pl').onclick = e => play(c.id, 1, e.currentTarget);
