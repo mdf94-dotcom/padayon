@@ -1407,8 +1407,8 @@ const EX = {
   teach(c, item) {
     sess.newIds.add(c.id);
     if (!S.cards[c.id]) { S.cards[c.id] = { b: 0, d: today() + 1, r: 0, w: 0 }; const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; S.newDay.n++; const rd = calDay(); if (!S.newReal || S.newReal.d !== rd) S.newReal = { d: rd, n: 0 }; S.newReal.n++; S.newMax = Math.max(S.newMax || 0, S.newReal.n); save(); }
-    $('#ex').innerHTML = `${picImg(picFile(c), 'big')}<div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : c.kind === 'd' ? 'Line from a conversation: ' + esc(c.convo) : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
-      <div class="ceb">${esc(c.ceb)}</div>${phonHtml(c.ceb)}<div class="prompt" style="font-weight:500">${esc(c.en)}</div>
+    $('#ex').innerHTML = `<div class="teachhead"><div class="th-text"><div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : c.kind === 'd' ? 'Line from a conversation: ' + esc(c.convo) : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
+      <div class="ceb">${esc(c.ceb)}</div>${phonHtml(c.ceb)}</div>${picImg(picFile(c), 'big')}</div><div class="prompt" style="font-weight:500">${esc(c.en)}</div>
       ${breakdown(c.ceb)}
       ${c.note ? `<div class="panel note">${castImg('binko', 'peek')}<div class="label">Binko explains · ${c.kind === 'p' || c.kind === 'w' ? 'when to use it' : 'how it fits together'}</div>${esc(c.note)}</div>` : ''}
       ${ruleChip(c.ceb)}

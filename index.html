@@ -467,6 +467,10 @@ details>summary{cursor:pointer}
 
 /* on wide screens the side column starts below the mute button */
 @media (min-width:960px){.today-side,.prog-side{padding-top:48px}}
+
+/* new-word screen: the picture sits to the right of the word */
+.teachhead{display:flex;align-items:center;gap:16px}.teachhead .th-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}.teachhead .epic.big{width:88px;height:88px;margin:0}
+@media (min-width:600px){.teachhead .epic.big{width:104px;height:104px}}
 </style>
 <style>
 /* ---------- tabs layout (Today / Practice / Progress / Me) ---------- */
