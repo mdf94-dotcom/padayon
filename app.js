@@ -176,6 +176,8 @@ function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settin
   if (s.settings.learner !== 'all') { s.settings.learner = 'all'; s.settings.newF = Math.max(3, s.settings.newF || 0); } return s; }
 let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && r.v === 1) return migrate(r); } catch (e) { } return fresh(); })();
 DAY_SHIFT = S.dayShift || 0;
+function fixFuture(st) { const rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5); if (st.streak.last > rt) { st.streak.count = Math.max(1, st.streak.count - (st.streak.last - rt)); st.streak.last = rt; st.streak.best = Math.max(st.streak.count, Math.min(st.streak.best, st.streak.count + 0)); } if ((st.announced || 0) > rt) st.announced = rt; }
+fixFuture(S);
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
 function save() { S.updated = Date.now(); DAY_SHIFT = S.dayShift || 0; localSave(); schedulePush(); if (typeof pushBoard === 'function') pushBoard(); }
 
@@ -233,7 +235,8 @@ async function pushNow() {
 function applyRemote(json) {
   let remote; try { remote = JSON.parse(json); } catch (e) { return; }
   const merged = mergeState(S, remote), changed = JSON.stringify(merged) !== JSON.stringify(S);
-  if (changed) { S = merged; DAY_SHIFT = S.dayShift || 0; localSave(); if (view === 'home' || view === 'settings') render(); }
+  fixFuture(merged); const changed2 = JSON.stringify(merged) !== JSON.stringify(S);
+  if (changed || changed2) { S = merged; DAY_SHIFT = S.dayShift || 0; localSave(); if (view === 'home' || view === 'settings') render(); }
   if (JSON.stringify(merged) !== json) schedulePush();
 }
 function initSync() {
@@ -274,8 +277,10 @@ function syncLine() {
 }
 function refreshSyncUI() { document.querySelectorAll('.syncline').forEach(el => el.innerHTML = syncLine()); document.querySelectorAll('.syncbtn').forEach(el => { el.textContent = Sync.user ? 'Sign out' : 'Sign in with Google'; }); const b = $('#syncbanner'); if (b) b.hidden = !!Sync.user || !window.firebase; }
 function addXP(n) { const t = today(); S.xp[t] = (S.xp[t] || 0) + n; if (!S.started || S.started > t) S.started = t; }
-function bumpStreak() { const t = today(); const s = S.streak; if (s.last === t) return; s.count = s.last === t - 1 ? s.count + 1 : 1; s.last = t; s.best = Math.max(s.best, s.count); }
-function streakNow() { const s = S.streak, t = today(); return (s.last === t || s.last === t - 1) ? s.count : 0; }
+// streaks and Discord posts count real calendar days only, so starting the next day early doesn't add to either
+const calDay = () => today() - DAY_SHIFT;
+function bumpStreak() { const t = calDay(); const s = S.streak; if (s.last === t) return; s.count = s.last === t - 1 ? s.count + 1 : 1; s.last = t; s.best = Math.max(s.best, s.count); }
+function streakNow() { const s = S.streak, t = calDay(); return (s.last === t || s.last === t - 1) ? s.count : 0; }
 function planDay() { const t = today(); if (!S.plan[t]) S.plan = { [t]: {} }; return S.plan[t]; }
 /* Today's plan is every activity, in order. The hero ring fills as they tick, and finishing one offers the next. */
 function planItems() {
@@ -306,7 +311,7 @@ async function discordHook() {
   return hookCache;
 }
 async function announceLesson() {
-  const t = today(); if (S.announced === t) return;
+  const t = calDay(); if (S.announced === t) return;
   const url = await discordHook(); if (!url) return;
   S.announced = t; save();
   const n = streakNow(), who = displayName();
@@ -582,7 +587,7 @@ VIEWS.home = function () {
 VIEWS.again = function () {
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Another session?</h2></div>
     ${binkoSays("You finished today's daily session! Want to keep the engine running? Binko can start TOMORROW'S plan right now, or you can review what you already know.", true)}
-    <div class="panel"><b>Start the next day</b><div class="small">Your checklist resets for a new day, with new cards and reviews. Finishing its daily session adds a day to your streak, and Binko announces it in #streaks.</div><button class="btn primary block" id="nextday" style="margin-top:8px">Start the next day</button></div>
+    <div class="panel"><b>Start the next day</b><div class="small">Your checklist resets for a new day, with new cards and reviews. Your streak and the #streaks post still count once per real day, so this doesn't add to them.</div><button class="btn primary block" id="nextday" style="margin-top:8px">Start the next day</button></div>
     <div class="panel"><b>Review what you know</b><div class="small">A quick round of cards you've already learned. No new cards, your checklist stays as it is, and nothing is announced.</div><button class="btn ghost block" id="extra" style="margin-top:8px">Review again</button></div>`;
   $('#quit').onclick = () => go('home');
   $('#extra').onclick = () => startSession();
