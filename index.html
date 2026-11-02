@@ -306,7 +306,7 @@ details>summary{cursor:pointer}
 /* ---------- tabs layout (Today / Practice / Progress / Me) ---------- */
 kbd{font:700 .7rem var(--f-body);border:1px solid currentColor;border-radius:6px;padding:0 6px;margin-left:8px;opacity:.75;display:none}
 .app.tabbed{padding-bottom:88px}
-.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:#121d20;border-top:1px solid var(--line);padding:6px max(6px,env(safe-area-inset-left,0px)) calc(8px + env(safe-area-inset-bottom,0px))}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#121d20;border-top:1px solid var(--line);padding:6px max(6px,env(safe-area-inset-left,0px)) calc(8px + env(safe-area-inset-bottom,0px))}
 .tabs-brand,.tabs-me{display:none}
 .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px;background:none;border:0;border-radius:12px;color:var(--muted);font-size:.75rem;font-weight:700}
 .tab svg{width:24px;height:24px}
@@ -343,6 +343,12 @@ kbd{font:700 .7rem var(--f-body);border:1px solid currentColor;border-radius:6px
 .prac:last-child{border-bottom:0}
 .pic{width:40px;height:40px;border-radius:12px;background:var(--chip);display:grid;place-items:center;flex:none}.pic svg{width:22px;height:22px}
 .pt{flex:1;min-width:0;display:flex;flex-direction:column}.pt b{font-size:1rem}
+.rush-grid{display:flex;flex-direction:column;gap:16px}
+.rush-hero{background:linear-gradient(160deg,#3a3a1c,#22281a 70%);border:2px solid #5a5a2a;border-radius:18px;box-shadow:0 4px 0 rgba(0,0,0,.4);padding:22px;display:flex;flex-direction:column;gap:16px;position:relative;overflow:hidden}
+.rush-hero::before{content:"";position:absolute;inset:0 0 auto 0;height:5px;background:var(--iri)}
+.rush-best{display:flex;flex-direction:column}.rush-best b{font-family:var(--f-display);font-size:4rem;line-height:1;color:var(--mango)}
+.rush-hero .btn{min-height:56px;justify-content:center;font-size:1.25rem;background:var(--mango);color:#1a1a12;font-weight:700;box-shadow:0 3px 0 #8a8030}
+.rush-how{margin:0;padding-left:18px;color:var(--muted);font-size:.9rem;display:grid;gap:2px}
 .acct{flex-direction:row;align-items:center;gap:14px}.acct img{width:56px;height:56px;border-radius:50%;background:#f0e278;object-fit:cover;flex:none}
 @media (hover:hover){.prac:hover,.prow-main:not(:disabled):hover b,.donebar:hover b{color:var(--sea)}.prac:hover{background:var(--chip)}.tab:hover{color:var(--ink)}.opt:hover:not(:disabled){border-color:var(--sea)}}
 
@@ -373,6 +379,8 @@ kbd{font:700 .7rem var(--f-body);border:1px solid currentColor;border-radius:6px
   .prog-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:24px;align-items:start}
   .me-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
   .me-grid .acct{grid-column:1/-1}
+  .rush-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
+  .rush-hero .btn{width:auto;align-self:flex-start;padding-inline:36px}
   /* lessons: one centered column, big word, answers in a 2x2 grid, the main button right under them */
   .app.lesson{max-width:720px;min-height:calc(100vh - 56px)}
   .app.lesson .sbar{background:transparent;margin-bottom:auto}

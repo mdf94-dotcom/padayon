@@ -502,7 +502,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !(typing && tag === 'textarea' && e.target.id !== 'tr') && !(typing && e.target.id === 'ans')) {
     if (typing && !['own', 'rep', 'tr', 'gen', 'gceb', 'myname'].includes(e.target.id)) return;
     if (typing && ['gen', 'gceb', 'myname'].includes(e.target.id)) return;
-    const b = ['#cont', '#chk', '#nx', '#fin', '#sh', '#show', '#nextup', '#start'].map(s => document.querySelector(s)).find(vis);
+    const b = ['#cont', '#chk', '#nx', '#fin', '#sh', '#show', '#nextup', '#start', '#rushplay', '#again'].map(s => document.querySelector(s)).find(vis);
     if (b) { e.preventDefault(); b.click(); }
   }
 });
@@ -530,9 +530,10 @@ const TI = {
   practice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
   progress: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>',
+  rushhome: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>',
   chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
 };
-const TABS = [['home', 'Today'], ['practice', 'Practice'], ['progress', 'Progress'], ['me', 'Me']];
+const TABS = [['home', 'Today'], ['practice', 'Practice'], ['rushhome', 'Rush'], ['progress', 'Progress'], ['me', 'Me']];
 const TAB_VIEWS = new Set(TABS.map(t => t[0]));
 let lastTab = 'home';
 const goTab = () => go(lastTab);
@@ -623,8 +624,7 @@ VIEWS.practice = function () {
   <div class="pgrid">
   ${g('Listen', 'var(--sky)', [
     { go: 'speed', icon: PI.bolt, c: 'var(--sky)', sub: 'Paspas', name: 'Speed round', badge: lk('speed') || S.speed.toFixed(1) + '×' },
-    { id: 'dictgo', icon: PI.pen, c: 'var(--sky)', sub: 'Isulat · type what you hear', name: 'Dictation', badge: lk('dict') },
-    { id: 'rushgo', icon: PI.cup, c: 'var(--mango)', sub: 'Game · easy to hard', name: 'Padayon Rush', badge: 'Best ' + (S.rushBest || 0), hot: true }])}
+    { id: 'dictgo', icon: PI.pen, c: 'var(--sky)', sub: 'Isulat · type what you hear', name: 'Dictation', badge: lk('dict') }])}
   ${g('Speak', 'var(--pink)', [
     { go: 'shadow', icon: I.mic, c: 'var(--pink)', sub: 'Sundog · speak along', name: 'Shadowing', badge: lk('shadow') },
     { go: 'convos', icon: PI.chat, c: 'var(--pink)', sub: 'Istorya · play your part', name: 'Conversations' },
@@ -637,11 +637,30 @@ VIEWS.practice = function () {
     { id: 'againgo', icon: PI.redo, c: 'var(--copper)', sub: 'A quick round, or start tomorrow', name: 'Another session' },
     { go: 'gaps', icon: PI.plus, c: 'var(--copper)', sub: 'English you keep reaching for', name: 'Gap words', badge: S.custom.length ? String(S.custom.length) : '' }])}
   </div>`);
-  $('#dictgo').onclick = startDictation; $('#rushgo').onclick = startRush;
+  $('#dictgo').onclick = startDictation;
   $('#buildgo').onclick = () => buildLock() ? go('rules') : startBuild();
   $('#againgo').onclick = () => planDay().session ? go('again') : startSession();
   $('#talkgo').onclick = () => { const p = planDay(); p.talk = !p.talk; save(); toast(p.talk ? 'Ticked for today. Maayo!' : 'Unticked'); render(); };
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+};
+/* Padayon Rush has its own tab: your best, the family's best runs, and a big Play button */
+VIEWS.rushhome = function () {
+  const rows = (Sync.user && BOARD ? BOARD.filter(r => r.rush > 0).sort((a, b) => b.rush - a.rush) : []), me = Sync.user && Sync.user.uid;
+  const myRank = rows.findIndex(r => r.uid === me);
+  shell('rushhome', `<div class="ptitle"><h1>Padayon Rush</h1><p class="muted">Every recorded word in the app, learned or not. Easy words first, then harder and faster. One miss ends the run.</p></div>
+  <div class="rush-grid">
+  <section class="rush-hero"><div class="rush-best"><span class="label">Your best</span><b class="tnum">${S.rushBest || 0}</b><span class="muted small">in a row${myRank >= 0 ? ' · #' + (myRank + 1) + ' in the family' : ''}</span></div>
+    <button class="btn" id="rushplay">Play<kbd>Enter</kbd></button>
+    <ul class="rush-how"><li>Hear a word, pick its meaning</li><li>The timer gets shorter every 5 right</li><li>Words get harder the longer you last</li></ul></section>
+  <section class="panel" id="rushboard"><div class="row spread"><h2>Family best runs</h2><span class="muted small">All time</span></div>
+    ${!Sync.user ? `<p class="muted small" style="margin:0">Sign in with Google on the Me tab to see everyone's best runs.</p>`
+      : boardErr ? `<p class="muted small" style="margin:0">${esc(boardErr)}</p>`
+      : !BOARD ? `<p class="muted small" style="margin:0">Loading…</p>`
+      : rows.length ? `<ol class="blist">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span><b>${esc(r.name || 'Someone')}</b><span class="muted small">${r.rush} in a row</span></li>`).join('')}</ol>`
+      : `<p class="muted small" style="margin:0">Nobody has played yet. Be the first!</p>`}</section>
+  </div>`);
+  $('#rushplay').onclick = startRush;
+  if (Sync.user && !BOARD && !boardErr) loadBoard().then(() => { if (view === 'rushhome' && (BOARD || boardErr)) render(); });
 };
 VIEWS.progress = function () {
   const weak = weakList(5);
