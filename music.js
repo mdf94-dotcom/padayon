@@ -62,20 +62,11 @@ const Music = (() => {
       if (s === 0 || s === 8) tom(t, 90, 0.35); if (s === 11) tom(t, 120, 0.18); if (s === 4 || s === 12) tom(t, 70, 0.25);
       if (s === 0) tone('sine', NOTE(r - 12), t, 0.02, 0.18, 1.6);
       if (s % 4 === 2 && Math.random() < 0.6) marimba(NOTE(r + 24 + [0, 3, 5, 7, 10][Math.floor(Math.random() * 5)]), t, 0.08); } },
-    // Penn: a lonely music box in the dark, every note echoing back
-    penn: { bpm: 64, vol: 0.14, ch: [[57, [0, 3, 7]], [53, [0, 4, 7]], [56, [0, 3, 6]], [52, [0, 4, 7]]], step(s, t, r, sh) {
-      if (s === 0) tone('sine', NOTE(r - 24), t, 0.8, 0.06, 60 / this.bpm * 3.8);
-      if (s % 4 === 0 || (s % 2 === 0 && Math.random() < 0.3)) { const n = r + 24 + sh[Math.floor(Math.random() * 3)]; tone('sine', NOTE(n), t, 0.003, 0.06, 0.6, 0, { echo: 1 }); tone('sine', NOTE(n) * 3, t, 0.002, 0.012, 0.15, 0, { echo: 1 }); } } },
     // Quickare: a hill-country hoedown, banjo rolls over a boom-chick
     quickare: { bpm: 132, vol: 0.13, ch: [[55, [0, 4, 7]], [55, [0, 4, 7]], [60, [0, 4, 7]], [62, [0, 4, 7]]], step(s, t, r, sh) {
       if (s % 8 === 0) tone('triangle', NOTE(r - 24), t, 0.005, 0.2, 0.25); if (s % 8 === 4) tone('triangle', NOTE(r - 17), t, 0.005, 0.16, 0.22);
       if (s % 4 === 2) sh.forEach(i => tone('square', NOTE(r + i), t, 0.002, 0.012, 0.08, 1800));
-      tone('triangle', NOTE(r + 12 + [0, 7, 12, 4, 7, 12, 0, 7][s % 8] - (s % 8 === 3 ? 0 : 0)), t, 0.001, 0.035, 0.12, 0, { glide: s % 8 === 0 ? 0.94 : 0 || undefined }); } },
-    // Cat: a hoppy pizzicato tune that skips every fourth note, like running on three legs, with the odd little bleat
-    cat: { bpm: 118, vol: 0.13, ch: [[65, [0, 4, 7]], [70, [0, 4, 7]], [72, [0, 4, 7]], [65, [0, 4, 7]]], step(s, t, r, sh) {
-      if (s % 2 === 0 && (s / 2) % 4 !== 3) tone('sine', NOTE(r + sh[(s / 2) % 3] + (s >= 8 ? 12 : 0)), t, 0.002, 0.08, 0.12, 0, { glide: 1.06 });
-      if (s % 8 === 0) tone('triangle', NOTE(r - 12), t, 0.004, 0.12, 0.2);
-      if (s === 14 && Math.random() < 0.3) tone('sawtooth', NOTE(r + 7), t, 0.02, 0.025, 0.35, 1400, { vib: 11 }); } }
+      tone('triangle', NOTE(r + 12 + [0, 7, 12, 4, 7, 12, 0, 7][s % 8] - (s % 8 === 3 ? 0 : 0)), t, 0.001, 0.035, 0.12, 0, { glide: s % 8 === 0 ? 0.94 : 0 || undefined }); } }
   };
   function marimba(freq, t, peak) { tone('sine', freq, t, 0.005, peak, 0.55); tone('sine', freq * 4, t, 0.003, peak * 0.18, 0.09); }
   function noise(t, peak, d, hp) {
@@ -113,12 +104,15 @@ const Music = (() => {
     if (!ctx) return;
     while (nextT < ctx.currentTime + 0.12) { play(nextT); nextT += 60 / bpm / 4; step++; }
   }
+  let fading = false;
   function apply() {
-    if (want === mode) return;
+    if (want === mode && !(fading && want !== 'off')) return;
     if (!init()) return;
     const t = ctx.currentTime;
     master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(master.gain.value, t);
-    if (want === 'off') { master.gain.linearRampToValueAtTime(0, t + 0.4); setTimeout(() => { if (want === 'off') { clearInterval(timer); timer = null; mode = 'off'; } }, 450); return; }
+    if (want === 'off') { fading = true; master.gain.linearRampToValueAtTime(0, t + 0.4); setTimeout(() => { if (want === 'off') { clearInterval(timer); timer = null; mode = 'off'; } fading = false; }, 450); return; }
+    if (fading && want === mode) { fading = false; master.gain.linearRampToValueAtTime(mode === 'rush' ? 0.22 : STY[mode] ? STY[mode].vol : 0.16, t + 0.3); if (!timer) timer = setInterval(tick, 25); return; }
+    fading = false;
     mode = want; bpm = mode === 'rush' ? 124 + rushLevel * 4 : STY[mode] ? STY[mode].bpm : 78; step = 0; nextT = t + 0.05;
     master.gain.linearRampToValueAtTime(mode === 'rush' ? 0.22 : STY[mode] ? STY[mode].vol : 0.16, t + 0.8);
     if (!timer) timer = setInterval(tick, 25);
@@ -129,8 +123,10 @@ const Music = (() => {
     level(n) { const lv = Math.min(6, Math.floor(n / 5)); if (lv !== rushLevel) { rushLevel = lv; if (mode === 'rush') bpm = 124 + rushLevel * 4; } },
     resetLevel() { rushLevel = 0; },
     duck(on) { if (!ctx || on === ducked) return; ducked = on; const t = ctx.currentTime; duckG.gain.cancelScheduledValues(t); duckG.gain.setValueAtTime(duckG.gain.value, t); duckG.gain.linearRampToValueAtTime(on ? 0.06 : 1, t + (on ? 0.08 : 0.5)); },
-    unlock() { if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {}); }
+    unlock() { if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {}); },
+    pause(h) { if (!ctx) return; if (h) { clearInterval(timer); timer = null; ctx.suspend().catch(() => {}); } else if (mode !== 'off') { ctx.resume().catch(() => {}); nextT = ctx.currentTime + 0.05; if (!timer) timer = setInterval(tick, 25); } }
   };
 })();
 // browsers only allow sound after a tap, so wake the music on the first one
 ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => { Music.unlock(); if (typeof view !== 'undefined' && typeof musicFor === 'function') Music.set(musicFor()); }, { capture: true }));
+document.addEventListener('visibilitychange', () => Music.pause(document.hidden));

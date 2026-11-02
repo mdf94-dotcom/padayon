@@ -335,11 +335,6 @@ details>summary{cursor:pointer}
 .c-quickare .fx{left:20px;top:38%;color:#fff6c8;font-style:normal;font-size:13px;z-index:2;opacity:0;animation:cl-glint 3s ease-in-out infinite}.c-quickare .fx::before{content:'✦'}
 @keyframes cl-tip{0%,60%,100%{transform:rotate(0)}68%{transform:rotate(-10deg) translateY(-3px)}78%{transform:rotate(4deg)}86%{transform:rotate(0)}}
 @keyframes cl-glint{0%,40%,100%{opacity:0;transform:scale(.4)}48%{opacity:1;transform:scale(1.3) rotate(45deg)}56%{opacity:0;transform:scale(.4)}}
-/* Penn: the Echo Bound. His mask leaves a fading echo of itself */
-.c-penn .cface{animation:cl-still 5s ease-in-out infinite}
-.c-penn .cface .art.face{border-color:#2a1f1a}
-.c-penn .fx,.c-penn .fx2{inset:0;border-radius:50%;background:var(--face) center/cover;z-index:0;opacity:0;animation:cl-echo 3.6s ease-out infinite}
-.c-penn .fx2{animation-delay:1.8s}
 @keyframes cl-still{0%,100%{transform:translateX(0)}50%{transform:translateX(1px)}}
 @keyframes cl-echo{0%{opacity:.5;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(16px,-6px) scale(1.12)}}
 /* Captain Triton: rocks like a ship, pipe smoke curling up */
@@ -349,10 +344,6 @@ details>summary{cursor:pointer}
 .c-triton .fx2{animation-delay:1.7s;right:10px}
 @keyframes cl-sway{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
 @keyframes cl-smoke{0%{opacity:0;transform:translate(0,0) scale(.5)}20%{opacity:.9}100%{opacity:0;transform:translate(-14px,-44px) scale(2.2)}}
-/* Cat: hop, hop, hop on three legs, then a rest */
-.c-cat .cface{animation:cl-hop 2s ease-in-out infinite}
-.c-cat .cface .art.face{border-color:#e8e0cc;background:#6b5240}
-.c-cat .fx{left:50%;bottom:-2px;width:30px;height:8px;margin-left:-15px;border-radius:50%;background:radial-gradient(ellipse,rgba(220,200,170,.6),rgba(220,200,170,0) 70%);z-index:0;animation:cl-dust 2s ease-out infinite}
 @keyframes cl-hop{0%,75%,100%{transform:translateY(0) rotate(0)}10%{transform:translateY(-10px) rotate(-6deg)}20%{transform:translateY(0) rotate(2deg)}32%{transform:translateY(-10px) rotate(-6deg)}42%{transform:translateY(0) rotate(2deg)}54%{transform:translateY(-10px) rotate(-6deg)}64%{transform:translateY(0) rotate(3deg)}}
 @keyframes cl-dust{0%,18%,40%,62%,100%{opacity:0;transform:scale(.6)}20%,42%,64%{opacity:1;transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.clover .cface,.clover .cface i{animation:none!important}.clover .cface i{display:none}}
@@ -385,19 +376,12 @@ details>summary{cursor:pointer}
 .c-quickare .bubble::before,.c-quickare .bubble::after{content:'❦';position:absolute;color:#d9b45a;font-size:14px;line-height:1}
 .c-quickare .bubble::before{left:5px;top:3px;transform:scaleX(-1)}.c-quickare .bubble::after{right:5px;bottom:3px;transform:rotate(180deg) scaleX(-1)}
 .c-quickare .bubble .who{color:#1c3a2a;background:linear-gradient(180deg,#f0d27a,#c9a24a);display:table;padding:1px 10px;border-radius:4px;letter-spacing:.06em}.c-quickare .bubble b{color:#f2c94c}
-/* Penn: a torn page from his journal to Nigel, lined, with a red margin */
 .hero.h-penn{--hbg:linear-gradient(160deg,#2c241e,#14100d 75%);--hbd:#5a4836;--hstripe:linear-gradient(90deg,#c9b58c,#8e2b2b 50%,#c9b58c);--hbtn:linear-gradient(180deg,#efe8d6,#cfc4a8);--hink:#221a16;--hshadow:#5e1d1d;--hlabel:#a99b86;--hline:#3e342b}
-.c-penn .bubble{border:0;border-radius:2px;padding:14px 18px 22px 30px;color:#221a16;background:linear-gradient(90deg,transparent 20px,rgba(142,43,43,.55) 20px 22px,transparent 22px),repeating-linear-gradient(180deg,transparent 0 23px,rgba(60,80,110,.18) 23px 24px),#ece6da;box-shadow:0 4px 0 #0d0a08;clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),94% 100%,86% calc(100% - 7px),77% 100%,66% calc(100% - 6px),55% 100%,44% calc(100% - 8px),33% 100%,22% calc(100% - 6px),11% 100%,0 calc(100% - 7px))}
-.c-penn .bubble .who{color:#8e2b2b;font-style:italic}
 /* Captain Triton: a brass ship's plaque with a rope border, green smoke drifting through */
 .hero.h-triton{--hbg:radial-gradient(circle at 12% 30%,rgba(120,190,120,.14),transparent 40%),linear-gradient(160deg,#28322f,#121816 75%);--hbd:#8a6d42;--hstripe:repeating-linear-gradient(-45deg,#c9a46a 0 5px,#7a5d33 5px 10px);--hbtn:linear-gradient(180deg,#dcbb82,#a8834a);--hink:#1d1a12;--hshadow:#4f3b1d;--hlabel:#a8b8a6;--hline:#36423d}
 .c-triton .bubble{border-radius:20px;border:3px solid #b08d57;outline:2px dashed rgba(201,164,106,.55);outline-offset:-9px;padding:16px 20px;color:#e6e3d6;background:#27302d;box-shadow:0 4px 0 #0c100f}
 .c-triton .bubble .who{color:#9fd39b}.c-triton .bubble b{color:#e0bf86}
-/* Cat: a soft, shaggy, cloud-round bubble with little hoofprints */
 .hero.h-cat{--hbg:linear-gradient(160deg,#5c4535,#33251b 75%);--hbd:#9c8466;--hstripe:repeating-linear-gradient(90deg,#efe6d2 0 14px,transparent 14px 24px);--hbtn:linear-gradient(180deg,#f6eedc,#dccdaa);--hink:#3a2b20;--hshadow:#20160f;--hlabel:#d4c3a8;--hline:#6a5340}
-.c-cat .bubble{position:relative;border-radius:36px 36px 36px 14px;border:3px solid #e8e0cc;padding:14px 22px 18px;color:#f6efe0;background:radial-gradient(circle at 20% 0,rgba(255,255,255,.07),transparent 50%),#6a5241;box-shadow:0 4px 0 #2e2219}
-.c-cat .bubble::after{content:'ᐢ ᐢ  ᐢ ᐢ';position:absolute;right:16px;bottom:3px;font-size:10px;letter-spacing:1px;color:rgba(232,224,204,.55)}
-.c-cat .bubble .who{color:#f0e6cf}.c-cat .bubble b{color:#ffd9a0}
 
 /* ---------- spacing: every face keeps clear of its bubble, halos and glows included ---------- */
 .clover{gap:24px}.clover .cface{margin:12px 2px 12px 12px}
@@ -485,7 +469,6 @@ details>summary{cursor:pointer}
 .hero-guide .clover .bubble .who{margin:0}
 .hero-guide .clover .kick{font-family:var(--f-display);font-weight:700;font-size:1.02rem;line-height:1.2}
 .c-binko .kick{color:#1f7d6f}.c-green .kick{color:#f0d27a}.c-ollie .kick{color:#ffc46b}.c-quickare .kick{color:#f2c94c}.c-penn .kick{color:#221a16}.c-triton .kick{color:#e0bf86}.c-cat .kick{color:#ffd9a0}
-.hero-guide .c-penn .bubble{padding:12px 18px 22px 30px}.hero-guide .c-penn .bhead{margin-left:60px}
 .hero-guide .c-quickare .bubble::before{left:auto;right:6px;top:4px;transform:none}
 .hero-guide .c-quickare .bubble::after{right:auto;left:6px;bottom:4px;transform:rotate(180deg)}
 .hero-guide .c-quickare .bubble .who{display:inline-block;align-self:flex-start}
@@ -654,7 +637,7 @@ html.embed .toast{bottom:20px}
 </head>
 <body>
 <div class="app" id="app"></div>
-<div class="toast" id="toast" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <input type="file" id="filein" hidden>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>

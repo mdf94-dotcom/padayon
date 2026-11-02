@@ -176,7 +176,7 @@ function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settin
   if (s.settings.learner !== 'all') { s.settings.learner = 'all'; s.settings.newF = Math.max(3, s.settings.newF || 0); } return s; }
 let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && r.v === 1) return migrate(r); } catch (e) { } return fresh(); })();
 DAY_SHIFT = S.dayShift || 0;
-function fixFuture(st) { const rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5); if (st.streak.last > rt) { st.streak.count = Math.max(1, st.streak.count - (st.streak.last - rt)); st.streak.last = rt; st.streak.best = Math.max(st.streak.count, Math.min(st.streak.best, st.streak.count + 0)); } if ((st.announced || 0) > rt) st.announced = rt; }
+function fixFuture(st) { const rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5); if (st.streak.last > rt) { st.streak.count = Math.max(1, st.streak.count - (st.streak.last - rt)); st.streak.last = rt; st.streak.best = Math.max(st.streak.count, (st.streak.best || 0) - (st.streak.last - rt)); } if ((st.announced || 0) > rt) st.announced = rt; }
 fixFuture(S);
 /* Streak reset: bump STREAK_RESET to start everyone's streak over at 1 (current and best). Carried through sync so an
    older device can't bring the old streak back, and the leaderboard shows 1 for anyone who hasn't opened the app since. */
@@ -249,7 +249,7 @@ function mergeState(a, b) {
   if ((a.streakReset || 0) !== (b.streakReset || 0)) { const w = (a.streakReset || 0) > (b.streakReset || 0) ? a : b;
     ['rushBest', 'rushHow', 'geoBest', 'geoHow', 'newMax', 'bestSpeed', 'acc', 'freezeWk', 'freezeDay'].forEach(k => out[k] = w[k]); out.announced = w.announced || 0; out.reannounce = w.reannounce || 0; }
   // another device finished today's session: count it
-  { const td = today(); if (out.plan[td] && out.plan[td].session && (out.streakReset || 0) >= 4 && out.streak.last < calDay()) { const c = calDay(); out.streak.count = out.streak.last === c - 1 ? out.streak.count + 1 : 1; out.streak.last = c; out.streak.best = Math.max(out.streak.best || 0, out.streak.count); } }
+  { const td = today(); if (out.plan[td] && out.plan[td].session && (out.streakReset || 0) >= STREAK_RESET && out.streak.last < calDay()) { const c = calDay(); out.streak.count = out.streak.last === c - 1 ? out.streak.count + 1 : 1; out.streak.last = c; out.streak.best = Math.max(out.streak.best || 0, out.streak.count); } }
   if ((a.streakReset || 0) === (b.streakReset || 0)) { out.freezeWk = Math.max(a.freezeWk || 0, b.freezeWk || 0); out.freezeDay = Math.max(a.freezeDay || 0, b.freezeDay || 0); }
   out.pod = (a.pod && b.pod) ? (a.pod.d >= b.pod.d ? a.pod : b.pod) : (a.pod || b.pod);
   out.flags = Object.assign({}, b.flags || {}, a.flags || {}); out.storyDone = Object.assign({}, b.storyDone || {}, a.storyDone || {}); out.placed = Math.max(a.placed || 0, b.placed || 0);
@@ -354,7 +354,7 @@ let hookCache = null;
 async function discordHook() {
   if (hookCache !== null) return hookCache;
   if (!Sync.user || !window.firebase) return '';
-  try { const d = await firebase.firestore().collection('config').doc('discord').get(); hookCache = (d.exists && d.data().webhook) || ''; } catch (e) { hookCache = ''; }
+  try { const d = await firebase.firestore().collection('config').doc('discord').get(); hookCache = (d.exists && d.data().webhook) || ''; } catch (e) { return ''; }
   return hookCache;
 }
 async function announceLesson() {
@@ -577,7 +577,7 @@ function exType(id, isNew) {
 function buildSession() {
   ensureRuleCards();
   const nwk = new Set(needsWork()), due = [...nwk, ...dueIds().filter(id => !nwk.has(id))], q = due.filter(id => id[0] !== 'r').slice(0, 16).concat(due.filter(id => id[0] === 'r').slice(0, 3)).map(id => ({ id, type: exType(id) }));
-  shuffle(q);
+  shuffle(q); q.sort((x, y) => (nwk.has(y.id) ? 1 : 0) - (nwk.has(x.id) ? 1 : 0));
   const nw = pickNew(); let lastPos = 0;
   for (const id of nw) {
     // new cards stay in the order they were picked, so the words an example needs are always taught first
@@ -678,10 +678,13 @@ function musicFor() {
   if (TAB_VIEWS.has(view) && HOME_SPK) return HOME_SPK.who;
   return ['speedrun', 'build', 'real', 'story', 'stories', 'geo', 'geogame'].includes(view) ? 'calm' : 'off';
 }
-function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); try { (VIEWS[view] || VIEWS.home)(); } catch (e) {
+function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); try { const ret = (VIEWS[view] || VIEWS.home)(); if (ret && ret.catch) ret.catch(e => renderCrash(e)); clearHealed(); } catch (e) {
     // a lesson or game screen redrawn after its lesson ended has nothing to show: go back to Today quietly
     if (!TAB_VIEWS.has(view)) { try { console.warn('left ' + view + ':', e.message); view = 'home'; a.className = 'app tabbed'; VIEWS.home(); } catch (e2) { renderCrash(e2); } }
-    else renderCrash(e); } window.scrollTo(0, 0); if (typeof Music !== 'undefined') try { Music.set(musicFor()); } catch (e) { } try { muteBtn(); } catch (e) { } }
+    else renderCrash(e); } window.scrollTo(0, 0); if (typeof Music !== 'undefined') try { Music.set(musicFor()); } catch (e) { } try { muteBtn(); a11y(); } catch (e) { } }
+// screen readers: on/off buttons say which is chosen, and text boxes get a name from their hint text
+function a11y() { const r = $('#app'); r.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.classList.contains('on') ? 'true' : 'false'));
+  r.querySelectorAll('input:not([aria-label]),textarea:not([aria-label])').forEach(i => { if (i.placeholder) i.setAttribute('aria-label', i.placeholder); }); }
 /* A small speaker button pinned to the top-right corner of every screen: one tap mutes or unmutes the music. */
 const MUTE_ON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 const MUTE_OFF = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
@@ -695,12 +698,15 @@ function muteBtn() {
 }
 /* If a page fails to draw (usually a half-finished app update: a mix of old and new files), show the tabs and a
    reload button instead of a blank screen, and quietly fetch a clean copy of the app once. */
+function clearHealed() { try { if (performance.now() > 60000 && /[?&]healed=/.test(location.search)) history.replaceState(null, '', location.pathname + location.search.replace(/[?&]healed=\d+/, '').replace(/^&/, '?')); } catch (x) { } }
 function renderCrash(e) {
   try { console.error(e); } catch (x) { }
-  let fixed = false; try { fixed = sessionStorage.getItem('padayon-healed') === '1'; } catch (x) { }
-  if (!fixed) { try { sessionStorage.setItem('padayon-healed', '1'); } catch (x) { }
-    if ('caches' in window) caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).then(() => navigator.serviceWorker && navigator.serviceWorker.getRegistrations()).then(rs => Promise.all((rs || []).map(r => r.update()))).finally(() => location.reload()); }
-  const body = `<section class="panel"><h2>Updating Padayon…</h2><p class="muted">Part of the app didn't load. ${fixed ? 'Tap reload to try again.' : 'Getting a fresh copy now.'}</p><button class="btn primary" id="crashre">Reload</button></section>`;
+  const tries = +((location.search.match(/[?&]healed=(\d+)/) || [])[1] || 0), online = navigator.onLine !== false;
+  if (tries < 1 && online) {
+    const go2 = () => { const u = new URL(location.href); u.searchParams.set('healed', String(tries + 1)); location.replace(u.href); };
+    if ('caches' in window) caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).then(() => navigator.serviceWorker && navigator.serviceWorker.getRegistrations()).then(rs => Promise.all((rs || []).map(r => r.update()))).catch(() => { }).finally(go2); else go2();
+  }
+  const body = `<section class="panel"><h2>${online ? 'Updating Padayon…' : 'Something didn’t load'}</h2><p class="muted">Part of the app didn't load. ${tries < 1 && online ? 'Getting a fresh copy now.' : online ? 'Tap reload to try again.' : 'You look offline. Reconnect, then tap reload.'}</p><button class="btn primary" id="crashre">Reload</button></section>`;
   try { shell(TAB_VIEWS.has(view) ? view : 'home', body); } catch (x) { $('#app').innerHTML = body; }
   const b = $('#crashre'); if (b) b.onclick = () => location.reload();
 }
@@ -788,7 +794,7 @@ function binkoPlan() {
   const list = x => x.length < 2 ? x.join('') : x.slice(0, -1).join(', ') + ' and ' + x[x.length - 1];
   let s = 'Binko here!';
   if (!plan.session) {
-    const parts = []; if (due) parts.push(`<b>${due}</b> review${due === 1 ? '' : 's'}`); if (nw) parts.push(`<b>${nw}</b> new word${nw === 1 ? '' : 's'}`);
+    const parts = []; const dueN = Math.min(due, 16); if (dueN) parts.push(`<b>${dueN}</b> review${dueN === 1 ? '' : 's'}`); if (nw) parts.push(`<b>${nw}</b> new word${nw === 1 ? '' : 's'}`);
     s += parts.length ? ` Today's session has ${list(parts)}` : ' Today\'s session is ready'; s += nr && !S.cards[ruleCardId(nr)] ? `, plus a new grammar rule: <b>${esc(nr.title)}</b>.` : '.';
     if (nw) s += ' Ooh, new words! Binko can\'t wait to find out what they mean with you!';
     if (weak.length) s += ` Last time, ${list(weak)} gave you trouble, so Binko put ${weak.length === 1 ? 'it' : 'them'} first today. Watch closely!`;
@@ -1182,7 +1188,7 @@ VIEWS.session = function () {
   if (['mc', 'type', 'speak', 'say'].includes(item.type) && picFile(c)) { const pr = $('#ex .prompt'); if (pr && !$('#ex .epic')) pr.insertAdjacentHTML('beforebegin', picImg(picFile(c), 'md')); }
 };
 function foot(html) { $('#foot').className = 'foot'; $('#foot').innerHTML = html; }
-function next() { stopAudio(); qi++; VIEWS.session(); window.scrollTo(0, 0); }
+function next() { stopAudio(); qi++; try { VIEWS.session(); } catch (e) { console.warn('session step failed:', e.message); view = 'home'; render(); return; } window.scrollTo(0, 0); }
 function result(c, item, ok, extra) {
   const q = ok === true ? 2 : ok === false ? 0 : ok;
   if (!sess.graded.has(c.id) && item.type !== 'teach' && item.type !== 'shadow') {
@@ -1462,7 +1468,7 @@ const EX = {
     if (qi === tok) document.querySelectorAll('.stage span').forEach(s => s.className = 'done');
   }
 };
-function finishSession() { stopAudio(); const full = qi >= Q.length; if (full && sess.mode === 'daily') { tick('session'); try{ if (window.parent !== window) window.parent.postMessage({practice:'done', app:'bisaya'}, location.origin); }catch(e){} } if (full && sess.mode === 'dict') tick('dict'); if (sess.mode === 'daily' && !full) bumpStreak(); save(); go('summary'); }
+function finishSession() { stopAudio(); const full = qi >= Q.length; if (full && sess.mode === 'daily') { tick('session'); try{ if (window.parent !== window) window.parent.postMessage({practice:'done', app:'bisaya'}, location.origin); }catch(e){} } if (full && sess.mode === 'dict') tick('dict'); save(); go('summary'); }
 VIEWS.summary = function () {
   const acc = sess.total ? Math.round(sess.right / sess.total * 100) : 0;
   $('#app').innerHTML = `<section class="panel summary"><div class="label">${sess.mode === 'speed' ? 'Speed round done' : sess.mode === 'dict' ? 'Dictation done' : 'Session done'}</div>
@@ -2077,12 +2083,12 @@ const learnedCount = () => Object.keys(S.cards).filter(id => id[0] !== 'r' && S.
 // each signed-in person's public scoreboard row: board/{uid}. Nothing else of their progress is shared.
 function boardRow() { const a = acc7(); return { name: displayName(), streakReset: STREAK_RESET, streak: streakNow(), best: S.streak.best || 0, accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, rushHow: S.rushHow || 'pick', newMax: S.newMax || 0, geoP: (S.geoBest || {}).prov || 0, geoL: (S.geoBest || {}).lang || 0, geoPHow: (S.geoHow || {}).prov || 'pick', geoLHow: (S.geoHow || {}).lang || 'pick', updated: Date.now() }; }
 let boardTimer = null;
-function pushBoard() { if (!Sync.user || !window.firebase) return; if (NAME_BY_UID[Sync.user.uid] && S.settings.name !== NAME_BY_UID[Sync.user.uid]) S.settings.name = NAME_BY_UID[Sync.user.uid]; if (S.reannounce && DONE_ON_RESET[Sync.user.uid] === calDay()) S.reannounce = 0; if (S.reannounce && planDay().session) { S.reannounce = 0; announceLesson(); } clearTimeout(boardTimer); boardTimer = setTimeout(() => { firebase.firestore().collection('board').doc(Sync.user.uid).set(boardRow()).catch(() => { }); }, 3000); }
+function pushBoard() { if (!Sync.user || !window.firebase) return; if (NAME_BY_UID[Sync.user.uid] && S.settings.name !== NAME_BY_UID[Sync.user.uid]) S.settings.name = NAME_BY_UID[Sync.user.uid]; if (S.reannounce && DONE_ON_RESET[Sync.user.uid] === calDay()) S.reannounce = 0; if (!S.reannounce && planDay().session && S.announced !== calDay() && !(DONE_ON_RESET[Sync.user.uid] === calDay())) announceLesson(); if (S.reannounce && planDay().session) { S.reannounce = 0; announceLesson(); } clearTimeout(boardTimer); boardTimer = setTimeout(() => { const row = boardRow(); firebase.firestore().collection('board').doc(Sync.user.uid).set(row).catch(() => { }); if (BOARD) { const i = BOARD.findIndex(r => r.uid === Sync.user.uid), mine = Object.assign({ uid: Sync.user.uid }, row); if (i >= 0) BOARD[i] = mine; else BOARD.push(mine); } }, 3000); }
 let BOARD = null, boardAt = 0, boardTab = 'streak', boardErr = '';
 async function loadBoard() {
   if (!Sync.user || !window.firebase || Date.now() - boardAt < 60000) return;
   boardAt = Date.now();
-  try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => Object.assign({ uid: d.id }, d.data())).map(r => (r.streakReset || 0) < STREAK_RESET
+  try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => Object.assign({ uid: d.id }, d.data())).map(r => (r.updated && Date.now() - r.updated > 2.5 * 864e5 && (r.streakReset || 0) >= STREAK_RESET) ? Object.assign(r, { streak: 0 }) : r).map(r => (r.streakReset || 0) < STREAK_RESET
       ? Object.assign(r, { streak: DONE_ON_RESET[r.uid] === calDay() ? 1 : 0, best: DONE_ON_RESET[r.uid] ? 1 : 0, accR: 0, accN: 0, newMax: 0, speed: 1, rush: 0, geoP: 0, geoL: 0 }) : r); boardErr = ''; }
   catch (e) { boardErr = 'The leaderboard needs a Firebase rule update first.'; }
   if (view === 'board') return render(); if (view === 'home') { const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }
@@ -2131,8 +2137,8 @@ function bestWith(old, oldHow, n, how) { if (n > old || (n === old && n > 0 && h
 const fold = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const fwords = s => fold(s).replace(/['’]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
 const EN_STOP = new Set(['to', 'a', 'an', 'the', 'is', 'are', 'be', 'am', 'it', 'some', 'something', 'someone']);
-const enAlts = en => String(en).replace(/\([^)]*\)/g, ' ').replace(/\balso:/gi, ';').split(/[;,\/]|\bor\b/).map(s => s.trim()).filter(Boolean);
-const wordNear = (a, b) => a === b || a.replace(/(es|s)$/, '') === b.replace(/(es|s)$/, '') || (a.length > 3 && b.length > 3 && lev(a, b) <= 1) || (a.length > 6 && b.length > 6 && lev(a, b) <= 2);
+const enAlts = en => String(en).replace(/\(\s*also:\s*([^)]*)\)/gi, ';$1;').replace(/\([^)]*\)/g, ' ').replace(/\balso:/gi, ';').split(/[;,\/]|\bor\b/).map(s => s.trim()).filter(Boolean);
+const wordNear = (a, b) => a === b || a.replace(/(es|s)$/, '') === b.replace(/(es|s)$/, '') || (a.length > 4 && b.length > 4 && lev(a, b) <= 1) || (a.length > 6 && b.length > 6 && lev(a, b) <= 2);
 // typed English meaning: any one of the meanings counts, small typos and missing "to"/"the" are fine
 function meaningOk(typed, en) {
   const t = fwords(typed); if (!t.length) return false;
@@ -2142,7 +2148,9 @@ function meaningOk(typed, en) {
     const ac = a.filter(w => !EN_STOP.has(w)), tc = t.filter(w => !EN_STOP.has(w));
     const A = ac.length ? ac : a, T = ac.length ? tc : t; if (!T.length) return false;
     const hit = A.filter(w => T.some(x => wordNear(x, w))).length, extra = T.filter(x => !A.some(w => wordNear(x, w))).length;
-    return (hit === A.length || (A.length >= 3 && hit / A.length >= 0.66)) && extra <= 1;
+    const neg = w => /^(not|no|never|dont|doesnt|didnt|isnt|arent|wasnt|cant|wont|nobody|nothing)$/.test(w);
+    if (t.some(neg) !== a.some(neg)) return false;
+    return hit === A.length && extra <= 1;
   });
 }
 // typed place or language name: small typos are fine, but typing a different real name is wrong
@@ -2304,5 +2312,5 @@ loadStoredPack().then(ok => { if (ok) { if (view === 'home') render(); } else au
 /* Picking the day's new words is the slowest thing the Today page does, and it asks more than once per draw.
    Remember the answer until anything about progress changes (every save bumps S.updated) or the day turns over. */
 { const _pickNew = pickNew; let memo = null;
-  pickNew = function () { const k = S.updated + '|' + today() + '|' + Object.keys(S.cards).length + '|' + (S.settings.newPerDay || 8) + '|' + (S.focus ? JSON.stringify(S.focus) : '');
+  pickNew = function () { const k = S.updated + '|' + today() + '|' + PATH.length + '|' + Object.keys(IDX || {}).length + '|' + Object.keys(S.cards).length + '|' + (S.settings.newPerDay || 8) + '|' + (S.focus ? JSON.stringify(S.focus) : '');
     if (!memo || memo.k !== k) memo = { k, v: _pickNew.apply(this, arguments) }; return memo.v.slice(); }; }

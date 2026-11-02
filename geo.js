@@ -61,7 +61,8 @@ VIEWS.geo = async function () {
   document.querySelectorAll('.geo-p.tap').forEach(p => p.onclick = () => { GS.sel = p.dataset.n; render(); window.scrollTo(0, 0); sayIt(GS.sel); });
   document.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { GS.sel = b.dataset.pick; render(); window.scrollTo(0, 0); sayIt(GS.sel); });
   wireSay();
-  const qi = $('#geoq'); qi.oninput = () => { GS.q = qi.value; const pos = qi.selectionStart; render(); const n = $('#geoq'); n.focus(); n.setSelectionRange(pos, pos); };
+  // search keeps your place on the page instead of jumping to the top on every letter
+  const qi = $('#geoq'); qi.oninput = () => { GS.q = qi.value; const pos = qi.selectionStart, y = window.scrollY; render(); window.scrollTo(0, y); const n = $('#geoq'); n.focus({ preventScroll: true }); n.setSelectionRange(pos, pos); };
 };
 /* ---------- the games ---------- */
 // other names people use, accepted when typing
