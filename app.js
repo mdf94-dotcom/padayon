@@ -195,7 +195,8 @@ function resetStreak(st) {
   st.acc = st.acc && st.acc[rt] ? { [rt]: st.acc[rt] } : {};
   st.freezeWk = 0; st.freezeDay = 0;
   // anyone who already finished today gets announced again with the new count
-  if (done && !(typeof Sync !== 'undefined' && Sync.user && DONE_ON_RESET[Sync.user.uid] === rt)) { st.announced = 0; st.reannounce = 1; }
+  // (who was already announced by hand is handled later in pushBoard, once sign-in is known)
+  if (done) { st.announced = 0; st.reannounce = 1; }
   st.streakReset = STREAK_RESET;
 }
 resetStreak(S);
@@ -348,7 +349,7 @@ const capName = s => { s = String(s || '').trim(); return s ? s[0].toUpperCase()
 // names fixed by account, so they stay the same everywhere no matter what the Google account or name setting says
 const NAME_BY_UID = { NB6NEkBWqkQ0mfggPTAot5fPbJ43: 'Mykha' };
 const displayName = () => (typeof Sync !== 'undefined' && Sync.user && NAME_BY_UID[Sync.user.uid]) || capName((S.settings.name || (Sync.user && Sync.user.displayName) || '').trim().split(/\s+/)[0]) || 'Someone';
-const rowName = r => NAME_BY_UID[r.uid] || rowName(r);
+const rowName = r => NAME_BY_UID[r.uid] || capName(r.name) || 'Someone';
 let hookCache = null;
 async function discordHook() {
   if (hookCache !== null) return hookCache;
@@ -677,7 +678,10 @@ function musicFor() {
   if (TAB_VIEWS.has(view) && HOME_SPK) return HOME_SPK.who;
   return ['speedrun', 'build', 'real', 'story', 'stories', 'geo', 'geogame'].includes(view) ? 'calm' : 'off';
 }
-function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); try { (VIEWS[view] || VIEWS.home)(); } catch (e) { renderCrash(e); } window.scrollTo(0, 0); if (typeof Music !== 'undefined') try { Music.set(musicFor()); } catch (e) { } try { muteBtn(); } catch (e) { } }
+function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); try { (VIEWS[view] || VIEWS.home)(); } catch (e) {
+    // a lesson or game screen redrawn after its lesson ended has nothing to show: go back to Today quietly
+    if (!TAB_VIEWS.has(view)) { try { console.warn('left ' + view + ':', e.message); view = 'home'; a.className = 'app tabbed'; VIEWS.home(); } catch (e2) { renderCrash(e2); } }
+    else renderCrash(e); } window.scrollTo(0, 0); if (typeof Music !== 'undefined') try { Music.set(musicFor()); } catch (e) { } try { muteBtn(); } catch (e) { } }
 /* A small speaker button pinned to the top-right corner of every screen: one tap mutes or unmutes the music. */
 const MUTE_ON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 const MUTE_OFF = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
@@ -2296,3 +2300,9 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
 if ((S.guideV || 0) < GUIDE_V) { guideAt = 0; guideBack = 'home'; view = 'guide'; }
 render();
 loadStoredPack().then(ok => { if (ok) { if (view === 'home') render(); } else autoPack(); }); loadVoice();
+
+/* Picking the day's new words is the slowest thing the Today page does, and it asks more than once per draw.
+   Remember the answer until anything about progress changes (every save bumps S.updated) or the day turns over. */
+{ const _pickNew = pickNew; let memo = null;
+  pickNew = function () { const k = S.updated + '|' + today() + '|' + Object.keys(S.cards).length + '|' + (S.settings.newPerDay || 8) + '|' + (S.focus ? JSON.stringify(S.focus) : '');
+    if (!memo || memo.k !== k) memo = { k, v: _pickNew.apply(this, arguments) }; return memo.v.slice(); }; }
