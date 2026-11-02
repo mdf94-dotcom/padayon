@@ -302,9 +302,11 @@ function sectionDone(label, line) {
 }
 
 /* ---------- cards & SRS ---------- */
+// clearer English where two cards would otherwise read the same
+const EN_FIX = { p42: 'Good morning (until about 11 am)', p0: 'Good noon (around lunchtime)', p1: 'Good afternoon (after lunch until dark)', p2: 'Good evening (a hello after dark)', p3: 'Good night (said before bed)' };
 function card(id) {
   const k = id[0], n = +id.slice(1);
-  if (k === 'p') return P[n] && { id, kind: 'p', ceb: P[n][0], en: P[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
+  if (k === 'p') return P[n] && { id, kind: 'p', ceb: P[n][0], en: EN_FIX[id] || P[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
   if (k === 'w') return W[n] && { id, kind: 'w', ceb: W[n][0], en: W[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
   if (k === 'g') return G[n] && { id, kind: 'g', ceb: G[n][0], en: G[n][1], note: G[n][2], audio: false };
   if (k === 'd') { const [di, li] = id.slice(1).split('_').map(Number), d = DIALOGS[di], l = d && d.lines[li]; return l && { id, kind: 'd', ceb: l[1], en: l[2], note: l[3] || '', audio: false, convo: d.title }; }

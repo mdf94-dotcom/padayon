@@ -156,7 +156,7 @@ const GLOSS = {
   gutom: 'hungry', gikapoy: 'tired', okay: 'okay', iro: 'dog', iring: 'cat', balay: 'house', kwarta: 'money', uyab: 'boyfriend/girlfriend', oras: 'time',
   trabaho: 'work/job', kape: 'coffee', manok: 'chicken', kusina: 'kitchen', lami: 'delicious', init: 'hot', nindot: 'nice/beautiful', dako: 'big', dakong: 'big (+ linker)',
   gamay: 'small', layo: 'far', duol: 'near', tinuod: 'true', kasilyas: 'bathroom', ngalan: 'name', lakaw: 'go/walk', kaon: 'eat', adlaw: 'day/sun', mama: 'mom', ma: 'mom',
-  buntag: 'morning', udto: 'noon', hapon: 'afternoon', gabii: 'evening/night', amping: 'take care', 'pag-amping': 'take care',
+  buntag: 'morning', udto: 'noon', hapon: 'afternoon', gabii: 'evening (after dark)', pagkatulog: 'sleeping / bedtime', amping: 'take care', 'pag-amping': 'take care',
   padulong: 'headed to', merkado: 'market', mamalit: 'will shop/buy', isda: 'fish', nikaon: 'ate', magluto: 'will cook', lutoon: 'will cook (it)',
   adobo: 'adobo', babay: 'bye', order: 'order', usa: 'one', 'kan-on': 'rice', tanan: 'everything', ania: 'here it is', sapayan: 'matter (walay sapayan = you\'re welcome)',
   'ig-agaw': 'cousin', nalipay: 'happy', nakaila: 'got to know', 'taga-asa': 'from where', pero: 'but', nagpuyo: 'living', singkwenta: 'fifty', mahal: 'expensive',
