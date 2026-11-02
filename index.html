@@ -464,6 +464,9 @@ details>summary{cursor:pointer}
 #mutebtn svg{width:20px;height:20px}#mutebtn.off{color:var(--muted)}
 #mutebtn:focus-visible{outline:2px solid var(--sea);outline-offset:2px}
 .app .top,.app .sbar,.app .ptitle{padding-right:52px}
+
+/* on wide screens the side column starts below the mute button */
+@media (min-width:960px){.today-side,.prog-side{padding-top:48px}}
 </style>
 <style>
 /* ---------- tabs layout (Today / Practice / Progress / Me) ---------- */

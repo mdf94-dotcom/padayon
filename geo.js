@@ -135,7 +135,7 @@ VIEWS.geogame = function () {
       f.innerHTML = `<div class="verdict">${pick(['Tama!', 'Sakto!', 'Nindot!'])}</div><div class="ans">${info}</div>`;
       Promise.all([voice, new Promise(r => setTimeout(r, 700))]).then(() => setTimeout(() => { if (view === 'geogame' && GG.done) { geoNext(); render(); } }, 150));
     }
-    else Promise.all([voice, new Promise(r => setTimeout(r, 900))]).then(() => geoOver(t, typed ? text == null : i < 0));
+    else { const run = GG; Promise.all([voice, new Promise(r => setTimeout(r, 900))]).then(() => { if (view === 'geogame' && GG === run) geoOver(t, typed ? text == null : i < 0); }); }
   };
   btns.forEach((b, i) => b.onclick = () => answer(i));
   if (typed) wireType(x => answer(-1, x));

@@ -206,7 +206,7 @@ resetStreak(S);
 function capStreak(st) {
   if (!st || !st.streak) return st; const s = st.streak, rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5);
   const maxNow = Math.max(0, (s.last || 0) - STREAK_BASE + 1);
-  const doneToday = !!(st.plan && st.plan[rt] && st.plan[rt].session);
+  const doneToday = !!(st.plan && Object.keys(st.plan).some(k => +k >= rt && st.plan[k].session));
   if (s.count > maxNow) s.count = maxNow;
   // on the reset day itself a streak of 1 means today's session is done
   if (s.last === rt && rt === STREAK_BASE && !doneToday) { s.count = 0; s.last = 0; }
@@ -247,7 +247,7 @@ function mergeState(a, b) {
   else { const sa = a.streak, sb = b.streak; out.streak = (sb.last > sa.last || (sb.last === sa.last && sb.count > sa.count)) ? { ...sb } : { ...sa }; out.streak.best = Math.max(sa.best, sb.best); }
   out.bestSpeed = Math.max(a.bestSpeed, b.bestSpeed);
   out.plan = {}; [a.plan, b.plan].forEach(p => Object.keys(p).forEach(d => { out.plan[d] = Object.assign(out.plan[d] || {}, p[d]); Object.keys(p[d]).forEach(k => { if (p[d][k]) out.plan[d][k] = p[d][k]; }); }));
-  const t = today(); Object.keys(out.plan).forEach(d => { if (+d !== t) delete out.plan[d]; });
+  const t = today(), ds = Math.max(a.dayShift || 0, b.dayShift || 0), keepDays = new Set([t, calDay() + ds]); Object.keys(out.plan).forEach(d => { if (!keepDays.has(+d)) delete out.plan[d]; });
   out.newDay = a.newDay.d === b.newDay.d ? { d: a.newDay.d, n: Math.max(a.newDay.n, b.newDay.n) } : (a.newDay.d > b.newDay.d ? a.newDay : b.newDay);
   out.mistakes = {}; new Set(Object.keys(a.mistakes).concat(Object.keys(b.mistakes))).forEach(k => { const x = a.mistakes[k], y = b.mistakes[k]; out.mistakes[k] = !x ? y : !y ? x : { n: Math.max(x.n, y.n), fix: (newer === b ? y.fix : x.fix) || x.fix || y.fix, last: Math.max(x.last || 0, y.last || 0) }; });
   out.tips = Object.assign({}, a.tips, b.tips);
@@ -313,7 +313,7 @@ async function signIn() {
     else if (e && e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') toast('Sign-in failed: ' + (e.message || e.code));
   }
 }
-async function signOutSync() { clearTimeout(Sync.timer); if (Sync.user) await pushNow(); await firebase.auth().signOut(); toast('Signed out. Progress stays on this device.'); }
+async function signOutSync() { clearResume(); clearTimeout(Sync.timer); if (Sync.user) await pushNow(); await firebase.auth().signOut(); toast('Signed out. Progress stays on this device.'); }
 function syncLine() {
   if (!window.firebase) return 'Sync is unavailable right now (offline?).';
   if (!Sync.user) return 'Not signed in. Progress is saved on this device only.';
@@ -374,10 +374,12 @@ async function discordHook() {
   try { const d = await firebase.firestore().collection('config').doc('discord').get(); hookCache = (d.exists && d.data().webhook) || ''; } catch (e) { return ''; }
   return hookCache;
 }
+let announcing = false;
 async function announceLesson() {
-  const t = calDay(); if (S.announced === t) return;
-  const url = await discordHook(); if (!url) return;
-  S.announced = t; save();
+  const t = calDay(); if (S.announced === t || announcing) return;
+  announcing = true;
+  try {
+  const url = await discordHook(); if (!url || S.announced === t) return;
   const n = streakNow(), who = displayName();
   const lines = ['BINKO REPORTING!', 'Log entry from Binko!', 'Binko binks this is worth announcing!', 'Ding ding ding! Binko has news!'];
   const fd = new FormData();
@@ -387,7 +389,9 @@ async function announceLesson() {
       author: { name: '🌈🤖 BINKO-SR157 · Lucky Clover Field Log 🍀⚙️', icon_url: new URL('img/binko-face.webp?v=2', location.href).href },
       footer: { text: '💛 Adventurer & Creator Binko · Bink bink! 🩵' }, description: `${lines[Math.floor(Math.random() * lines.length)]} **${who}** finished today's Bisaya lesson!\n🔥 Streak: **${n} day${n === 1 ? '' : 's'}**${n >= 7 && n % 7 === 0 ? ' · a whole week! SUPER DUPER!' : ''}` }]
   }));
-  try { await fetch(url, { method: 'POST', body: fd, mode: 'no-cors' }); } catch (e) { }
+  await fetch(url, { method: 'POST', body: fd, mode: 'no-cors' });
+  S.announced = t; save();
+  } catch (e) { } finally { announcing = false; }
 }
 function nextBtnHtml(id = 'nextup') {
   const n = planNext();
@@ -606,7 +610,7 @@ function buildSession() {
   const nr = nextRule();
   if (nr && !S.cards[ruleCardId(nr)]) { const id = ruleCardId(nr), pos = Math.min(q.length, 3 + Math.floor(Math.random() * 3)); q.splice(pos, 0, { id, type: 'rteach' }); q.splice(Math.min(q.length, pos + 2), 0, { id, type: 'rq' }); q.splice(Math.min(q.length, pos + 6), 0, { id, type: 'rq' }); }
   const sh = [...new Set(shuffle(Object.keys(S.cards).filter(id => id[0] === 'p' && card(id)).concat(nw.filter(id => id[0] === 'p'))))].slice(0, 2);
-  sh.forEach((id, i) => q.splice(Math.floor(q.length * (0.45 + i * 0.4)), 0, { id, type: 'shadow' }));
+  sh.forEach((id, i) => { const taught = q.findIndex(x => x.id === id && x.type === 'teach'); q.splice(Math.max(Math.floor(q.length * (0.45 + i * 0.4)), taught + 2), 0, { id, type: 'shadow' }); });
   if (q.filter(x => x.type !== 'shadow').length < 4) shuffle(Object.keys(S.cards).filter(card)).slice(0, 10).forEach(id => q.push({ id, type: exType(id) }));
   if (!q.length) GRAM_ORDER.slice(0, 4).forEach(id => q.push({ id, type: 'teach' }, { id, type: 'mc' }));
   q.forEach(x => { if (x.type === 'say' || x.type === 'pron') x.type = 'speak'; });
@@ -995,7 +999,7 @@ VIEWS.me = function () {
   document.querySelectorAll('[data-set]').forEach(g => g.querySelectorAll('button').forEach(b => b.onclick = () => { S.settings[g.dataset.set] = +b.dataset.v; save(); render(); }));
   $('#pack2').onclick = importPack; $('#pack3').onclick = () => { go('home'); autoPack(); };
   $('#exp').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' })); a.download = 'padayon-progress-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); };
-  $('#imp').onclick = () => { const fi = $('#filein'); fi.accept = '.json,application/json'; fi.value = ''; fi.onchange = async () => { try { const s = JSON.parse(await fi.files[0].text()); if (s.v !== 1) throw 0; S = migrate(s); save(); toast('Progress loaded'); go('home'); } catch (e) { toast('That is not a Padayon backup file.'); } }; fi.click(); };
+  $('#imp').onclick = () => { const fi = $('#filein'); fi.accept = '.json,application/json'; fi.value = ''; fi.onchange = async () => { try { const s = JSON.parse(await fi.files[0].text()); if (s.v !== 1) throw 0; S = migrate(s); clearResume(); save(); toast('Progress loaded'); go('home'); } catch (e) { toast('That is not a Padayon backup file.'); } }; fi.click(); };
 };
 /* ---------- Binko's stories ----------
    Short silly family stories, told by Binko a line at a time, each opening once you know every Bisaya word in it.
@@ -1189,11 +1193,12 @@ const newSess = mode => ({ xp: 0, right: 0, total: 0, graded: new Set(), requeue
 /* An unfinished daily session is saved after every question, so leaving (the X button, switching apps, closing the
    app) and coming back later picks up on the same question instead of building a new lesson. It lasts for the day. */
 const RESUME_K = 'padayon-resume';
-function saveResume() { if (!sess || sess.mode !== 'daily' || qi >= Q.length) return;
-  try { localStorage.setItem(RESUME_K, JSON.stringify({ d: today(), qi, Q, sess: Object.assign({}, sess, { graded: [...sess.graded], requeued: [...sess.requeued], newIds: [...sess.newIds] }) })); } catch (e) { } }
-function loadResume() { try { const r = JSON.parse(localStorage.getItem(RESUME_K)); if (r && r.d === today() && Array.isArray(r.Q) && r.qi < r.Q.length) return r; } catch (e) { } return null; }
+function saveResume(at) { if (at == null) at = qi; if (!sess || sess.mode !== 'daily' || at >= Q.length || planDay().session) return;
+  try { localStorage.setItem(RESUME_K, JSON.stringify({ d: today(), qi: at, Q, sess: Object.assign({}, sess, { graded: [...sess.graded], requeued: [...sess.requeued], newIds: [...sess.newIds] }) })); } catch (e) { } }
+function loadResume() { try { if (planDay().session) { clearResume(); return null; } const r = JSON.parse(localStorage.getItem(RESUME_K)); if (r && r.d === today() && Array.isArray(r.Q) && r.qi < r.Q.length) return r; } catch (e) { } return null; }
 function clearResume() { try { localStorage.removeItem(RESUME_K); } catch (e) { } }
 function startSession() {
+  if (!hasPack()) { toast('Still loading your words. One moment!'); return; }
   const r = loadResume();
   if (r) { Q = r.Q; qi = r.qi; sess = Object.assign(newSess('daily'), r.sess, { graded: new Set(r.sess.graded), requeued: new Set(r.sess.requeued), newIds: new Set(r.sess.newIds) }); return go('session'); }
   Q = buildSession(); qi = 0; sess = newSess('daily'); go('session'); }
@@ -1211,7 +1216,7 @@ VIEWS.session = function () {
   if (!c || ((item.type === 'pron' || item.type === 'dict' || item.type === 'listen' || item.type === 'tiles' || item.type === 'shadow') && !c.audio)) { qi++; return VIEWS.session(); }
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End session">${I.x}</button><div class="prog"><i style="width:${(qi / Q.length) * 100}%"></i></div><span class="muted small tnum qcount">${qi + 1} of ${Q.length}</span><span class="speedchip">${S.speed.toFixed(1)}×</span></div>
   <div class="ex" id="ex"></div><div class="foot" id="foot"></div>`;
-  $('#quit').onclick = () => { if (sess.mode === 'daily') { stopAudio(); saveResume(); goTab(); if (qi > 0) toast('Saved your place. Tap Continue on Today to pick up where you left off.'); return; } if (qi > 0 && sess.total > 0) finishSession(); else goTab(); };
+  $('#quit').onclick = () => { if (sess.mode === 'daily') { stopAudio(); saveResume(); go('home'); if (qi > 0) toast('Saved your place. Tap Continue on Today to pick up where you left off.'); return; } if (qi > 0 && sess.total > 0) finishSession(); else goTab(); };
   if (typeof Music !== 'undefined') Music.set(musicFor());
   EX[item.type](c, item);
   // a picture on questions that already show the English (never on ones that ask for the meaning)
@@ -1224,6 +1229,7 @@ function result(c, item, ok, extra) {
   if (!sess.graded.has(c.id) && item.type !== 'teach' && item.type !== 'shadow') {
     sess.graded.add(c.id);
     if (!sess.newIds.has(c.id)) grade(c.id, q);
+    else if (!S.cards[c.id]) grade(c.id, q);
     else if (q === 0) S.cards[c.id].d = today();
     else { S.cards[c.id].b = Math.max(S.cards[c.id].b, 1); S.cards[c.id].r++; }
   }
@@ -1411,7 +1417,7 @@ const EX = {
     if (canHear(c)) wirePlay(c, 1);
     document.querySelectorAll('#ex [data-vs]').forEach(b => b.onclick = () => playSentence(b.dataset.vs, b));
     wireTip(c, '#tipslot');
-    sess.xp += 2; addXP(2);
+    sess.taughtXP = sess.taughtXP || []; if (!sess.taughtXP.includes(c.id)) { sess.taughtXP.push(c.id); sess.xp += 2; addXP(2); }
     foot(`<button class="btn primary block" id="cont">Got it</button>`); $('#cont').onclick = next;
   },
   listen(c, item) { const d = distract(c, 3, 'en'); if (d.length < 2) return EX.dict(c, item); $('#ex').innerHTML = `<h2>What did you hear?</h2>${playBlock(S.speed)}<div class="opts"></div>`; wirePlay(c, S.speed); choiceEx(c, item, shuffle([c, ...d]), 'en'); },
@@ -1479,7 +1485,7 @@ const EX = {
       foot(`<div class="label">How did it go?</div><div class="grades"><button class="btn" data-q="2">Said it smoothly</button><button class="btn" data-q="1">Got there, but slowly or with small mistakes</button><button class="btn" data-q="0">Blanked or used English</button></div>`);
       document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => result(c, item, +b.dataset.q));
     };
-    timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / (secs * 1000); $('#tb').style.width = Math.max(0, f * 100) + '%'; if (f <= 0) reveal(); }, 100);
+    timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / (secs * 1000); const tb = $('#tb'); if (!tb) return clearInterval(timerH); tb.style.width = Math.max(0, f * 100) + '%'; if (f <= 0) reveal(); }, 100);
     $('#show').onclick = reveal;
   },
   async shadow(c, item) {
@@ -2168,19 +2174,24 @@ const fold = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase
 const fwords = s => fold(s).replace(/['’]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
 const EN_STOP = new Set(['to', 'a', 'an', 'the', 'is', 'are', 'be', 'am', 'it', 'some', 'something', 'someone']);
 const enAlts = en => String(en).replace(/\(\s*also:\s*([^)]*)\)/gi, ';$1;').replace(/\([^)]*\)/g, ' ').replace(/\balso:/gi, ';').split(/[;,\/]|\bor\b/).map(s => s.trim()).filter(Boolean);
-const wordNear = (a, b) => a === b || a.replace(/(es|s)$/, '') === b.replace(/(es|s)$/, '') || (a.length > 4 && b.length > 4 && lev(a, b) <= 1) || (a.length > 6 && b.length > 6 && lev(a, b) <= 2);
+let EN_VOCAB = null;
+const enVocab = () => EN_VOCAB || (EN_VOCAB = new Set(Object.keys(IDX).map(card).filter(Boolean).flatMap(c => fwords(String(c.en).replace(/\([^)]*\)/g, ' ')))));
+const wordNear = (a, b) => { if (a === b) return true;
+  if (Math.min(a.length, b.length) >= 3 && a.replace(/(es|s)$/, '') === b.replace(/(es|s)$/, '') && a.replace(/(es|s)$/, '').length >= 3) return true;
+  if (enVocab().has(a)) return false; // a different real word, not a typo
+  return (a.length >= 4 && b.length > 4 && lev(a, b) <= 1) || (a.length > 6 && b.length > 6 && lev(a, b) <= 2); };
 // typed English meaning: any one of the meanings counts, small typos and missing "to"/"the" are fine
 function meaningOk(typed, en) {
   const t = fwords(typed); if (!t.length) return false;
   return enAlts(en).some(alt => {
     const a = fwords(alt); if (!a.length) return false;
-    const whole = a.join(' '); if (t.join(' ') === whole || lev(t.join(' '), whole) <= Math.floor(whole.length * 0.15)) return true;
+    const whole = a.join(' '); if (t.join(' ') === whole || (t.some(w => !enVocab().has(w)) && lev(t.join(' '), whole) <= Math.floor(whole.length * 0.15))) return true;
     const ac = a.filter(w => !EN_STOP.has(w)), tc = t.filter(w => !EN_STOP.has(w));
     const A = ac.length ? ac : a, T = ac.length ? tc : t; if (!T.length) return false;
     const hit = A.filter(w => T.some(x => wordNear(x, w))).length, extra = T.filter(x => !A.some(w => wordNear(x, w))).length;
     const neg = w => /^(not|no|never|dont|doesnt|didnt|isnt|arent|wasnt|cant|wont|nobody|nothing)$/.test(w);
     if (t.some(neg) !== a.some(neg)) return false;
-    return hit === A.length && extra <= 1;
+    return hit === A.length && extra === 0;
   });
 }
 // typed place or language name: small typos are fine, but typing a different real name is wrong
@@ -2245,7 +2256,7 @@ async function rushQ() {
     if (typed) { const i = $('#tans'); if (i) { i.disabled = true; i.classList.add(ok ? 'right' : 'wrong'); } const g = $('#tgo'); if (g) g.disabled = true;
       if (ok) $('#tslot').insertAdjacentHTML('beforeend', `<div class="small muted" style="margin-top:6px">${esc(c.en)}</div>`); }
     const miss = typed ? text == null : sel == null;
-    if (ok) { RU.n++; addXP(2); setTimeout(() => { if (view === 'rush') rushQ(); }, typed ? 700 : 450); } else setTimeout(() => rushOver(miss ? 'time' : 'miss', c, miss || typed ? null : opts[sel], typed ? text : null), 700);
+    if (ok) { RU.n++; addXP(2); setTimeout(() => { if (view === 'rush') rushQ(); }, typed ? 700 : 450); } else { const run = RU; setTimeout(() => { if (view === 'rush' && RU === run) rushOver(miss ? 'time' : 'miss', c, miss || typed ? null : opts[sel], typed ? text : null); }, 700); }
   };
   btns.forEach((b, i) => b.onclick = () => finish(i));
   if (typed) { $('#tslot').innerHTML = typeBox('Type the meaning in English'); wireType(t => finish(null, t)); }
@@ -2327,6 +2338,7 @@ VIEWS.gaps = function () {
 
 /* ---------- boot ---------- */
 document.addEventListener('keydown', e => {
+  if (e.defaultPrevented) return;
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (view !== 'session' && view !== 'speedrun') return;
   if (/^[1-4]$/.test(e.key)) { const b = document.querySelectorAll('.opt')[+e.key - 1]; if (b && !b.disabled) b.click(); }
@@ -2352,3 +2364,7 @@ const progressKey = () => S.updated + '|' + today() + '|' + PATH.length + '|' + 
   planItems = function () { const k = progressKey() + '|' + JSON.stringify(planDay()); if (!memo || memo.k !== k) memo = { k, v: _planItems() }; return memo.v.slice(); }; }
 { const _knownWords = knownWords; let memo = null;
   knownWords = function () { const k = progressKey(); if (!memo || memo.k !== k) memo = { k, v: _knownWords() }; return new Set(memo.v); }; }
+
+/* After any answer is graded, the saved place moves to the next question, so leaving from the answer screen
+   (or closing the app there) never shows or grades the same question twice. */
+{ const _result = result; result = function () { const r = _result.apply(this, arguments); try { if (sess && sess.mode === 'daily') saveResume(qi + 1); } catch (e) { } return r; }; }
