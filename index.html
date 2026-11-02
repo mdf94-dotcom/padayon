@@ -184,7 +184,9 @@ textarea.field{min-height:96px;resize:vertical}
 .loadnote{font-size:.82rem;color:var(--muted)}
 
 /* Binko comes alive: idle on the home screen, reactions in lessons */
-.guide .art.idle{width:118px;height:auto;object-fit:contain;filter:none;margin:-6px -4px -2px -6px}
+.guide .art.face{width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid #2a9e8c;flex:none;align-self:flex-end}
+.guide.big .art.face{width:84px;height:84px}
+.guide .art.face{animation:none!important}
 .guide .art:not(.idle){transform-origin:50% 100%}.hero-guide .guide .art:not(.idle){animation:bk-idle 3.6s ease-in-out infinite}
 @keyframes bk-idle{0%,100%{transform:translateY(0) rotate(0)}20%{transform:translateY(-4px) rotate(-2deg)}40%{transform:translateY(0) rotate(0)}55%{transform:translateY(-2px) rotate(3deg)}62%{transform:translateY(-2px) rotate(-3deg)}70%{transform:translateY(-2px) rotate(3deg)}80%{transform:translateY(0) rotate(0)}}
 .hero-guide .guide{position:relative}
@@ -432,6 +434,7 @@ html.embed .toast{bottom:20px}
 <script src="fixes.js"></script>
 <script src="pics.js"></script>
 <script src="examples.js"></script>
+<script src="music.js"></script>
 <script src="cast.js"></script>
 <script src="grammar.js"></script>
 <script src="real.js"></script>

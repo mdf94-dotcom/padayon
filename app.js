@@ -571,7 +571,9 @@ async function loadVoice() {
 const hasVoice = s => !!(VOICE && VOICE.k[vkey(s)]);
 function voiceUrl(s) { const k = vkey(s), ix = VOICE && VOICE.k[k]; if (!ix) return null; return vurls[k] || (vurls[k] = URL.createObjectURL(new Blob([VOICE_BUF.slice(ix[0], ix[0] + ix[1])], { type: 'audio/mpeg' }))); }
 // last resort for the learner's own gap words: the device voice (usually Filipino, not Cebuano)
-function sayFallback(text) { try { const v = speechSynthesis.getVoices().find(x => /^(ceb|fil|tl)/i.test(x.lang)); const u = new SpeechSynthesisUtterance(text); if (v) u.voice = v; u.lang = v ? v.lang : 'fil-PH'; u.rate = 0.9; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) { } }
+['play', 'playing'].forEach(ev => player.addEventListener(ev, () => typeof Music !== 'undefined' && Music.duck(true)));
+['pause', 'ended', 'error'].forEach(ev => player.addEventListener(ev, () => typeof Music !== 'undefined' && Music.duck(false)));
+function sayFallback(text) { try { if (typeof Music !== 'undefined') { Music.duck(true); setTimeout(() => Music.duck(false), 2500); } const v = speechSynthesis.getVoices().find(x => /^(ceb|fil|tl)/i.test(x.lang)); const u = new SpeechSynthesisUtterance(text); if (v) u.voice = v; u.lang = v ? v.lang : 'fil-PH'; u.rate = 0.9; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) { } }
 const canHear = c => !!c && (c.audio || hasVoice(c.ceb) || c.kind === 'c');
 const voiceNote = c => c.audio ? 'Say it out loud with the recording.' : hasVoice(c.ceb) ? 'Computer voice, not a native speaker. Say it out loud with it.' : "Your phone's voice, so it may sound Tagalog. Say it out loud.";
 function clipUrl(id) {
@@ -615,7 +617,13 @@ const rulePic = (r, cls) => typeof PIC_X !== 'undefined' ? picImg(PIC_X.rule[r.i
 /* ---------- views ---------- */
 let view = 'home';
 const VIEWS = {};
-function render() { stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); }
+// background music: upbeat in Rush, calm in lessons and practice, off on menus and whenever you're speaking
+function musicFor() {
+  if (view === 'rush') return 'rush';
+  if (view === 'session') { const it = Q[qi]; return it && ['speak', 'shadow', 'pron', 'say'].includes(it.type) ? 'off' : 'calm'; }
+  return ['speedrun', 'build', 'real'].includes(view) ? 'calm' : 'off';
+}
+function render() { stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); if (typeof Music !== 'undefined') Music.set(musicFor()); }
 function go(v) { view = v; render(); }
 function ringSvg(v, goal) { const r = 36, c = 2 * Math.PI * r, f = Math.min(1, v / goal); return `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - f)}" transform="rotate(-90 42 42)"/></svg>`; }
 function unitRow(u, key) {
@@ -809,6 +817,7 @@ VIEWS.me = function () {
     <div class="keybox"><input class="field" id="myname" placeholder="${esc(displayName())}" value="${esc(S.settings.name || '')}"><button class="btn primary" id="savename">Save</button></div></section>
   <section class="panel"><h2>Daily cards</h2>
     ${[['newPerDay', 'New cards per day', [5, 8, 10, 15]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}
+    <div><div class="label">Background music</div><div class="seg" id="musicseg"><button class="${S.settings.music !== false ? 'on' : ''}" data-m="1">On</button><button class="${S.settings.music === false ? 'on' : ''}" data-m="0">Off</button></div></div>
     <p class="muted small" style="margin:0">8 a day is about 15 to 20 minutes with reviews. More moves you along the path faster but makes reviews pile up.</p></section>
   <section class="panel"><h2>Your data</h2>
     <p class="small muted" style="margin:0">${hasPack() ? `Word pack loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Word pack not loaded yet.'}</p>
@@ -818,6 +827,7 @@ VIEWS.me = function () {
   <section class="panel"><h2>About</h2><p class="small muted" style="margin:0">Made for the Balay Ta family. Computer voice: Meta MMS Cebuano (CC BY-NC 4.0). Pictures: Twemoji (CC BY 4.0).</p></section>
   </div>`);
   wireProgress();
+  document.querySelectorAll('#musicseg button').forEach(b => b.onclick = () => { S.settings.music = b.dataset.m === '1'; save(); render(); toast(S.settings.music ? 'Music on in lessons and Rush' : 'Music off'); });
   $('#guidego').onclick = () => openGuide('me');
   $('#syncset').onclick = () => Sync.user ? signOutSync() : signIn();
   $('#savename').onclick = () => { S.settings.name = $('#myname').value.trim(); save(); toast('Saved'); };
@@ -882,6 +892,7 @@ VIEWS.session = function () {
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End session">${I.x}</button><div class="prog"><i style="width:${(qi / Q.length) * 100}%"></i></div><span class="muted small tnum qcount">${qi + 1} of ${Q.length}</span><span class="speedchip">${S.speed.toFixed(1)}×</span></div>
   <div class="ex" id="ex"></div><div class="foot" id="foot"></div>`;
   $('#quit').onclick = () => { if (qi > 0 && sess.total > 0) finishSession(); else goTab(); };
+  if (typeof Music !== 'undefined') Music.set(musicFor());
   EX[item.type](c, item);
   // a picture on questions that already show the English (never on ones that ask for the meaning)
   if (['mc', 'type', 'speak', 'say'].includes(item.type) && picFile(c)) { const pr = $('#ex .prompt'); if (pr && !$('#ex .epic')) pr.insertAdjacentHTML('beforebegin', picImg(picFile(c), 'md')); }
@@ -1837,8 +1848,9 @@ function rushOptions(c, pool) {
   for (const [, d] of near) { if (out.length >= 4) break; const v = norm(d.en); if (!v || used.has(v) || sameMeaning(c.en, d.en)) continue; used.add(v); out.push(d); }
   return shuffle(out);
 }
-function startRush() { if (!hasPack()) { toast('Load the content pack first.'); return goTab(); } RU = { pool: rushPool(), n: 0, seen: new Set() }; sess = newSess('rush'); view = 'rush'; rushQ(); }
+function startRush() { if (typeof Music !== 'undefined') Music.resetLevel(); if (!hasPack()) { toast('Load the content pack first.'); return goTab(); } RU = { pool: rushPool(), n: 0, seen: new Set() }; sess = newSess('rush'); view = 'rush'; rushQ(); }
 async function rushQ() {
+  if (typeof Music !== 'undefined') { Music.level(RU.n); Music.set('rush'); }
   const id = rushPick(); RU.seen.add(id);
   const c = card(id), opts = rushOptions(c, RU.pool), secs = Math.max(3, 8 - Math.floor(RU.n / 5) * 0.5);
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End">${I.x}</button><h2 style="flex:1">Padayon Rush</h2><span class="speedchip tnum">${RU.n}</span></div>
