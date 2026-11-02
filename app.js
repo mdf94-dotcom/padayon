@@ -655,7 +655,7 @@ function musicFor() {
   if (view === 'session') { const it = Q[qi]; return it && ['speak', 'shadow', 'pron', 'say'].includes(it.type) ? 'off' : 'calm'; }
   return ['speedrun', 'build', 'real', 'story', 'stories'].includes(view) ? 'calm' : 'off';
 }
-function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); if (typeof Music !== 'undefined') Music.set(musicFor()); }
+function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); if (typeof Music !== 'undefined') Music.set(musicFor()); }
 let BINKO_N = (() => { try { const n = (+localStorage.getItem('padayon-binko') || 0) + 1; localStorage.setItem('padayon-binko', n); return n; } catch (e) { return Math.floor(Math.random() * 20); } })();
 function go(v) { if (v === 'home' && view !== 'home') { BINKO_N++; try { localStorage.setItem('padayon-binko', BINKO_N); } catch (e) { } } view = v; render(); }
 function ringSvg(v, goal) { const r = 36, c = 2 * Math.PI * r, f = Math.min(1, v / goal); return `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - f)}" transform="rotate(-90 42 42)"/></svg>`; }
@@ -754,7 +754,7 @@ VIEWS.home = function () {
     <div class="hero-actions"><button class="btn" id="start">${nextUp ? (nextUp.manual ? 'I did it' : 'Start') : 'Do another session'}<kbd>Enter</kbd></button></div>
     <div class="hero-foot"><span>${sinceShort()}</span><span>${freezePending() ? `🧊 Freeze ready: finish today to keep your ${S.streak.count}-day streak` : freezeOk(calDay() + 1) ? '🧊 Streak freeze ready' : `Best streak ${S.streak.best || 0}`}</span></div>
   </section>
-  ${!S.placed && learnedCount() < 40 ? `<section class="banner"><b>Already know some Bisaya?</b><div class="small">Take the 5-minute placement check and skip the words you already know.</div><div class="row"><button class="btn primary" id="placego2">Take the check</button><button class="btn ghost" id="placeno">No thanks</button></div></section>` : ''}
+  ${false ? `<section class="banner"><b>Already know some Bisaya?</b><div class="small">Take the 5-minute placement check and skip the words you already know.</div><div class="row"><button class="btn primary" id="placego2">Take the check</button><button class="btn ghost" id="placeno">No thanks</button></div></section>` : ''}
   ${podHtml()}
   <section class="panel plan"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${doneN} of ${items.length} done</span></div>
     <div class="bar"><i style="width:${doneN / items.length * 100}%"></i></div>
@@ -983,10 +983,11 @@ function flagsHtml() {
    whole stretch (and everything before it) as known, so heritage speakers skip what they already have. */
 const PLACE_CUTS = [0, 30, 80, 150, 260, 420, 650, 950, 1350, 1900, 2600, 3400, 99999];
 let PL = null;
-function startPlacement() {
+function startPlacement() { initPlacement(); go('place'); }
+function initPlacement() {
   const ids = PATH.flatMap(s => s.ids).filter(id => { const c = card(id); return c && !['r', 'c'].includes(c.kind) && firstAlt(c.en); });
   PL = { ids, k: 0, qs: [], qi: 0, right: 0, marked: 0, done: false };
-  plRound(); go('place');
+  plRound();
 }
 function plRound() {
   const lo = PLACE_CUTS[PL.k], hi = Math.min(PL.ids.length, PLACE_CUTS[PL.k + 1]);
@@ -1001,12 +1002,12 @@ function plPass() {
   S.placed = today(); save(); PL.k++; plRound();
 }
 VIEWS.place = function () {
-  const head = `<div class="sbar"><button class="x" id="quit" aria-label="Stop">${I.x}</button><div class="prog"><i style="width:${Math.min(100, PL.k / (PLACE_CUTS.length - 1) * 100)}%"></i></div><span class="muted small tnum">Round ${PL.k + 1}</span></div>`;
+  const head = `<div class="sbar">${S.placed ? `<button class="x" id="quit" aria-label="Stop">${I.x}</button>` : '<span style="width:44px"></span>'}<div class="prog"><i style="width:${Math.min(100, PL.k / (PLACE_CUTS.length - 1) * 100)}%"></i></div><span class="muted small tnum">Round ${PL.k + 1}</span></div>`;
   if (PL.done || PL.qi >= PL.qs.length && PL.right < 5) {
     if (!S.placed) { S.placed = today(); save(); }
     const st = pathState().cur;
     $('#app').innerHTML = `${head}<div class="ex">${binkoSays(PL.marked ? `BINKO REPORTING! You already know <b>${PL.marked}</b> words and phrases, so Binko marked them as learned. You're starting in <b>Stage ${st + 1}: ${esc(PATH[st].name)}</b>. They'll still come back now and then as quick reviews.` : "Binko binks we'll start from the beginning. That's great, every word will be new and fun!", true)}</div><div class="foot"><button class="btn primary block" id="pldone">Done</button></div>`;
-    $('#pldone').onclick = () => go('home'); $('#quit').onclick = () => go('home'); return;
+    $('#pldone').onclick = () => go('home'); if ($('#quit')) $('#quit').onclick = () => go('home'); return;
   }
   if (PL.qi >= PL.qs.length) { plPass(); return render(); }
   const c = card(PL.qs[PL.qi]), pool = PL.ids.slice(Math.max(0, PL.range[0] - 40), PL.range[1] + 40).filter(id => id !== c.id).map(card).filter(Boolean);
@@ -1024,34 +1025,40 @@ VIEWS.place = function () {
     setTimeout(render, 250); };
   document.querySelectorAll('.opt').forEach(b => b.onclick = () => { const ok = o[+b.dataset.i].id === c.id; b.classList.add(ok ? 'right' : 'wrong'); answer(ok); });
   $('#pldk').onclick = () => answer(false);
-  $('#quit').onclick = () => { if (PL.marked) toast(PL.marked + ' words marked as known'); go('home'); };
+  if ($('#quit')) $('#quit').onclick = () => { if (PL.marked) toast(PL.marked + ' words marked as known'); go('home'); };
 };
 /* ---------- the guide: shown once to everyone after a big update (bump GUIDE_V), and any time from Me ---------- */
-const GUIDE_V = 3;
+const GUIDE_V = 4;
+/* The guide: short, visual pages. Each page has a picture, a few short points, and shows where to find it. */
 const GUIDE = [
-  { t: 'Maayong pag-abot!', b: "Binko rebuilt Padayon! Here's a quick tour of how everything works now. It takes about a minute.", i: 'home' },
-  { t: 'Today: your daily session', b: "Start is your daily session, about 15 to 20 minutes of reviews and new words. Every new word comes with a picture, a <b>sounds like</b> guide, and an example sentence made only of words you already know. Your plan lists everything else for the day; finished items fold away. Finish the daily session to keep your streak, and Binko announces it in #streaks. Miss a day? A <b>streak freeze</b> covers one missed day a week, automatically. And each day there's a <b>phrase of the day</b> to say to someone in the family.", i: 'home' },
-  { t: 'Grammar, one rule a day', b: "A new grammar rule shows up inside your daily session, like a new word. Binko explains it, then it keeps coming back with harder questions: pick the right sentence, then <b>which rule is this?</b>, then <b>what's wrong with this sentence?</b>", i: 'practice' },
-  { t: 'When you miss one', b: "The wrong answers are look-alikes on purpose (ko / ka, mo- / ni-). When you miss, Binko shows what your pick means and which word made the difference, like <b>Kinsa = who, but Unsa = what</b>. Missed cards come back later in the session. If a card ever looks or sounds wrong, tap <b>⚑ Sounds wrong?</b> and Binko writes it down for the family to fix.", i: 'practice' },
-  { t: 'Practice', b: "Extra practice any time, grouped by skill. <b>Listen:</b> speed round and dictation. <b>Speak:</b> shadowing, conversations (8 new family ones) and talking with family. <b>Build and read:</b> grammar, the rule book, Real Bisaya clips, posts and songs, and <b>Binko's stories</b>: short, silly family stories that open as you learn their words. <b>Your words:</b> another session and gap words.", i: 'practice' },
-  { t: 'Rush 🏆', b: 'The golden trophy is Padayon Rush: every word in the app, easiest first, getting harder and faster. One miss ends the run. Your best shows on the trophy, and the family best runs are right there too.', i: 'rushhome' },
-  { t: 'Ranks', b: 'The family leaderboard, one box per ranking: streak, best streak, accuracy (every answer, right and wrong), words learned, listening speed and Rush. Sign in with Google in Me to show up on it and to keep your progress on all your devices.', i: 'board' },
-  { t: 'Me, and your daily cards', b: 'Me has your path through the five stages, your stats, weak spots, every unit, and your settings. You can change how many new cards you get each day any time:', i: 'me', cards: true },
-  { t: 'Music 🎵', b: "Lessons and practice have a calm background song, and Rush has an upbeat one that speeds up the longer your run goes. It goes quiet whenever a Bisaya word plays, and turns off when you're speaking. Want it?", i: 'me', music: true },
-  { t: "You're all set!", b: "On a computer: <b>Space</b> replays the audio, <b>S</b> plays it slowly, <b>1 to 4</b> picks an answer and <b>Enter</b> continues. You can open this guide again from Me. Already speak some Bisaya? Take the <b>placement check</b> on Today to skip ahead. Padayon!", i: 'home' }
+  { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['🤖', 'Binko, the little robot, helps along the way']] },
+  { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone']] },
+  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know']] },
+  { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'One new rule a day, inside your session'], ['📈', 'Questions get harder each time'], ['🤔', 'Miss one? See exactly why']] },
+  { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya']] },
+  { t: 'Rush and Ranks', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> easy to hard, one miss ends it'], ['📊', '<b>Ranks:</b> see how the family is doing'], ['🔑', 'Sign in on <b>Me</b> to join']] },
+  { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day'], ['🎵', 'Background music on or off']], set: true },
+  { t: 'One last thing', art: '🎯', pts: [['✏️', 'A quick check of what you already know'], ['⏭️', 'Words you know get skipped'], ['🤷', 'Not sure? Tap "I don\'t know". That\'s fine!']] }
 ];
 let guideAt = 0, guideBack = 'home';
 function openGuide(back) { guideAt = 0; guideBack = back || 'home'; go('guide'); }
+const tabPreview = on => `<div class="gtabs">${TABS.map(([k, l]) => `<span class="gtab ${k === on ? 'on' : ''}" data-k="${k}">${TI[k]}<span>${l}</span></span>`).join('')}</div>`;
 VIEWS.guide = function () {
-  const g = GUIDE[guideAt], last = guideAt === GUIDE.length - 1, per = S.settings.newPerDay || 8;
-  const must = (S.guideV || 0) < GUIDE_V;
-  $('#app').innerHTML = `<div class="sbar">${must ? '<span style="width:44px"></span>' : `<button class="x" id="quit" aria-label="Close">${I.x}</button>`}<div class="gdots">${GUIDE.map((_, i) => `<i class="${i === guideAt ? 'on' : i < guideAt ? 'done' : ''}"></i>`).join('')}</div>${must ? `<span class="muted small tnum" style="width:44px;text-align:right">${guideAt + 1}/${GUIDE.length}</span>` : '<button class="linkbtn" id="gskip">Skip</button>'}</div>
-    <div class="ex guide-page"><div class="gicon">${TI[g.i] || ''}</div><h1 class="gtitle">${g.t}</h1>${binkoSays(g.b, guideAt === 0)}
-    ${g.music ? `<div class="panel"><div class="label">Background music</div><div class="seg" id="gmusic"><button class="${S.settings.music !== false ? 'on' : ''}" data-m="1">On</button><button class="${S.settings.music === false ? 'on' : ''}" data-m="0">Off</button></div><p class="muted small" style="margin:0">You can change this any time in Me, under Daily cards.</p></div>` : ''}
-    ${g.cards ? `<div class="panel"><div class="label">New cards per day</div><div class="seg" id="gseg">${[5, 8, 10, 15].map(n => `<button class="${per === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div><p class="muted small" style="margin:0">8 a day is about 15 to 20 minutes with reviews. Fewer keeps it light; more moves you along faster but means more reviews.</p></div>` : ''}</div>
-    <div class="foot"><div class="row" style="gap:10px">${guideAt ? '<button class="btn ghost" id="gprev">Back</button>' : ''}<button class="btn primary block" id="gnext" style="flex:1">${last ? "Let's go!" : 'Next'}</button></div></div>`;
-  const done = () => { S.guideV = GUIDE_V; save(); go(guideBack); };
-  if ($('#quit')) $('#quit').onclick = done; if ($('#gskip')) $('#gskip').onclick = done;
+  const g = GUIDE[guideAt], last = guideAt === GUIDE.length - 1, per = S.settings.newPerDay || 8, must = (S.guideV || 0) < GUIDE_V;
+  $('#app').innerHTML = `<div class="sbar">${must ? '<span style="width:44px"></span>' : `<button class="x" id="quit" aria-label="Close">${I.x}</button>`}<div class="gdots">${GUIDE.map((_, i) => `<i class="${i === guideAt ? 'on' : i < guideAt ? 'done' : ''}"></i>`).join('')}</div>${must ? '<span style="width:44px"></span>' : '<button class="linkbtn" id="gskip">Skip</button>'}</div>
+    <div class="ex gpage">
+      <div class="gart">${g.art}</div>
+      <h1 class="gtitle">${g.t}</h1>
+      <ul class="gpts">${g.pts.map(([e, t]) => `<li><span class="gemo">${e}</span><span>${t}</span></li>`).join('')}</ul>
+      ${g.set ? `<div class="gset"><div class="label">New words per day</div><div class="seg" id="gseg">${[5, 8, 10, 15].map(n => `<button class="${per === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div>
+        <div class="label" style="margin-top:12px">Background music</div><div class="seg" id="gmusic"><button class="${S.settings.music !== false ? 'on' : ''}" data-m="1">On</button><button class="${S.settings.music === false ? 'on' : ''}" data-m="0">Off</button></div>
+        <p class="muted small" style="margin:8px 0 0">8 a day is about 15 minutes. You can change both later in Me.</p></div>` : ''}
+      ${g.tab ? `<div class="gwhere"><div class="label">Find it here</div>${tabPreview(g.tab)}</div>` : ''}
+    </div>
+    <div class="foot"><div class="row" style="gap:10px">${guideAt ? '<button class="btn ghost" id="gprev">Back</button>' : ''}<button class="btn primary block" id="gnext" style="flex:1">${last ? (S.placed ? "Let's go!" : 'Start the check') : guideAt ? 'Next' : "Let's start"}</button></div></div>`;
+  const done = () => { S.guideV = GUIDE_V; save(); if (!S.placed) return startPlacement(); go(guideBack); };
+  if ($('#quit')) $('#quit').onclick = () => { S.guideV = GUIDE_V; save(); go(guideBack); };
+  if ($('#gskip')) $('#gskip').onclick = () => { S.guideV = GUIDE_V; save(); go(guideBack); };
   $('#gnext').onclick = () => { if (last) return done(); guideAt++; render(); };
   if ($('#gprev')) $('#gprev').onclick = () => { guideAt--; render(); };
   if ($('#gmusic')) $('#gmusic').querySelectorAll('button').forEach(b => b.onclick = () => { S.settings.music = b.dataset.m === '1'; save(); render(); });
