@@ -674,10 +674,21 @@ const VIEWS = {};
 function musicFor() {
   if (view === 'rush' || (view === 'geogame' && GG && !GG.practice)) return 'rush';
   if (view === 'session') { const it = Q[qi]; return it && ['speak', 'shadow', 'pron', 'say'].includes(it.type) ? 'off' : 'calm'; }
-  if (view === 'home' && HOME_SPK) return HOME_SPK.who;
+  if (TAB_VIEWS.has(view) && HOME_SPK) return HOME_SPK.who;
   return ['speedrun', 'build', 'real', 'story', 'stories', 'geo', 'geogame'].includes(view) ? 'calm' : 'off';
 }
-function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); if (typeof Music !== 'undefined') Music.set(musicFor()); }
+function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); try { (VIEWS[view] || VIEWS.home)(); } catch (e) { renderCrash(e); } window.scrollTo(0, 0); if (typeof Music !== 'undefined') try { Music.set(musicFor()); } catch (e) { } }
+/* If a page fails to draw (usually a half-finished app update: a mix of old and new files), show the tabs and a
+   reload button instead of a blank screen, and quietly fetch a clean copy of the app once. */
+function renderCrash(e) {
+  try { console.error(e); } catch (x) { }
+  let fixed = false; try { fixed = sessionStorage.getItem('padayon-healed') === '1'; } catch (x) { }
+  if (!fixed) { try { sessionStorage.setItem('padayon-healed', '1'); } catch (x) { }
+    if ('caches' in window) caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).then(() => navigator.serviceWorker && navigator.serviceWorker.getRegistrations()).then(rs => Promise.all((rs || []).map(r => r.update()))).finally(() => location.reload()); }
+  const body = `<section class="panel"><h2>Updating Padayon…</h2><p class="muted">Part of the app didn't load. ${fixed ? 'Tap reload to try again.' : 'Getting a fresh copy now.'}</p><button class="btn primary" id="crashre">Reload</button></section>`;
+  try { shell(TAB_VIEWS.has(view) ? view : 'home', body); } catch (x) { $('#app').innerHTML = body; }
+  const b = $('#crashre'); if (b) b.onclick = () => location.reload();
+}
 let BINKO_N = (() => { try { const n = (+localStorage.getItem('padayon-binko') || 0) + 1; localStorage.setItem('padayon-binko', n); return n; } catch (e) { return Math.floor(Math.random() * 20); } })();
 function go(v) { if (v === 'home' && view !== 'home') { if (HOME_SPK) HOME_SPK = nextFactTeller(); BINKO_N++; try { localStorage.setItem('padayon-binko', BINKO_N); } catch (e) { } } view = v; render(); }
 function ringSvg(v, goal) { const r = 36, c = 2 * Math.PI * r, f = Math.min(1, v / goal); return `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - f)}" transform="rotate(-90 42 42)"/></svg>`; }
@@ -1948,6 +1959,7 @@ const tweetWords = t => {
 const RE_AFFIX = /^(nag|mag|mo|ni|mi|gi|na|pag|ka|ma|mu|ga|naka|maka)-?/;
 const knowsWord = (kw, w) => kw.has(w) || (w.length > 4 && kw.has(w.replace(RE_AFFIX, '')));
 function realItems() {
+  if (typeof REAL_TWEETS === 'undefined') return [];
   const kw = knownWords(), { stats, cur } = pathState();
   const tw = REAL_TWEETS.map((t, i) => { const left = tweetWords(t).filter(w => !knowsWord(kw, w)); return { key: realKey('t', i), kind: 't', i, t, left, open: !left.length }; });
   const cl = REAL_CLIPS.map((c, i) => ({ key: realKey('c', i), kind: 'c', i, c, open: cur > c.stage || (cur === c.stage && stats[c.stage].frac >= 0.5) }));
