@@ -96,6 +96,38 @@ function lev(a, b) { const m = a.length, n = b.length; if (!m) return n; if (!n)
 const norm = s => s.toLowerCase().replace(/\([^)]*\)/g, '').replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…]/g, ' ').replace(/\bug\b/g, 'og').replace(/\s+/g, ' ').trim();
 const alts = ceb => ceb.split(/\s*\/\s*/).map(norm).filter(Boolean);
 const firstAlt = ceb => ceb.split(/\s*\/\s*/)[0].replace(/\s*\([^)]*\)/g, '').trim();
+/* ---------- "sounds like": an English-friendly respelling, split into syllables ----------
+   Bisaya is spelled the way it sounds, so this is built from the spelling. Stress isn't marked: it changes from word to word. */
+const PH_V = { a: 'ah', e: 'eh', i: 'ee', o: 'oh', u: 'oo' };
+const PH_DI = { ay: 'ai', aw: 'ow', oy: 'oy', uy: 'ooy', iw: 'ew', ey: 'ay', ew: 'ew' };
+function phonWord(w) {
+  w = w.toLowerCase().replace(/[^a-zñ'-]/g, ''); if (!w) return '';
+  // letters into units: 'ng' is one sound
+  const u = []; for (let i = 0; i < w.length; i++) { if (w[i] === 'n' && w[i + 1] === 'g') { u.push('ng'); i++; } else u.push(w[i]); }
+  const isV = x => 'aeiou'.includes(x);
+  const syl = []; let cur = '';
+  for (let i = 0; i < u.length; i++) {
+    const x = u[i];
+    if (x === '-' || x === "'") { if (cur) syl.push(cur); cur = ''; continue; }
+    if (isV(x)) {
+      if (/[aeiou]/.test(cur)) { syl.push(cur); cur = ''; } // two vowels in a row: new syllable (a small catch in the throat)
+      cur += x;
+      // y / w right after a vowel, not followed by a vowel: glide closes the syllable
+      if ((u[i + 1] === 'y' || u[i + 1] === 'w') && !isV(u[i + 2] || '')) { cur += u[i + 1]; i++; }
+    } else {
+      // a consonant goes with the next vowel; if two consonants meet, the first closes this syllable
+      if (/[aeiou]/.test(cur) && isV(u[i + 1] || '')) { syl.push(cur); cur = x; }
+      else if (/[aeiou]/.test(cur) && !isV(u[i + 1] || '') && u[i + 1] && u[i + 1] !== '-' && u[i + 1] !== "'") { cur += x; syl.push(cur); cur = ''; }
+      else cur += x;
+    }
+  }
+  if (cur) { if (!/[aeiou]/.test(cur) && syl.length) syl[syl.length - 1] += cur; else syl.push(cur); }
+  const conv = t => t.replace(/[aeiou]/g, v => PH_V[v]);
+  return syl.map(s => { const m = s.match(/^(.*?)(ay|aw|oy|uy|iw|ey|ew)([^aeiou]*)$/); return m ? conv(m[1]) + PH_DI[m[2]] + m[3] : conv(s); }).join('·');
+}
+const phon = s => firstAlt(String(s)).split(/\s+/).map(phonWord).filter(Boolean).join('  ');
+const phonHtml = (s, label = true) => `<div class="phon">${label ? '<span>sounds like</span> ' : ''}${esc(phon(s))}</div>`;
+
 const tokens = ceb => firstAlt(ceb).split(/\s+/).map(t => t.replace(/[.,!?…]/g, '')).filter(Boolean);
 function b64(buf) { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
 function unb64(s) { const b = atob(s); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
@@ -420,9 +452,24 @@ function buildSession() {
 /* ---------- audio playback ---------- */
 const urls = {}; const player = new Audio(); player.preservesPitch = true;
 let playToken = 0;
+/* ---------- computer voice: cards with no native recording ----------
+   voice.bin holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
+const VOICE_V = 1; let VOICE = null, VOICE_BUF = null; const vurls = {};
+const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
+function setVoice(buf) { const dv = new DataView(buf); if (String.fromCharCode(...new Uint8Array(buf, 0, 4)) !== 'PVOI') throw new Error('bad voice pack'); const hl = dv.getUint32(4, true); VOICE = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, hl))); VOICE_BUF = buf.slice(8 + hl); }
+async function loadVoice() {
+  try { const b = await idbGet('voice'); if (b) { setVoice(b); if (VOICE.v === VOICE_V) return; } } catch (e) { }
+  try { const r = await fetch('voice.bin?v=' + VOICE_V, { cache: 'no-store' }); if (!r.ok) return; const b = await r.arrayBuffer(); setVoice(b); await idbSet('voice', b); if (view === 'home') render(); } catch (e) { }
+}
+const hasVoice = s => !!(VOICE && VOICE.k[vkey(s)]);
+function voiceUrl(s) { const k = vkey(s), ix = VOICE && VOICE.k[k]; if (!ix) return null; return vurls[k] || (vurls[k] = URL.createObjectURL(new Blob([VOICE_BUF.slice(ix[0], ix[0] + ix[1])], { type: 'audio/mpeg' }))); }
+// last resort for the learner's own gap words: the device voice (usually Filipino, not Cebuano)
+function sayFallback(text) { try { const v = speechSynthesis.getVoices().find(x => /^(ceb|fil|tl)/i.test(x.lang)); const u = new SpeechSynthesisUtterance(text); if (v) u.voice = v; u.lang = v ? v.lang : 'fil-PH'; u.rate = 0.9; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) { } }
+const canHear = c => !!c && (c.audio || hasVoice(c.ceb) || c.kind === 'c');
+const voiceNote = c => c.audio ? 'Say it out loud with the recording.' : hasVoice(c.ceb) ? 'Computer voice, not a native speaker. Say it out loud with it.' : "Your phone's voice, so it may sound Tagalog. Say it out loud.";
 function clipUrl(id) {
   if (urls[id]) return urls[id];
-  const buf = SPR[id[0]]; const ix = IDX[id]; if (!buf || !ix) return null;
+  const buf = SPR[id[0]]; const ix = IDX[id]; if (!buf || !ix) { const c = card(id); return c ? voiceUrl(c.ceb) : null; }
   return (urls[id] = URL.createObjectURL(new Blob([buf.slice(ix[0], ix[0] + ix[1])], { type: 'audio/mpeg' })));
 }
 async function playUrl(u, rate, btn) {
@@ -434,10 +481,23 @@ async function playUrl(u, rate, btn) {
   await new Promise(res => { player.onended = res; player.onerror = res; player.onpause = res; player.play().then(() => { player.playbackRate = rate || 1; }).catch(res); });
   if (btn && tok === playToken) btn.classList.remove('playing');
 }
-const play = (id, rate, btn) => playUrl(clipUrl(id), rate, btn);
+const play = (id, rate, btn) => { const u = clipUrl(id); if (u) return playUrl(u, rate, btn); const c = card(id); if (c) sayFallback(firstAlt(c.ceb)); };
 function stopAudio() { playToken++; player.pause(); }
 
 function weakList(n = 6) { return Object.entries(S.mistakes || {}).sort((a, b) => b[1].n - a[1].n).slice(0, n); }
+/* ---------- keyboard: 1-9 picks an answer, Enter presses the main button ---------- */
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = (e.target.tagName || '').toLowerCase(), typing = tag === 'input' || tag === 'textarea';
+  const vis = el => el && !el.disabled && el.offsetParent !== null;
+  if (!typing && /^[1-9]$/.test(e.key)) { const opts = [...document.querySelectorAll('.opt, [data-o]')].filter(vis); const b = opts[+e.key - 1]; if (b) { e.preventDefault(); b.click(); } return; }
+  if (e.key === 'Enter' && !e.shiftKey && !(typing && tag === 'textarea' && e.target.id !== 'tr') && !(typing && e.target.id === 'ans')) {
+    if (typing && !['own', 'rep', 'tr', 'gen', 'gceb', 'myname'].includes(e.target.id)) return;
+    if (typing && ['gen', 'gceb', 'myname'].includes(e.target.id)) return;
+    const b = ['#cont', '#chk', '#nx', '#fin', '#sh', '#show', '#nextup'].map(s => document.querySelector(s)).find(vis);
+    if (b) { e.preventDefault(); b.click(); }
+  }
+});
 /* ---------- views ---------- */
 let view = 'home';
 const VIEWS = {};
@@ -593,10 +653,10 @@ function result(c, item, ok, extra) {
   const f = $('#foot'); f.className = 'foot ' + (q > 0 ? 'good' : 'bad');
   const bxKind = q > 0 && sess.run >= 3 ? 'streak' : q > 0 ? 'right' : 'wrong';
   f.innerHTML = `<div class="row spread" style="gap:12px;align-items:flex-start"><div class="bx ${bxKind}"><img src="img/binko-face.webp" alt="Binko">${bxKind === 'streak' ? `<span class="run">${sess.run}🔥</span>` : ''}</div><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
-  <div class="ans"><span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && ruleFor(c.ceb) && ruleLearned(ruleFor(c.ceb).id) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
-  ${c.audio ? `<button class="play sm" id="fplay" aria-label="Play">${I.play}</button>` : ''}</div>
+  <div class="ans"><span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${phonHtml(c.ceb)}${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && ruleFor(c.ceb) && ruleLearned(ruleFor(c.ceb).id) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
+  ${canHear(c) ? `<button class="play sm" id="fplay" aria-label="Play">${I.play}</button>` : ''}</div>
   ${cameoKind ? cameoHtml(cameoKind) : ''}<button class="btn primary block" id="cont">Continue</button>`;
-  if (c.audio) { $('#fplay').onclick = e => play(c.id, 1, e.currentTarget); if (!['listen', 'tiles', 'dict', 'pron', 'say'].includes(item.type)) play(c.id, 1); }
+  if (canHear(c)) { $('#fplay').onclick = e => play(c.id, 1, e.currentTarget); if (!['listen', 'tiles', 'dict', 'pron', 'say'].includes(item.type)) play(c.id, 1); }
   $('#cont').onclick = next; $('#cont').focus({ preventScroll: true });
 }
 /* ---------- answer choices that can't be guessed by elimination ----------
@@ -717,7 +777,7 @@ const EX = {
     sess.newIds.add(c.id);
     if (!S.cards[c.id]) { S.cards[c.id] = { b: 0, d: today() + 1, r: 0, w: 0 }; const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; S.newDay.n++; save(); }
     $('#ex').innerHTML = `<div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : c.kind === 'd' ? 'Line from a conversation: ' + esc(c.convo) : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
-      <div class="ceb">${esc(c.ceb)}</div><div class="prompt" style="font-weight:500">${esc(c.en)}</div>
+      <div class="ceb">${esc(c.ceb)}</div>${phonHtml(c.ceb)}<div class="prompt" style="font-weight:500">${esc(c.en)}</div>
       ${breakdown(c.ceb)}
       ${c.note ? `<div class="panel note">${castImg('binko', 'peek')}<div class="label">Binko explains · ${c.kind === 'p' || c.kind === 'w' ? 'when to use it' : 'how it fits together'}</div>${esc(c.note)}</div>` : ''}
       ${ruleChip(c.ceb)}
@@ -725,8 +785,8 @@ const EX = {
       ${usedIn(c)}
       <div id="tipslot"></div>
       ${c.ex ? `<div class="panel"><b>${esc(c.ex)}</b><span class="muted small">${esc(c.exEn || '')}</span></div>` : ''}
-      ${c.audio ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">Say it out loud with the recording.</span></div>` : `<p class="muted small">Say it out loud twice.</p>`}`;
-    if (c.audio) wirePlay(c, 1);
+      ${canHear(c) ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">${voiceNote(c)}</span></div>` : `<p class="muted small">Say it out loud twice.</p>`}`;
+    if (canHear(c)) wirePlay(c, 1);
     wireTip(c, '#tipslot');
     sess.xp += 2; addXP(2);
     foot(`<button class="btn primary block" id="cont">Got it</button>`); $('#cont').onclick = next;
@@ -780,7 +840,7 @@ const EX = {
   dict(c, item) {
     $('#ex').innerHTML = `<h2>Type what you hear</h2>${playBlock(S.speed)}<input class="field" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type the Bisaya you hear"><p class="muted small" style="margin:0">Replay as often as you need. Catch every little word: ko, na, pa, man, sa.</p>`;
     wirePlay(c, S.speed); foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
-    const inp = $('#ans'); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
+    const inp = $('#ans'); inp.focus(); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
     inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) $('#chk').click(); };
     $('#chk').onclick = () => typedCheck(c, item, inp, 0.15, true);
   },
@@ -917,7 +977,7 @@ VIEWS.convos = function () {
   DL = { d: p.d, idx: p.i, m: p.unknown.length ? 'learn' : 'read', i: 0, show: {}, right: 0, unknown: p.unknown };
   view = 'convo'; render();
 };
-const lineSay = () => { };
+const lineSay = (t, btn) => { const u = voiceUrl(t); if (u) playUrl(u, 1, btn); };
 function bubble(d, l, j, opts = {}) {
   const me = l[0] === 'b', showEn = opts.en || DL.show[j];
   return `<div class="msg ${me ? 'me' : 'them'}"><div class="small" style="opacity:.75">${esc(me ? d.b : d.a)}</div><div style="font-weight:700">${esc(l[1])}</div>
@@ -935,7 +995,7 @@ VIEWS.convo = function () {
   const done = () => { const xp = DL.m === 'part' ? 4 * DL.right + 6 : 10; addXP(xp); if (DL.m === 'part' || DL.m === 'order') { tick('convo'); S.convoDone = S.convoDone || {}; S.convoDone[DL.idx] = (S.convoDone[DL.idx] || 0) + 1; } save(); view = 'done'; sectionDone('Conversation done', '+' + xp + ' XP · ' + esc(d.title)); };
   if (DL.m === 'learn') {
     $('#app').innerHTML = `${head}<div class="ex">${binkoSays('Today\'s conversation: <b>' + esc(d.title) + '</b>. First, the words you haven\'t met yet. Binko binks you\'ll be fine!')}
-      <div class="panel"><div class="label">New words in this conversation</div>${DL.unknown.map(t => `<div class="gap"><span class="c">${esc(t)}</span><span class="small muted">${esc(glossOf(t) || 'see it in the conversation')}</span></div>`).join('')}</div></div><div class="foot" id="foot"></div>`;
+      <div class="panel"><div class="label">New words in this conversation</div>${DL.unknown.map(t => `<div class="gap"><span class="c">${esc(t)}</span><span class="small muted">${esc(glossOf(t) || 'see it in the conversation')}</span>${phonHtml(t, false)}</div>`).join('')}</div></div><div class="foot" id="foot"></div>`;
     foot(`<button class="btn primary block" id="nx">Start the conversation</button>`);
     $('#nx').onclick = () => { DL.m = 'read'; DL.i = 0; render(); };
   } else if (DL.m === 'read') {
@@ -1075,10 +1135,11 @@ VIEWS.build = function () {
     $('#app').innerHTML = `${head}<div class="ex"><div class="label">New rule ${r.n} · ${esc(r.title)}</div>
       ${BD.step === 0 ? binkoSays('New part for the engine! Binko will show you how it works, one step at a time.') : ''}
       <div class="panel"><div style="font-size:1.05rem">${esc(st[0])}</div>
-      ${st[1].map(x => `<div style="margin-top:10px"><div class="ceb" style="font-size:1.4rem">${esc(x[0])}</div><div>${esc(x[1])}</div><div class="small muted">${esc(x[2])}</div></div>`).join('')}</div>
+      ${st[1].map(x => `<div style="margin-top:10px"><div class="row" style="gap:8px;align-items:center"><div class="ceb" style="font-size:1.4rem">${esc(x[0])}</div>${hasVoice(x[0]) ? `<button class="play sm" data-vs="${esc(x[0])}" aria-label="Play">${I.play}</button>` : ''}</div>${/→/.test(x[0]) ? '' : phonHtml(x[0])}<div>${esc(x[1])}</div><div class="small muted">${esc(x[2])}</div></div>`).join('')}</div>
       <p class="muted small" style="margin:0">Step ${BD.step + 1} of ${r.steps.length}. Say the examples out loud.</p></div><div class="foot" id="foot"></div>`;
     foot(`<button class="btn primary block" id="nx">${BD.step < r.steps.length - 1 ? 'Next' : 'Drill it'}</button>`);
     $('#nx').onclick = () => { if (BD.step < r.steps.length - 1) BD.step++; else BD.phase = 'drill'; render(); };
+    document.querySelectorAll('[data-vs]').forEach(b => b.onclick = () => playUrl(voiceUrl(b.dataset.vs), 1, b));
   } else if (BD.phase === 'drill') {
     if (BD.qi >= BD.quiz.length) return drillDone(head);
     const q = BD.quiz[BD.qi], r = q.r || BD.nr, opts = shuffle(q.a.map((x, j) => ({ x, ok: j === 0 })));
@@ -1153,7 +1214,7 @@ function buildOwn(head) {
     <div class="small muted" style="margin-top:6px">Words you know that fit: ${o.words.slice(0, 12).map(esc).join(', ')}</div></div>
     <input class="field" id="own" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type your sentence in Bisaya"><div id="res"></div></div><div class="foot" id="foot"></div>`;
   foot(`<button class="btn primary block" id="chk" disabled>Check my sentence</button>`);
-  const inp = $('#own'); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
+  const inp = $('#own'); inp.focus(); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
   const finish = finishBuild;
   const check = () => {
     const v = norm(inp.value), okShape = o.re.test(v), fill = o.words.some(w => v.split(' ').includes(w));
@@ -1214,7 +1275,7 @@ VIEWS.real = function () {
   const done = () => { tick('real'); S.realDone = S.realDone || {}; S.realDone[it.key] = (S.realDone[it.key] || 0) + 1; addXP(12); save(); const was = it; RB = null; view = 'done'; sectionDone('Real Bisaya done', '+12 XP · ' + esc(was.kind === 't' ? 'post by ' + was.t[1] : was.kind === 's' ? '"' + was.g.song + '" by ' + was.g.artist : was.c.show)); };
   const respond = (prompt, ex) => {
     $('#step').innerHTML = `<div class="panel"><div class="label">Now answer in Bisaya</div><div class="prompt">${esc(prompt)}</div><input class="field" id="rep" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type or say it out loud"><div id="exr"></div></div>`;
-    foot(`<button class="btn primary block" id="sh">Show an example</button>`);
+    foot(`<button class="btn primary block" id="sh">Show an example</button>`); $('#rep').focus();
     $('#sh').onclick = () => { $('#exr').innerHTML = `<div class="corr">${esc(ex)}</div>${ruleChip(ex)}`; foot(`<button class="btn primary block" id="fin">Done</button>`); $('#fin').onclick = done; };
   };
   if (it.kind === 't') {
@@ -1225,7 +1286,7 @@ VIEWS.real = function () {
       <div id="step"></div></div><div class="foot" id="foot"></div>`;
     loadTwitter();
     $('#step').innerHTML = `<div class="panel"><div class="label">Translate it</div><textarea class="field" id="tr" rows="2" placeholder="What does it say in English?"></textarea><div id="key"></div></div>`;
-    foot(`<button class="btn primary block" id="chk">Check</button>`);
+    foot(`<button class="btn primary block" id="chk">Check</button>`); $('#tr').focus();
     $('#chk').onclick = () => {
       $('#key').innerHTML = `<div class="corr">${esc(t[3])}</div>${breakdown(t[2].replace(/["“”]/g, ''))}${notes ? `<div class="small"><b>Shortcuts in this post:</b> ${notes}</div>` : ''}${ruleChip(t[2].replace(/["“”]/g, ''))}`;
       foot(`<div class="grades"><button class="btn" data-g="1">I got the gist</button><button class="btn" data-g="0">I missed it</button></div>`);
@@ -1349,4 +1410,4 @@ document.addEventListener('keydown', e => {
 initSync();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
 render();
-loadStoredPack().then(ok => { if (ok) { if (view === 'home') render(); } else autoPack(); });
+loadStoredPack().then(ok => { if (ok) { if (view === 'home') render(); } else autoPack(); }); loadVoice();
