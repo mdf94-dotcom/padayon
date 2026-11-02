@@ -401,11 +401,12 @@ function card(id) {
 const IV = [0, 1, 2, 4, 7, 14, 30, 60];
 function grade(id, q) {
   const t = today(); const c = S.cards[id] || (S.cards[id] = { b: 0, d: t, r: 0, w: 0 });
-  if (q === 2) { c.b = Math.min(c.b + 1, 7); c.r++; } else if (q === 1) { c.r++; } else { c.b = Math.max(0, c.b - 2); c.w++; }
+  if (q === 2) { c.b = Math.min(c.b + 1, 7); c.r++; } else if (q === 1) { c.r++; } else { c.b = Math.max(0, c.b - 2); c.w++; c.wd = t; }
   c.d = t + (q === 0 ? 1 : Math.max(1, IV[c.b]));
 }
 const learned = ids => ids.filter(id => S.cards[id] && S.cards[id].b >= 2).length;
 const seen = ids => ids.filter(id => S.cards[id]).length;
+const needsWork = () => { const t = today(); return dueIds().filter(id => { const c = S.cards[id]; return c.w > 0 && (c.wd ? c.wd >= t - 7 : c.b <= 1); }); };
 function dueIds() { const t = today(); return Object.keys(S.cards).filter(id => S.cards[id].d <= t && card(id)).sort((a, b) => S.cards[a].d - S.cards[b].d); }
 function newAllowance() { const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; return Math.max(0, (S.settings.newPerDay || 8) - S.newDay.n); }
 /* ---------- the learning path ---------- */
@@ -569,7 +570,7 @@ function exType(id, isNew) {
 }
 function buildSession() {
   ensureRuleCards();
-  const due = dueIds(), q = due.filter(id => id[0] !== 'r').slice(0, 16).concat(due.filter(id => id[0] === 'r').slice(0, 3)).map(id => ({ id, type: exType(id) }));
+  const nwk = new Set(needsWork()), due = [...nwk, ...dueIds().filter(id => !nwk.has(id))], q = due.filter(id => id[0] !== 'r').slice(0, 16).concat(due.filter(id => id[0] === 'r').slice(0, 3)).map(id => ({ id, type: exType(id) }));
   shuffle(q);
   const nw = pickNew(); let lastPos = 0;
   for (const id of nw) {
@@ -668,11 +669,12 @@ const VIEWS = {};
 function musicFor() {
   if (view === 'rush' || (view === 'geogame' && GG && !GG.practice)) return 'rush';
   if (view === 'session') { const it = Q[qi]; return it && ['speak', 'shadow', 'pron', 'say'].includes(it.type) ? 'off' : 'calm'; }
+  if (view === 'home' && HOME_SPK) return HOME_SPK.who;
   return ['speedrun', 'build', 'real', 'story', 'stories', 'geo', 'geogame'].includes(view) ? 'calm' : 'off';
 }
 function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); if (typeof Music !== 'undefined') Music.set(musicFor()); }
 let BINKO_N = (() => { try { const n = (+localStorage.getItem('padayon-binko') || 0) + 1; localStorage.setItem('padayon-binko', n); return n; } catch (e) { return Math.floor(Math.random() * 20); } })();
-function go(v) { if (v === 'home' && view !== 'home') { BINKO_N++; try { localStorage.setItem('padayon-binko', BINKO_N); } catch (e) { } } view = v; render(); }
+function go(v) { if (v === 'home' && view !== 'home') { if (HOME_SPK) HOME_SPK = nextFactTeller(); BINKO_N++; try { localStorage.setItem('padayon-binko', BINKO_N); } catch (e) { } } view = v; render(); }
 function ringSvg(v, goal) { const r = 36, c = 2 * Math.PI * r, f = Math.min(1, v / goal); return `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - f)}" transform="rotate(-90 42 42)"/></svg>`; }
 function unitRow(u, key) {
   const n = u.ids.length, l = learned(u.ids), s = seen(u.ids);
@@ -745,7 +747,27 @@ function wirePod() {
   if ($('#podsaid')) $('#podsaid').onclick = () => { S.pod = { d: calDay() }; save(); toast(pick(['Maayo kaayo! Binko is proud of you!', 'Nindot! That counts as real Bisaya!', 'BINKO REPORTING: phrase delivered!'])); render(); };
 }
 let showDone = false;
+// Binko opens every visit to the app with the day's plan and what needs work from last time
+const cardLabel = id => { const c = card(id); return !c ? '' : c.kind === 'r' ? `the "${c.ceb}" rule` : firstAlt(c.ceb); };
+function binkoPlan() {
+  const h = new Date().getHours(), hi = h < 12 ? 'Maayong buntag' : h < 18 ? 'Maayong hapon' : 'Maayong gabii';
+  const nm = displayName(), name = nm === 'Someone' ? '' : ', ' + esc(nm);
+  const plan = planDay(), nx = planNext(), due = dueIds().length, nw = Math.min(newAllowance(), pickNew().length), nr = nextRule();
+  const weak = needsWork().filter(id => card(id)).slice(0, 3).map(id => `<b>${esc(cardLabel(id))}</b>`);
+  const list = x => x.length < 2 ? x.join('') : x.slice(0, -1).join(', ') + ' and ' + x[x.length - 1];
+  let s = `${hi}${name}! Binko here!`;
+  if (!plan.session) {
+    const parts = []; if (due) parts.push(`<b>${due}</b> review${due === 1 ? '' : 's'}`); if (nw) parts.push(`<b>${nw}</b> new word${nw === 1 ? '' : 's'}`);
+    s += parts.length ? ` Today's session has ${list(parts)}` : ' Today\'s session is ready'; s += nr && !S.cards[ruleCardId(nr)] ? `, plus a new grammar rule: <b>${esc(nr.title)}</b>.` : '.';
+    if (weak.length) s += ` Last time, ${list(weak)} gave you trouble, so Binko put ${weak.length === 1 ? 'it' : 'them'} first today. Watch closely!`;
+    else if (Object.keys(S.cards).length) s += ' Nothing tripped you up last time. SUPER DUPER!';
+    else s += ' This is your very first lesson. Binko is SO excited!';
+  } else s += nx ? ` Today's session is done! Next up: <b>${esc(nx.name)}</b>.` : ' You finished everything today! Binko is doing a happy little spin.';
+  return s;
+}
+let HOME_SPK = null;
 VIEWS.home = function () {
+  if (!HOME_SPK) HOME_SPK = { who: 'binko' };
   const t = today(), xp = S.xp[t] || 0, due = dueIds().length, nw = Math.min(newAllowance(), pickNew().length), plan = planDay();
   const items = planItems(), nextUp = planNext(), doneN = items.filter(i => isDone(i, plan)).length;
   const open = items.filter(i => !isDone(i, plan)), done = items.filter(i => isDone(i, plan));
@@ -763,7 +785,7 @@ VIEWS.home = function () {
   </section>` : ''}
   <div class="today-grid"><div class="today-main">
   <section class="hero">
-    <div class="hero-guide">${binkoSays(binkoToday(nextUp ? nextUp.k : 'done', BINKO_N), true)}</div>
+    <div class="hero-guide">${cloverSays(HOME_SPK.who, HOME_SPK.who === 'binko' ? binkoPlan() : HOME_SPK.html, true)}</div>
     <div class="hero-text"><div class="label">Karon nga adlaw · Today</div><h2>${nextUp ? esc(nextUp.name) : 'All done today. Padayon!'}</h2>
       <p>${nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${due} review${due === 1 ? '' : 's'}, ${nw} new` : nextUp.d) : 'Come back tomorrow, or do another session.'}</p></div>
     <div class="hero-actions"><button class="btn" id="start">${nextUp ? (nextUp.manual ? 'I did it' : 'Start') : 'Do another session'}<kbd>Enter</kbd></button></div>
