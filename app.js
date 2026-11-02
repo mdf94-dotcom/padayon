@@ -85,7 +85,9 @@ const I = {
 /* ---------- utils ---------- */
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const today = () => Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5);
+// DAY_SHIFT: days the learner chose to jump ahead ("Start the next day" after finishing everything)
+let DAY_SHIFT = 0;
+const today = () => Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5) + DAY_SHIFT;
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -135,14 +137,15 @@ function importPack() {
 
 /* ---------- state ---------- */
 const LS = 'padayon-app-v1';
-function fresh() { return { v: 1, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newPerDay: 8, newP: 4, newW: 4, newG: 2, newF: 3, newD: 2, newM: 3, learner: 'all', goal: 60 }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
+function fresh() { return { v: 1, planResetV: 2, updated: 0, cards: {}, xp: {}, streak: { last: 0, count: 0, best: 0 }, speed: 1.0, bestSpeed: 1.0, settings: { newPerDay: 8, newP: 4, newW: 4, newG: 2, newF: 3, newD: 2, newM: 3, learner: 'all', goal: 60 }, focus: null, custom: [], plan: {}, newDay: { d: 0, n: 0 }, nextC: 1, mistakes: {}, tips: {} }; }
 function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settings = Object.assign(fresh().settings, s.settings || {}); s.streak = Object.assign(fresh().streak, s.streak || {}); s.mistakes = s.mistakes || {}; s.rules = s.rules || {}; s.tips = s.tips || {}; if (s.planResetV !== 2) { s.planResetV = 2; s.plan = {}; }
   if (!s.started) { const days = Object.keys(s.xp || {}).map(Number).filter(Boolean); s.started = days.length ? Math.min(...days) : (s.streak && s.streak.last) || 0; }
   if (!s.settings.pathV) { s.settings.pathV = 1; s.settings.newPerDay = 8; }
   if (s.settings.learner !== 'all') { s.settings.learner = 'all'; s.settings.newF = Math.max(3, s.settings.newF || 0); } return s; }
 let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && r.v === 1) return migrate(r); } catch (e) { } return fresh(); })();
+DAY_SHIFT = S.dayShift || 0;
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
-function save() { S.updated = Date.now(); localSave(); schedulePush(); }
+function save() { S.updated = Date.now(); DAY_SHIFT = S.dayShift || 0; localSave(); schedulePush(); }
 
 /* ---------- sync across devices (Firebase: Google sign-in + one Firestore doc per person) ---------- */
 const FB_CFG = { apiKey: 'AIzaSyAMedDtDrSRJbULhA5Kwz30ZyYwPKj0rc4', authDomain: 'padayon-sync.firebaseapp.com', projectId: 'padayon-sync', storageBucket: 'padayon-sync.firebasestorage.app', messagingSenderId: '1192476989', appId: '1:1192476989:web:257d2aaafd933e6ab38554' };
@@ -178,6 +181,7 @@ function mergeState(a, b) {
   out.mistakes = {}; new Set(Object.keys(a.mistakes).concat(Object.keys(b.mistakes))).forEach(k => { const x = a.mistakes[k], y = b.mistakes[k]; out.mistakes[k] = !x ? y : !y ? x : { n: Math.max(x.n, y.n), fix: (newer === b ? y.fix : x.fix) || x.fix || y.fix, last: Math.max(x.last || 0, y.last || 0) }; });
   out.tips = Object.assign({}, a.tips, b.tips);
   out.announced = Math.max(a.announced || 0, b.announced || 0);
+  out.dayShift = Math.max(a.dayShift || 0, b.dayShift || 0);
   out.convoDone = {}; [a.convoDone || {}, b.convoDone || {}].forEach(x => Object.keys(x).forEach(k => out.convoDone[k] = Math.max(out.convoDone[k] || 0, x[k])));
   out.started = Math.min(...[a.started, b.started].filter(Boolean).concat([out.started || Infinity])) || 0; if (!isFinite(out.started)) out.started = 0;
   out.rules = Object.assign({}, b.rules || {}, a.rules || {}); out.ruleDay = Math.max(a.ruleDay || 0, b.ruleDay || 0);
@@ -195,7 +199,7 @@ async function pushNow() {
 function applyRemote(json) {
   let remote; try { remote = JSON.parse(json); } catch (e) { return; }
   const merged = mergeState(S, remote), changed = JSON.stringify(merged) !== JSON.stringify(S);
-  if (changed) { S = merged; localSave(); if (view === 'home' || view === 'settings') render(); }
+  if (changed) { S = merged; DAY_SHIFT = S.dayShift || 0; localSave(); if (view === 'home' || view === 'settings') render(); }
   if (JSON.stringify(merged) !== json) schedulePush();
 }
 function initSync() {
@@ -501,7 +505,7 @@ VIEWS.home = function () {
     <p class="small syncline" style="margin:0">${syncLine()}</p><p class="muted small" style="margin:0">Sign in with the same Google account on your phone and PC and your progress follows you.</p></section>
   <section class="panel"><div class="row spread"><h2>Settings</h2><button class="btn sm ghost" data-go="settings">Open</button></div>
     <p class="muted small" style="margin:0">Your name, cards per day, sync, and backups.</p></section>`;
-  $('#start').onclick = () => { if (!nextUp) return startSession(); if (nextUp.manual) { tick(nextUp.k); return render(); } nextUp.run(); };
+  $('#start').onclick = () => { if (!nextUp) return planDay().session ? go('again') : startSession(); if (nextUp.manual) { tick(nextUp.k); return render(); } nextUp.run(); };
   document.querySelectorAll('[data-run]').forEach(b => b.onclick = () => planItems().find(i => i.k === b.dataset.run).run());
   $('#dictgo').onclick = startDictation; $('#buildgo').onclick = startBuild;
   $('#synchome').onclick = () => Sync.user ? signOutSync() : signIn();
@@ -509,6 +513,15 @@ VIEWS.home = function () {
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
   document.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { const p = planDay(); p[b.dataset.plan] = !p[b.dataset.plan]; save(); render(); });
   document.querySelectorAll('[data-focus]').forEach(b => b.onclick = () => { S.focus = S.focus === b.dataset.focus ? null : b.dataset.focus; save(); render(); toast(S.focus ? 'New cards will come from this unit first' : 'Back to the normal order'); });
+};
+VIEWS.again = function () {
+  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Another session?</h2></div>
+    ${binkoSays("You finished today's daily session! Want to keep the engine running? Binko can start TOMORROW'S plan right now, or you can just do extra practice.", true)}
+    <div class="panel"><b>Start the next day</b><div class="small">Your checklist resets for a new day, with new cards and reviews. Finishing its daily session adds a day to your streak, and Binko announces it in #streaks.</div><button class="btn primary block" id="nextday" style="margin-top:8px">Start the next day</button></div>
+    <div class="panel"><b>Just extra practice</b><div class="small">Stay on today. Your checklist stays as it is, and nothing is announced.</div><button class="btn ghost block" id="extra" style="margin-top:8px">Extra practice</button></div>`;
+  $('#quit').onclick = () => go('home');
+  $('#extra').onclick = () => startSession();
+  $('#nextday').onclick = () => { S.dayShift = (S.dayShift || 0) + 1; DAY_SHIFT = S.dayShift; save(); toast('Day ' + (today() - (S.started || today()) + 1) + ' started. Padayon!'); startSession(); };
 };
 VIEWS.settings = function () {
   const st = S.settings;
