@@ -700,7 +700,7 @@ function musicFor() {
   if (view === 'rush' || (view === 'geogame' && GG && !GG.practice)) return 'rush';
   if (view === 'session') { const it = Q[qi]; return it && ['speak', 'shadow', 'pron', 'say'].includes(it.type) ? 'off' : 'calm'; }
   if (TAB_VIEWS.has(view) && HOME_SPK) return HOME_SPK.who;
-  return ['speedrun', 'build', 'real', 'story', 'stories', 'geo', 'geogame'].includes(view) ? 'calm' : 'off';
+  return ['speedrun', 'build', 'real', 'story', 'stories', 'geo', 'geogame', 'numbers', 'numround'].includes(view) ? 'calm' : 'off';
 }
 function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); try { const ret = (VIEWS[view] || VIEWS.home)(); if (ret && ret.catch) ret.catch(e => renderCrash(e)); clearHealed(); } catch (e) {
     // a lesson or game screen redrawn after its lesson ended has nothing to show: go back to Today quietly
@@ -879,6 +879,7 @@ function practiceRow(o) {
     <span class="pt"><span class="small muted">${o.sub}</span><b>${o.name}</b></span>${o.badge ? `<span class="tag ${o.hot ? 'hot' : 'soft'}">${o.badge}</span>` : `<span class="chev">${TI.chev}</span>`}</button>`;
 }
 const PI = {
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   bolt: I.bolt, pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
   cup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>',
   chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-12 7l-5 1 1-4a8 8 0 1 1 16-4z"/></svg>',
@@ -907,6 +908,8 @@ VIEWS.practice = function () {
     { go: 'rules', icon: PI.book, c: 'var(--good)', sub: 'Every rule, in plain words', name: 'Rule book' },
     { go: 'real', icon: PI.video, c: 'var(--good)', sub: 'Tinuod · posts, clips, songs', name: 'Real Bisaya', badge: realOpen + ' open' },
     { go: 'stories', icon: PI.book, c: 'var(--good)', sub: 'Sugilanon · short, silly family stories', name: "Binko's stories", badge: storyOpenN() + ' open' }])}
+  ${typeof NUM !== 'undefined' && NUM.ready ? g('Numbers', 'var(--mango)', [
+    { go: 'numbers', icon: PI.clock || PI.bolt, c: 'var(--mango)', sub: 'Numero ug oras · any number up to a billion', name: 'Numbers &amp; time' }]) : ''}
   ${g('Your words', 'var(--copper)', [
     { id: 'againgo', icon: PI.redo, c: 'var(--copper)', sub: 'A quick round, or start tomorrow', name: 'Another session' },
     { go: 'gaps', icon: PI.plus, c: 'var(--copper)', sub: 'English you keep reaching for', name: 'Gap words', badge: S.custom.length ? String(S.custom.length) : '' }])}
@@ -1338,8 +1341,40 @@ function glossOf(tok) {
 }
 function breakdown(ceb) {
   const toks = tokens(ceb); if (toks.length < 2) return '';
-  return `<div><div class="label">Word by word</div><div class="wbw">${toks.map(t => { const g = glossOf(t); return `<span class="wb"><b>${esc(t.replace(/[.,!?…]/g, ''))}</b><i>${esc(g || '·')}</i></span>`; }).join('')}</div></div>`;
+  return `<div><div class="label">Word by word <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· tap a word to see it</span></div><div class="wbw">${toks.map(t => { const g = glossOf(t), w = t.replace(/[.,!?…]/g, ''); return `<button type="button" class="wb" data-tok="${esc(w)}" aria-label="${esc(w)}: ${esc(g || 'see this word')}"><b>${esc(w)}</b><i>${esc(g || '·')}</i></button>`; }).join('')}</div></div>`;
 }
+/* Tapping a word in "Word by word" opens its vocabulary card in a sheet over the lesson, so you keep your place. */
+function cardForTok(tok) {
+  const t = lowTok(tok); if (!t) return null;
+  const w = W.findIndex((x, i) => norm(x[0]) === t && !HIDE.has('w' + i) && card('w' + i)); if (w >= 0) return 'w' + w;
+  const p = P.findIndex((x, i) => tokens(x[0]).length === 1 && alts(x[0]).includes(t) && card('p' + i)); if (p >= 0) return 'p' + p;
+  const m = (typeof MEGA !== 'undefined' ? MEGA : []).findIndex((x, i) => tokens(x[0]).length === 1 && alts(x[0]).map(norm).includes(t) && card('m' + i)); if (m >= 0) return 'm' + m;
+  for (const [re] of AFFIX) if (re.test(t) && t.length > 5) { const root = t.replace(re, ''), ri = W.findIndex((x, i) => norm(x[0]) === root && card('w' + i)); if (ri >= 0) return 'w' + ri; }
+  return null;
+}
+function wordSheet(tok) {
+  const id = cardForTok(tok), c = id && card(id), g = glossOf(tok), st = id && S.cards[id];
+  const stageOf = id && PATH.findIndex(s => s.ids.includes(id));
+  const status = !c ? '' : st && st.b >= 2 ? "You've learned this one." : st ? "You've met this one. Keep practicing it." : stageOf >= 0 ? `Coming up in Stage ${stageOf + 1}: ${esc(PATH[stageOf].name)}.` : '';
+  const derived = c && lowTok(tok) !== norm(firstAlt(c.ceb));
+  const ex = c && knownExample(c);
+  const html = `<div class="wsheet-bg" id="wsbg"></div><section class="wsheet" role="dialog" aria-modal="true" aria-label="${esc(tok)}">
+    <button class="x" id="wsx" aria-label="Close">${I.x}</button>
+    <div class="teachhead"><div class="th-text"><div class="label">${c ? (c.kind === 'w' ? 'Word' : 'Phrase') : 'Word'}</div><div class="ceb">${esc(tok)}</div>${phonHtml(tok)}</div>${c ? picImg(picFile(c), 'big') : ''}</div>
+    <div class="prompt" style="font-weight:500">${esc(derived ? (g || c.en) : c ? c.en : (g || 'No meaning saved for this word yet.'))}</div>
+    ${derived ? `<div class="small muted">Built from <b>${esc(firstAlt(c.ceb))}</b> · ${esc(firstAlt(c.en))}</div>` : ''}
+    <div class="row" style="gap:10px;align-items:center"><button class="play sm" id="wsplay" aria-label="Hear it">${I.play}</button><span class="muted small">${status}</span></div>
+    ${ex ? `<div class="panel"><div class="label">Example</div><b>${esc(ex[0])}</b><div class="muted small">${esc(ex[1])}</div></div>` : ''}
+    ${c && c.note ? `<div class="panel note"><div class="label">Binko explains</div>${esc(c.note)}</div>` : ''}</section>`;
+  const box = document.createElement('div'); box.id = 'wsheet'; box.innerHTML = html; document.body.appendChild(box);
+  const close = () => { box.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = e => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  $('#wsbg').onclick = close; $('#wsx').onclick = close;
+  $('#wsplay').onclick = e => { if (c && !derived && c.audio) play(c.id, 1, e.currentTarget); else playSentence(tok, e.currentTarget); };
+  $('#wsx').focus({ preventScroll: true });
+}
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('.wb[data-tok]'); if (b) { e.preventDefault(); wordSheet(b.dataset.tok); } });
 function usedIn(c) {
   if (c.kind !== 'w' && !(c.kind === 'p' && tokens(c.ceb).length === 1)) return '';
   const t = norm(firstAlt(c.ceb)); if (!t) return '';
