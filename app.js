@@ -331,13 +331,13 @@ function nextBtnHtml(id = 'nextup') {
     : `<button class="btn primary block" id="${id}">Next: ${esc(n.name)}</button>`)
     : `<div class="small"><b>Everything on today's plan is done.</b> Padayon!</div><button class="btn primary block" id="${id}">Back home</button>`;
 }
-function wireNext(id = 'nextup') { const b = $('#' + id); if (!b) return; b.onclick = () => { const n = planNext(); if (n && !n.manual) n.run(); else go('home'); }; }
+function wireNext(id = 'nextup') { const b = $('#' + id); if (!b) return; b.onclick = () => { const n = planNext(); if (n && !n.manual) n.run(); else goTab(); }; }
 function sectionDone(label, line) {
   stopAudio();
   $('#app').innerHTML = `<section class="panel summary"><div class="label">${esc(label)}</div><h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1>${line ? `<p class="muted">${line}</p>` : ''}
     ${cameoHtml('done')}${binkoSays(planNext() ? BINKO_NEXT[planNext().k] : BINKO_NEXT.done)}
     ${nextBtnHtml()}<button class="btn ghost block" id="home2">Home</button></section>`;
-  wireNext(); $('#home2').onclick = () => go('home');
+  wireNext(); $('#home2').onclick = () => goTab();
 }
 
 /* ---------- cards & SRS ---------- */
@@ -496,18 +496,20 @@ document.addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const tag = (e.target.tagName || '').toLowerCase(), typing = tag === 'input' || tag === 'textarea';
   const vis = el => el && !el.disabled && el.offsetParent !== null;
+  // Space replays the clip, S plays it slowly
+  if (!typing && (e.key === ' ' || e.key === 's' || e.key === 'S')) { const b = (e.key === ' ' ? ['#pl', '#fplay', '#pl2'] : ['#pls']).map(s => document.querySelector(s)).find(vis); if (b) { e.preventDefault(); b.click(); return; } }
   if (!typing && /^[1-9]$/.test(e.key)) { const opts = [...document.querySelectorAll('.opt, [data-o]')].filter(vis); const b = opts[+e.key - 1]; if (b) { e.preventDefault(); b.click(); } return; }
   if (e.key === 'Enter' && !e.shiftKey && !(typing && tag === 'textarea' && e.target.id !== 'tr') && !(typing && e.target.id === 'ans')) {
     if (typing && !['own', 'rep', 'tr', 'gen', 'gceb', 'myname'].includes(e.target.id)) return;
     if (typing && ['gen', 'gceb', 'myname'].includes(e.target.id)) return;
-    const b = ['#cont', '#chk', '#nx', '#fin', '#sh', '#show', '#nextup'].map(s => document.querySelector(s)).find(vis);
+    const b = ['#cont', '#chk', '#nx', '#fin', '#sh', '#show', '#nextup', '#start'].map(s => document.querySelector(s)).find(vis);
     if (b) { e.preventDefault(); b.click(); }
   }
 });
 /* ---------- views ---------- */
 let view = 'home';
 const VIEWS = {};
-function render() { stopAudio(); clearInterval(timerH); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); }
+function render() { stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); }
 function go(v) { view = v; render(); }
 function ringSvg(v, goal) { const r = 36, c = 2 * Math.PI * r, f = Math.min(1, v / goal); return `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - f)}" transform="rotate(-90 42 42)"/></svg>`; }
 function unitRow(u, key) {
@@ -522,39 +524,129 @@ function sinceHtml() {
   const days = today() - S.started + 1, active = Object.keys(S.xp).filter(k => S.xp[k] > 0).length, st = streakNow();
   return `<div class="since"><span>Padayon since <b>${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</b></span><span><b class="tnum">${days}</b> day${days === 1 ? '' : 's'} in · <b class="tnum">${active}</b> practiced</span>${st ? `<span>${I.flame.replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px"')} <b class="tnum">${st}</b>-day streak</span>` : ''}</div>`;
 }
+/* ---------- tabs: Today, Practice, Progress, Me. A bottom bar on phones, a left sidebar on wide screens ---------- */
+const TI = {
+  home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
+  practice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
+  progress: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>',
+  chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
+};
+const TABS = [['home', 'Today'], ['practice', 'Practice'], ['progress', 'Progress'], ['me', 'Me']];
+const TAB_VIEWS = new Set(TABS.map(t => t[0]));
+let lastTab = 'home';
+const goTab = () => go(lastTab);
+function shell(tab, html) {
+  lastTab = tab;
+  $('#app').innerHTML = `<nav class="tabs" aria-label="Tabs"><div class="tabs-brand">Padayon</div>
+    ${TABS.map(([k, l]) => `<button class="tab ${k === tab ? 'on' : ''}" data-tab="${k}" ${k === tab ? 'aria-current="page"' : ''}>${TI[k]}<span>${l}</span></button>`).join('')}
+    <div class="tabs-me">${Sync.user ? `<img src="img/binko-face.webp" alt=""><span><b>${esc(displayName())}</b><span class="small" style="color:var(--good)">Synced</span></span>` : ''}</div></nav>
+    <div class="tabmain">${html}</div>`;
+  document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => go(b.dataset.tab));
+}
+const streakChip = () => `<span class="stat tnum" title="Day streak"><span class="flame">${I.flame}</span>${streakNow()} day${streakNow() === 1 ? '' : 's'}</span>`;
+function statTrio() {
+  const a = acc7();
+  return `<section class="trio"><div class="st"><b class="tnum" style="color:var(--copper)">${streakNow()}</b><span>day streak · best ${S.streak.best || 0}</span></div>
+    <div class="st"><b class="tnum" style="color:var(--sea)">${learnedCount()}</b><span>words learned</span></div>
+    <div class="st"><b class="tnum" style="color:var(--good)">${a.n ? a.pct + '%' : '–'}</b><span>${a.n ? 'right, last 7 days' : 'accuracy shows after a few answers'}</span></div></section>`;
+}
+function stageMini() {
+  const { stats, cur } = pathState(), x = stats[cur], tl = pathTimeline();
+  return `<section class="panel"><div class="row spread"><h2>Stage ${cur + 1} · ${esc(PATH[cur].name)}</h2><button class="linkbtn" data-tab="progress">Full path</button></div>
+    <div class="bar"><i style="width:${x.frac * 100}%"></i></div><div class="muted small">${x.learned} of ${x.total} learned${tl[cur] ? ' · done around ' + dateIn(tl[cur]) : ''}</div></section>`;
+}
+function sinceShort() {
+  if (!S.started) return 'Your first day starts today';
+  const d = new Date(S.started * 864e5 + new Date().getTimezoneOffset() * 60000 + 12 * 36e5);
+  return `Day ${today() - S.started + 1} · since ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+}
+let showDone = false;
 VIEWS.home = function () {
-  const t = today(), xp = S.xp[t] || 0, goal = S.settings.goal, due = dueIds().length, nw = Math.min(newAllowance(), pickNew().length), plan = planDay();
+  const t = today(), xp = S.xp[t] || 0, due = dueIds().length, nw = Math.min(newAllowance(), pickNew().length), plan = planDay();
   const items = planItems(), nextUp = planNext(), doneN = items.filter(i => isDone(i, plan)).length;
-  const weak = weakList(5);
-  $('#app').innerHTML = `
-  <div class="top"><div class="brand"><h1>Padayon</h1><span class="muted small">Bisaya with the Lucky Clovers</span></div>
-    <div class="stats"><span class="stat tnum" title="Day streak"><span class="flame">${I.flame}</span>${streakNow()}</span><span class="stat tnum" title="Listening speed"><span class="flame">${I.bolt}</span>${S.speed.toFixed(1)}×</span></div></div>
+  const open = items.filter(i => !isDone(i, plan)), done = items.filter(i => isDone(i, plan));
+  const mins = Math.max(5, Math.round((Math.min(due, 16) + nw * 2 + 2) * 0.6));
+  const SHORT = { session: 'Reviews and new words', convo: 'Read it, then say your part', speed: 'Listening at ' + S.speed.toFixed(1) + '×', dict: 'Type what you hear', shadow: 'Speak along with one unit', talk: 'Call or chat with family, then tick it' };
+  const shortOf = it => it.locked ? 'Opens soon' : it.k === 'build' ? (nextRule() ? 'New rule: ' + nextRule().title : 'Make your own sentences') : it.k === 'real' ? (it.d || '').split('.')[0] : SHORT[it.k] || it.d;
+  const row = it => { const d = isDone(it, plan), nx = nextUp && it.k === nextUp.k;
+    return `<div class="prow ${d ? 'done' : ''}"><button class="box ${d ? 'on' : ''}" data-plan="${it.k}" ${it.manual ? '' : 'disabled title="Ticks itself when you finish"'} aria-label="${esc(it.name)}">${d ? I.check : ''}</button>
+      <button class="prow-main" ${!d && !it.manual && !it.locked ? `data-run="${it.k}"` : 'disabled'}><b>${esc(it.name)}${it.locked ? ' 🔒' : ''}</b><span class="muted small">${esc(nx ? 'Up next' : shortOf(it))}</span></button>
+      ${nx ? '<span class="tag">Next</span>' : !d && !it.manual && !it.locked ? `<span class="chev">${TI.chev}</span>` : ''}</div>`; };
+  shell('home', `
+  <div class="top"><h1 class="brand-sm">Padayon</h1><div class="stats">${streakChip()}</div></div>
   ${!hasPack() ? `<section class="banner"><b>Finish setting up</b>
-    ${!hasPack() ? (packState === 'loading' ? `<div class="small">Downloading 225 phrases and 1,002 words with native recordings… <b id="packpct">${packPct}%</b> (about 10 MB, one time only)</div>` : `<div class="small">${packState === 'error' ? "The phrases and recordings didn't download. Check your connection and try again." : 'Phrases and recordings are not loaded yet.'}</div><button class="btn primary" id="packretry">Download phrases and recordings</button>`) : ''}
-</section>` : ''}
+    ${packState === 'loading' ? `<div class="small">Downloading 225 phrases and 1,002 words with native recordings… <b id="packpct">${packPct}%</b> (about 10 MB, one time only)</div>` : `<div class="small">${packState === 'error' ? "The phrases and recordings didn't download. Check your connection and try again." : 'Phrases and recordings are not loaded yet.'}</div><button class="btn primary" id="packretry">Download phrases and recordings</button>`}
+  </section>` : ''}
+  <div class="today-grid"><div class="today-main">
   <section class="hero">
     <div class="hero-guide">${binkoSays(BINKO_NEXT[nextUp ? nextUp.k : 'done'], true)}</div>
-    <div><div class="label" style="color:inherit;opacity:.8">Karon nga adlaw · Today</div><h2>${nextUp ? 'Next up: ' + esc(nextUp.name) : 'All done today. Padayon!'}</h2>
-      <p>${nextUp ? esc(nextUp.k === 'session' ? due + ' review' + (due === 1 ? '' : 's') + ' due · ' + nw + ' new · about ' + Math.max(5, Math.round((Math.min(due, 16) + nw * 2 + 2) * 0.6)) + ' min' : nextUp.d) : xp + ' XP today. Come back tomorrow, or do another session.'}</p>${sinceHtml()}</div>
-    <div class="ringwrap plandone">${ringSvg(doneN, items.length)}<span class="ringtxt tnum">${doneN}<small>of ${items.length}</small></span></div>
-    <div class="hero-actions">${nextUp ? (nextUp.manual ? `<button class="btn" id="start">I did it</button>` : `<button class="btn" id="start">Start ${esc(nextUp.name.toLowerCase())}</button>`) : `<button class="btn" id="start">Do another session</button>`}</div>
+    <div class="hero-text"><div class="label">Karon nga adlaw · Today</div><h2>${nextUp ? esc(nextUp.name) : 'All done today. Padayon!'}</h2>
+      <p>${nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${due} review${due === 1 ? '' : 's'}, ${nw} new` : nextUp.d) : xp + ' XP today. Come back tomorrow, or do another session.'}</p></div>
+    <div class="hero-actions"><button class="btn" id="start">${nextUp ? (nextUp.manual ? 'I did it' : 'Start') : 'Do another session'}<kbd>Enter</kbd></button></div>
+    <div class="hero-foot"><span>${sinceShort()}</span><span>Best streak ${S.streak.best || 0}</span></div>
   </section>
-  <section class="panel"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${doneN} of ${items.length}</span></div>
-    <div class="bar" style="grid-column:auto"><i style="width:${doneN / items.length * 100}%"></i></div>
-    <div>${items.map(it => `<div class="check"><button class="box ${isDone(it, plan) ? 'on' : ''}" data-plan="${it.k}" ${it.manual ? '' : 'disabled title="Ticks itself when you finish"'} aria-label="${esc(it.name)}">${isDone(it, plan) ? I.check : ''}</button><div style="flex:1;min-width:0"><b>${esc(it.name)}${it.locked ? ' 🔒' : ''}</b><span class="muted small">${esc(it.d)}</span></div>${!isDone(it, plan) && !it.manual ? `<button class="btn sm ghost" data-run="${it.k}">Go</button>` : ''}</div>`).join('')}</div></section>
-  ${boardPanel()}
-  ${pathPanel()}
-  <section class="drills">
-    <button class="drill" data-go="speed"><span class="label">Listening</span><span class="big tnum">${S.speed.toFixed(1)}×</span><b>Speed round</b><span class="muted small">Clips get faster as you get them right.</span></button>
-    <button class="drill" id="dictgo"><span class="label">Fast speech</span><span class="big">Dictation</span><b>Type what you hear</b><span class="muted small">Catch every little word.</span></button>
-    <button class="drill" data-go="shadow"><span class="label">Fluency</span><span class="big">Shadow</span><b>Speak along</b><span class="muted small">Hands-free. Repeat with the speaker.</span></button>
-    <button class="drill" data-go="convos"><span class="label">Chaining</span><span class="big">Istorya</span><b>Today's conversation</b><span class="muted small">Picked to match what you know. Play your part out loud.</span></button>
-    <button class="drill" id="rushgo"><span class="label">Game</span><span class="big tnum">${S.rushBest || 0}</span><b>Padayon Rush</b><span class="muted small">Every word, easy to hard. Go until you miss.</span></button>
-    <button class="drill" id="buildgo"><span class="label">Grammar</span><span class="big">Himo</span><b>Build sentences</b><span class="muted small">Your own sentences from words you know.</span></button>
-    <button class="drill" data-go="rules"><span class="label">Grammar</span><span class="big">${RULES.length}</span><b>Sentence rules</b><span class="muted small">Where ko goes, dili vs wala, mo- vs ni-, and more.</span></button>
-    <button class="drill" data-go="real"><span class="label">Real life</span><span class="big">Tinuod</span><b>Real Bisaya</b><span class="muted small">Tweets and show clips, once you know the words.</span></button>
-    <button class="drill" data-go="gaps"><span class="label">Your words</span><span class="big tnum">${S.custom.length}</span><b>Gap words</b><span class="muted small">English you keep reaching for.</span></button>
-  </section>
+  <section class="panel plan"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${doneN} of ${items.length} done</span></div>
+    <div class="bar"><i style="width:${doneN / items.length * 100}%"></i></div>
+    <div class="plist">${open.map(row).join('')}${showDone ? done.map(row).join('') : ''}</div>
+    ${done.length ? `<button class="donebar" id="showdone">${I.check}<span>Done: ${esc(done.map(i => i.name.replace("Today's ", '')).join(', '))}</span><b>${showDone ? 'Hide' : 'Show'}</b></button>` : ''}
+  </section></div>
+  <div class="today-side">${statTrio()}${stageMini()}${boardPanel()}</div></div>`);
+  $('#start').onclick = () => { if (!nextUp) return planDay().session ? go('again') : startSession(); if (nextUp.manual) { tick(nextUp.k); return render(); } nextUp.run(); };
+  document.querySelectorAll('[data-run]').forEach(b => b.onclick = () => planItems().find(i => i.k === b.dataset.run).run());
+  if ($('#showdone')) $('#showdone').onclick = () => { showDone = !showDone; render(); };
+  wireBoard(); loadBoard();
+  if ($('#packretry')) $('#packretry').onclick = autoPack;
+  document.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { const p = planDay(); p[b.dataset.plan] = !p[b.dataset.plan]; save(); render(); });
+  document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => go(b.dataset.tab));
+};
+function practiceRow(o) {
+  return `<button class="prac" ${o.id ? `id="${o.id}"` : ''} ${o.go ? `data-go="${o.go}"` : ''}><span class="pic" style="color:${o.c}">${o.icon}</span>
+    <span class="pt"><span class="small muted">${o.sub}</span><b>${o.name}</b></span>${o.badge ? `<span class="tag ${o.hot ? 'hot' : 'soft'}">${o.badge}</span>` : `<span class="chev">${TI.chev}</span>`}</button>`;
+}
+const PI = {
+  bolt: I.bolt, pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  cup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-12 7l-5 1 1-4a8 8 0 1 1 16-4z"/></svg>',
+  phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>',
+  blocks: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="6" rx="1.5"/><rect x="14" y="4" width="7" height="6" rx="1.5"/><rect x="7" y="14" width="10" height="6" rx="1.5"/></svg>',
+  book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/></svg>',
+  video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>',
+  redo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2 6"/><path d="M20 4v7h-7"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'
+};
+VIEWS.practice = function () {
+  const lk = k => DRILL_MIN[k] && drillLock(k) ? 'Opens soon' : '';
+  const ruleN = RULES.filter(r => ruleLearned(r.id)).length, realOpen = realItems().filter(x => x.open).length, plan = planDay();
+  const g = (name, color, rows) => `<section class="pgroup"><h2 class="glabel" style="color:${color}">${name}</h2><div class="plist2">${rows.map(practiceRow).join('')}</div></section>`;
+  shell('practice', `<div class="ptitle"><h1>Practice</h1><p class="muted">Extra practice, any time. Today's plan lives on the Today tab.</p></div>
+  <div class="pgrid">
+  ${g('Listen', 'var(--sky)', [
+    { go: 'speed', icon: PI.bolt, c: 'var(--sky)', sub: 'Paspas', name: 'Speed round', badge: lk('speed') || S.speed.toFixed(1) + '×' },
+    { id: 'dictgo', icon: PI.pen, c: 'var(--sky)', sub: 'Isulat · type what you hear', name: 'Dictation', badge: lk('dict') },
+    { id: 'rushgo', icon: PI.cup, c: 'var(--mango)', sub: 'Game · easy to hard', name: 'Padayon Rush', badge: 'Best ' + (S.rushBest || 0), hot: true }])}
+  ${g('Speak', 'var(--pink)', [
+    { go: 'shadow', icon: I.mic, c: 'var(--pink)', sub: 'Sundog · speak along', name: 'Shadowing', badge: lk('shadow') },
+    { go: 'convos', icon: PI.chat, c: 'var(--pink)', sub: 'Istorya · play your part', name: 'Conversations' },
+    { id: 'talkgo', icon: PI.phone, c: 'var(--pink)', sub: 'Estorya · call or chat with family', name: 'Talk out loud', badge: plan.talk ? 'Done today' : 'Tick it' }])}
+  ${g('Build &amp; read', 'var(--good)', [
+    { id: 'buildgo', icon: PI.blocks, c: 'var(--good)', sub: 'Gramatika · learn a rule, then use it', name: 'Grammar', badge: ruleN + ' of ' + RULES.length },
+    { go: 'rules', icon: PI.book, c: 'var(--good)', sub: 'Every rule, in plain words', name: 'Rule book' },
+    { go: 'real', icon: PI.video, c: 'var(--good)', sub: 'Tinuod · posts, clips, songs', name: 'Real Bisaya', badge: realOpen + ' open' }])}
+  ${g('Your words', 'var(--copper)', [
+    { id: 'againgo', icon: PI.redo, c: 'var(--copper)', sub: 'A quick round, or start tomorrow', name: 'Another session' },
+    { go: 'gaps', icon: PI.plus, c: 'var(--copper)', sub: 'English you keep reaching for', name: 'Gap words', badge: S.custom.length ? String(S.custom.length) : '' }])}
+  </div>`);
+  $('#dictgo').onclick = startDictation; $('#rushgo').onclick = startRush;
+  $('#buildgo').onclick = () => buildLock() ? go('rules') : startBuild();
+  $('#againgo').onclick = () => planDay().session ? go('again') : startSession();
+  $('#talkgo').onclick = () => { const p = planDay(); p.talk = !p.talk; save(); toast(p.talk ? 'Ticked for today. Maayo!' : 'Unticked'); render(); };
+  document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+};
+VIEWS.progress = function () {
+  const weak = weakList(5);
+  shell('progress', `<div class="ptitle"><h1>Progress</h1><p class="muted">${S.started ? 'Padayon since ' + new Date(S.started * 864e5 + new Date().getTimezoneOffset() * 60000 + 12 * 36e5).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + (today() - S.started + 1) + ' days in' : 'Your first day starts with today\'s session.'}</p></div>
+  <div class="prog-grid"><div class="prog-main">${statTrio()}${pathPanel()}</div><div class="prog-side">${boardPanel()}
   ${weak.length ? `<section class="panel"><h2>Your weak spots</h2><div>${weak.map(([k, v]) => `<div class="weak"><span class="n tnum">${v.n}×</span><div style="min-width:0"><b>${esc(k)}</b><div class="small muted">${esc(v.fix)}</div></div></div>`).join('')}</div></section>` : ''}
   <section class="panel"><details><summary><b>Browse every unit</b> <span class="muted small">· jump ahead with Focus</span></summary><div style="display:grid;gap:12px;margin-top:10px">
   <div class="panel"><div class="row spread"><h2>Foundations</h2><span class="muted small tnum">${learned(F_ORDER)} of ${F.length} learned</span></div>
@@ -570,54 +662,44 @@ VIEWS.home = function () {
   <div class="panel"><details><summary>Mega-deck topics <span class="muted small tnum">· ${learned(M_ORDER)} of ${M_ORDER.length} learned</span></summary>
     <p class="muted small" style="margin:8px 0 0">From the Cebuano Mega-Deck: Peace Corps phrases, everyday sayings, numbers, family, food, body, home and more. Tap Focus to study a topic first.</p>
     <div style="margin-top:8px">${M_UNITS.map((u, i) => unitRow(u, 'm' + i)).join('')}</div></details></div>` : ''}
-  </div></details></section>
-  <section class="panel"><div class="row spread"><h2>Sync across devices</h2><button class="btn sm ${Sync.user ? 'ghost' : 'primary'} syncbtn" id="synchome">${Sync.user ? 'Sign out' : 'Sign in with Google'}</button></div>
-    <p class="small syncline" style="margin:0">${syncLine()}</p><p class="muted small" style="margin:0">Sign in with the same Google account on your phone and PC and your progress follows you.</p></section>
-  <section class="panel"><div class="row spread"><h2>Settings</h2><button class="btn sm ghost" data-go="settings">Open</button></div>
-    <p class="muted small" style="margin:0">Your name, cards per day, sync, and backups.</p></section>`;
-  $('#start').onclick = () => { if (!nextUp) return planDay().session ? go('again') : startSession(); if (nextUp.manual) { tick(nextUp.k); return render(); } nextUp.run(); };
-  document.querySelectorAll('[data-run]').forEach(b => b.onclick = () => planItems().find(i => i.k === b.dataset.run).run());
-  $('#dictgo').onclick = startDictation; $('#buildgo').onclick = startBuild; $('#rushgo').onclick = startRush; wireBoard(); loadBoard();
-  $('#synchome').onclick = () => Sync.user ? signOutSync() : signIn();
-  if ($('#packretry')) $('#packretry').onclick = autoPack;
-  document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
-  document.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { const p = planDay(); p[b.dataset.plan] = !p[b.dataset.plan]; save(); render(); });
+  </div></details></section></div></div>`);
+  wireBoard(); loadBoard();
   document.querySelectorAll('[data-focus]').forEach(b => b.onclick = () => { S.focus = S.focus === b.dataset.focus ? null : b.dataset.focus; save(); render(); toast(S.focus ? 'New cards will come from this unit first' : 'Back to the normal order'); });
 };
-VIEWS.again = function () {
-  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Another session?</h2></div>
-    ${binkoSays("You finished today's daily session! Want to keep the engine running? Binko can start TOMORROW'S plan right now, or you can review what you already know.", true)}
-    <div class="panel"><b>Start the next day</b><div class="small">Your checklist resets for a new day, with new cards and reviews. Your streak and the #streaks post still count once per real day, so this doesn't add to them.</div><button class="btn primary block" id="nextday" style="margin-top:8px">Start the next day</button></div>
-    <div class="panel"><b>Review what you know</b><div class="small">A quick round of cards you've already learned. No new cards, your checklist stays as it is, and nothing is announced.</div><button class="btn ghost block" id="extra" style="margin-top:8px">Review again</button></div>`;
-  $('#quit').onclick = () => go('home');
-  $('#extra').onclick = () => startSession();
-  $('#nextday').onclick = () => { S.dayShift = (S.dayShift || 0) + 1; DAY_SHIFT = S.dayShift; save(); toast('Day ' + (today() - (S.started || today()) + 1) + ' started. Padayon!'); startSession(); };
-};
-VIEWS.settings = function () {
+VIEWS.settings = function () { go('me'); };
+VIEWS.me = function () {
   const st = S.settings;
-  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Settings</h2></div>
+  shell('me', `<div class="ptitle"><h1>Me</h1></div>
+  <div class="me-grid">
+  <section class="panel acct"><img src="img/binko-face.webp" alt=""><div style="flex:1;min-width:0"><b style="font-size:1.1rem">${esc(displayName())}</b><div class="small syncline">${syncLine()}</div></div>
+    <button class="btn sm ${Sync.user ? 'ghost' : 'primary'} syncbtn" id="syncset">${Sync.user ? 'Sign out' : 'Sign in with Google'}</button></section>
   <section class="panel"><h2>Your name</h2>
-    <p class="small" style="margin:0">Binko uses this when he announces your finished lessons in the family Discord.</p>
+    <p class="small muted" style="margin:0">Binko uses this when he announces your finished lessons in the family Discord, and on the leaderboard.</p>
     <div class="keybox"><input class="field" id="myname" placeholder="${esc(displayName())}" value="${esc(S.settings.name || '')}"><button class="btn primary" id="savename">Save</button></div></section>
   <section class="panel"><h2>Daily cards</h2>
     ${[['newPerDay', 'New cards per day', [5, 8, 10, 15]], ['goal', 'Daily XP goal', [30, 60, 100, 150]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}
     <p class="muted small" style="margin:0">8 a day is about 15 to 20 minutes with reviews. More moves you along the path faster but makes reviews pile up.</p></section>
-  <section class="panel"><h2>Content pack</h2><p class="small" style="margin:0">${hasPack() ? `Loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Not loaded yet.'}</p><div class="row"><button class="btn ${hasPack() ? 'ghost' : 'primary'}" id="pack3">${hasPack() ? 'Download again' : 'Download now'}</button><button class="btn ghost" id="pack2">Load from a file</button></div></section>
-  <section class="panel"><h2>Sync across devices</h2>
-    <p class="small syncline" style="margin:0">${syncLine()}</p>
-    <div class="row"><button class="btn ${Sync.user ? 'ghost' : 'primary'} syncbtn" id="syncset">${Sync.user ? 'Sign out' : 'Sign in with Google'}</button></div>
-</section>
-  <section class="panel"><h2>Backup file</h2>
-    <p class="small" style="margin:0">A manual copy of your progress, if you ever want one.</p>
-    <div class="row"><button class="btn" id="exp">Save backup file</button><button class="btn ghost" id="imp">Load backup</button></div></section>
-`;
-  $('#quit').onclick = () => go('home');
+  <section class="panel"><h2>Your data</h2>
+    <p class="small muted" style="margin:0">${hasPack() ? `Word pack loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Word pack not loaded yet.'}</p>
+    <div class="row"><button class="btn" id="exp">Save a backup</button><button class="btn ghost" id="imp">Restore a backup</button></div>
+    <div class="row"><button class="btn ghost" id="pack3">${hasPack() ? 'Reload word pack' : 'Download word pack'}</button><button class="btn ghost" id="pack2">Load pack from a file</button></div></section>
+  <section class="panel"><h2>About</h2><p class="small muted" style="margin:0">Made for the Balay Ta family. Computer voice: Meta MMS Cebuano (CC BY-NC 4.0).</p></section>
+  </div>`);
   $('#syncset').onclick = () => Sync.user ? signOutSync() : signIn();
   $('#savename').onclick = () => { S.settings.name = $('#myname').value.trim(); save(); toast('Saved'); };
   document.querySelectorAll('[data-set]').forEach(g => g.querySelectorAll('button').forEach(b => b.onclick = () => { S.settings[g.dataset.set] = +b.dataset.v; save(); render(); }));
   $('#pack2').onclick = importPack; $('#pack3').onclick = () => { go('home'); autoPack(); };
   $('#exp').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' })); a.download = 'padayon-progress-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); };
   $('#imp').onclick = () => { const fi = $('#filein'); fi.accept = '.json,application/json'; fi.value = ''; fi.onchange = async () => { try { const s = JSON.parse(await fi.files[0].text()); if (s.v !== 1) throw 0; S = migrate(s); save(); toast('Progress loaded'); go('home'); } catch (e) { toast('That is not a Padayon backup file.'); } }; fi.click(); };
+};
+VIEWS.again = function () {
+  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Another session?</h2></div>
+    ${binkoSays("You finished today's daily session! Want to keep the engine running? Binko can start TOMORROW'S plan right now, or you can review what you already know.", true)}
+    <div class="panel"><b>Start the next day</b><div class="small">Your checklist resets for a new day, with new cards and reviews. Your streak and the #streaks post still count once per real day, so this doesn't add to them.</div><button class="btn primary block" id="nextday" style="margin-top:8px">Start the next day</button></div>
+    <div class="panel"><b>Review what you know</b><div class="small">A quick round of cards you've already learned. No new cards, your checklist stays as it is, and nothing is announced.</div><button class="btn ghost block" id="extra" style="margin-top:8px">Review again</button></div>`;
+  $('#quit').onclick = () => goTab();
+  $('#extra').onclick = () => startSession();
+  $('#nextday').onclick = () => { S.dayShift = (S.dayShift || 0) + 1; DAY_SHIFT = S.dayShift; save(); toast('Day ' + (today() - (S.started || today()) + 1) + ' started. Padayon!'); startSession(); };
 };
 
 /* ---------- session engine ---------- */
@@ -635,9 +717,9 @@ VIEWS.session = function () {
   if (qi >= Q.length) return finishSession();
   const item = Q[qi], c = card(item.id);
   if (!c || ((item.type === 'pron' || item.type === 'dict' || item.type === 'listen' || item.type === 'tiles' || item.type === 'shadow') && !c.audio)) { qi++; return VIEWS.session(); }
-  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End session">${I.x}</button><div class="prog"><i style="width:${(qi / Q.length) * 100}%"></i></div><span class="speedchip">${S.speed.toFixed(1)}×</span></div>
+  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End session">${I.x}</button><div class="prog"><i style="width:${(qi / Q.length) * 100}%"></i></div><span class="muted small tnum qcount">${qi + 1} of ${Q.length}</span><span class="speedchip">${S.speed.toFixed(1)}×</span></div>
   <div class="ex" id="ex"></div><div class="foot" id="foot"></div>`;
-  $('#quit').onclick = () => { if (qi > 0 && sess.total > 0) finishSession(); else go('home'); };
+  $('#quit').onclick = () => { if (qi > 0 && sess.total > 0) finishSession(); else goTab(); };
   EX[item.type](c, item);
 };
 function foot(html) { $('#foot').className = 'foot'; $('#foot').innerHTML = html; }
@@ -893,18 +975,18 @@ VIEWS.summary = function () {
     ${sess.mode === 'speed' ? `<p class="muted">Your listening speed is now <b>${S.speed.toFixed(1)}×</b>.</p>` : `<p class="muted">${sess.newIds.size} new · ${sess.graded.size} practiced.</p>`}
     ${cameoHtml('done')}${binkoSays(planNext() ? BINKO_NEXT[planNext().k] : BINKO_NEXT.done)}
     ${nextBtnHtml()}<button class="btn ghost block" id="home">Home</button></section>`;
-  wireNext(); $('#home').onclick = () => go('home');
+  wireNext(); $('#home').onclick = () => goTab();
 };
 
 /* ---------- speed round ---------- */
 VIEWS.speed = function () {
-  if (!hasPack()) { toast('Load the content pack first. The speed round uses its recordings.'); return go('home'); }
+  if (!hasPack()) { toast('Load the content pack first. The speed round uses its recordings.'); return goTab(); }
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Speed round</h2></div>
   <section class="panel"><p style="margin:0">20 clips. Each plays once at your speed, then you get 7 seconds to answer. Two right in a row speeds it up by 0.1×. A miss slows it down.</p>
     <div class="row"><span class="label">Starting speed</span><span class="speedchip">${S.speed.toFixed(1)}×</span><span class="muted small">Best ${S.bestSpeed.toFixed(1)}×</span></div>
     <button class="btn primary block" id="go">Start</button></section>
   <section class="panel"><b>Padayon Rush</b><p class="small" style="margin:0">Endless mode with every recorded word in the app, not just the ones you&rsquo;ve learned, starting easy and getting harder. Keep going until you miss. Best: ${S.rushBest || 0}.</p><button class="btn ghost block" id="rush">Play Rush</button></section>`;
-  $('#quit').onclick = () => go('home'); $('#go').onclick = startSpeed; $('#rush').onclick = startRush;
+  $('#quit').onclick = () => goTab(); $('#go').onclick = startSpeed; $('#rush').onclick = startRush;
 };
 let SP = null;
 const heardIds = () => Object.keys(S.cards).filter(id => IDX[id] && card(id));
@@ -917,7 +999,7 @@ function lockedScreen(title, k) {
   const L = drillLock(k);
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">${esc(title)}</h2></div>
     ${binkoSays(`${esc(title)} is still locked! Binko only uses things you've already learned. Learn ${L.need} more ${L.what}${L.need === 1 ? '' : 's'} with a recording in your daily session and it opens up.`)}`;
-  $('#quit').onclick = () => go('home');
+  $('#quit').onclick = () => goTab();
 }
 function startSpeed() {
   if (drillLock('speed')) return lockedScreen('Speed round', 'speed');
@@ -932,7 +1014,7 @@ async function speedQ() {
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End">${I.x}</button><div class="prog"><i style="width:${SP.i / SP.list.length * 100}%"></i></div><span class="speedchip">${SP.rate.toFixed(1)}×</span></div>
    <div class="ex"><h2>Listen once</h2><div class="playrow"><button class="play playing" id="pl" aria-label="Playing" disabled>${I.play}</button><span class="muted small" id="st">Playing…</span></div>
    <div class="timer"><i id="tb"></i></div><div class="opts">${opts.map((o, i) => `<button class="opt" data-i="${i}" disabled>${esc(optText(o, 'en'))}</button>`).join('')}</div></div><div class="foot" id="foot" hidden></div>`;
-  $('#quit').onclick = () => { clearInterval(timerH); stopAudio(); if (sess.total) endSpeed(); else go('home'); };
+  $('#quit').onclick = () => { clearInterval(timerH); stopAudio(); if (sess.total) endSpeed(); else goTab(); };
   const myI = SP.i;
   await play(c.id, SP.rate, $('#pl'));
   if (view !== 'speedrun' || SP.i !== myI) return;
@@ -981,7 +1063,7 @@ VIEWS.convos = function () {
     const near = nextConvo();
     $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Conversations</h2></div>
       ${binkoSays('No conversation is unlocked yet! Binko is still building it. <b>' + esc(near.d.title) + '</b> opens once you\'ve learned ' + near.left.length + ' more word' + (near.left.length === 1 ? '' : 's') + '. Keep doing your daily sessions!')}`;
-    $('#quit').onclick = () => go('home'); return;
+    $('#quit').onclick = () => goTab(); return;
   }
   DL = { d: p.d, idx: p.i, m: p.unknown.length ? 'learn' : 'read', i: 0, show: {}, right: 0, unknown: p.unknown };
   view = 'convo'; render();
@@ -1013,7 +1095,7 @@ VIEWS.convo = function () {
     $('#nx').onclick = () => { if (DL.i < n - 1) { DL.i++; render(); lineSay(d.lines[DL.i][1]); } else { DL = Object.assign(DL, { m: 'part', i: 0, show: {}, right: 0, spoke: 0 }); render(); } };
     if (DL.i === 0 && !DL.spoke) { DL.spoke = 1; lineSay(d.lines[0][1]); }
   } else if (DL.m === 'part') {
-    if (DL.i >= n) { $('#app').innerHTML = `${head}<section class="panel summary"><div class="label">Conversation done</div><h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1><p class="muted">${DL.right} of ${d.lines.filter(l => l[0] === 'b').length} of your lines said right.</p><button class="btn primary block" id="fin">Continue</button></section>`; $('#fin').onclick = done; $('#quit').onclick = () => go('home'); return; }
+    if (DL.i >= n) { $('#app').innerHTML = `${head}<section class="panel summary"><div class="label">Conversation done</div><h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1><p class="muted">${DL.right} of ${d.lines.filter(l => l[0] === 'b').length} of your lines said right.</p><button class="btn primary block" id="fin">Continue</button></section>`; $('#fin').onclick = done; $('#quit').onclick = () => goTab(); return; }
     const l = d.lines[DL.i], mine = l[0] === 'b';
     $('#app').innerHTML = `${head}<div class="ex"><div class="chat">${d.lines.slice(0, DL.i).map((x, j) => bubble(d, x, j)).join('')}${mine ? '' : bubble(d, l, DL.i)}</div>
       ${mine ? `<div class="panel"><div class="label">Your turn. Say it in Bisaya</div><div class="prompt">${esc(l[2])}</div>${l[3] ? `<div class="small muted">Hint: ${esc(l[3])}</div>` : ''}<div id="micw"></div><div id="res"></div></div>` : ''}</div><div class="foot" id="foot"></div>`;
@@ -1040,7 +1122,7 @@ VIEWS.convo = function () {
       if ($('#again')) $('#again').onclick = () => { DL.order = []; DL.checked = false; DL.pool = shuffle(DL.pool); render(); };
     }
   }
-  $('#quit').onclick = () => go('home');
+  $('#quit').onclick = () => goTab();
 };
 
 /* ---------- sentence rules: which rule a sentence shows, and the guide ---------- */
@@ -1123,7 +1205,7 @@ function pickSentences(n, favor) {
 }
 function startBuild() {
   const L = buildLock();
-  if (L) { view = 'locked'; $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Build sentences</h2></div>${binkoSays('Build sentences is still locked! Binko only builds with parts you already have. ' + esc(L))}`; $('#quit').onclick = () => go('home'); return; }
+  if (L) { view = 'locked'; $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Build sentences</h2></div>${binkoSays('Build sentences is still locked! Binko only builds with parts you already have. ' + esc(L))}`; $('#quit').onclick = () => goTab(); return; }
   const nr = nextRule(), roots = knownRoots();
   // a new rule: explain it, then drill it. No new rule: a quick review drill of rules already learned.
   const learned = RULES.filter(r => ruleLearned(r.id));
@@ -1165,7 +1247,7 @@ VIEWS.build = function () {
     if (BD.i >= BD.qs.length) return buildOwn(head);
     return buildTiles(head);
   }
-  $('#quit').onclick = () => go('home');
+  $('#quit').onclick = () => goTab();
 };
 function drillDone(head) {
   const n = BD.quiz.length, pass = BD.qRight >= Math.ceil(n * 0.75);
@@ -1179,7 +1261,7 @@ function drillDone(head) {
   $('#app').innerHTML = `${head}<div class="ex">${binkoSays(esc(msg), true)}${BD.nr ? `<div class="panel"><b>${esc(BD.nr.title)}</b><div class="small">${esc(BD.nr.short)}</div></div>` : ''}</div><div class="foot" id="foot"></div>`;
   foot(`<button class="btn primary block" id="nx">${BD.qs.length ? 'Build sentences' : 'Finish'}</button>`);
   $('#nx').onclick = () => { BD.phase = 'tiles'; if (!BD.qs.length) return finishBuild(); render(); };
-  $('#quit').onclick = () => go('home');
+  $('#quit').onclick = () => goTab();
 }
 function finishBuild() { tick('build'); addXP(10); save(); view = 'done'; sectionDone('Build sentences', BD.nr && ruleLearned(BD.nr.id) ? 'New rule learned: ' + esc(BD.nr.title) : BD.right + ' of ' + BD.qs.length + ' sentences right'); }
 function buildTiles(head) {
@@ -1206,7 +1288,7 @@ function buildTiles(head) {
       <button class="btn primary block" id="cont">Continue</button>`;
     $('#cont').onclick = () => { BD.i++; render(); };
   };
-  $('#quit').onclick = () => go('home');
+  $('#quit').onclick = () => goTab();
 }
 // the last step: the learner makes a sentence of their own and checks it against the pattern
 function buildOwn(head) {
@@ -1233,7 +1315,7 @@ function buildOwn(head) {
     $('#fin').onclick = finish; if ($('#again')) $('#again').onclick = () => { inp.focus(); foot(`<button class="btn primary block" id="chk">Check my sentence</button>`); $('#chk').onclick = check; };
   };
   $('#chk').onclick = check;
-  $('#quit').onclick = () => go('home');
+  $('#quit').onclick = () => goTab();
 }
 
 /* ---------- Real Bisaya: tweets and show clips ---------- */
@@ -1279,7 +1361,7 @@ function loadTwitter() { if (twLoaded) { window.twttr && twttr.widgets && twttr.
 VIEWS.real = function () {
   const it = RB && RB.it ? RB.it : realToday();
   const top = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Real Bisaya</h2></div>`;
-  if (!it) { $('#app').innerHTML = `${top}${binkoSays('Real Bisaya is still locked! Binko only shows you real posts once you know every word in them. ' + esc(realLockHint()) + ' Keep doing your daily sessions!')}`; $('#quit').onclick = () => go('home'); return; }
+  if (!it) { $('#app').innerHTML = `${top}${binkoSays('Real Bisaya is still locked! Binko only shows you real posts once you know every word in them. ' + esc(realLockHint()) + ' Keep doing your daily sessions!')}`; $('#quit').onclick = () => goTab(); return; }
   if (!RB || RB.it !== it) RB = { it, step: 'see' };
   const done = () => { tick('real'); S.realDone = S.realDone || {}; S.realDone[it.key] = (S.realDone[it.key] || 0) + 1; addXP(12); save(); const was = it; RB = null; view = 'done'; sectionDone('Real Bisaya done', '+12 XP · ' + esc(was.kind === 't' ? 'post by ' + was.t[1] : was.kind === 's' ? '"' + was.g.song + '" by ' + was.g.artist : was.c.show)); };
   const respond = (prompt, ex) => {
@@ -1339,7 +1421,7 @@ VIEWS.real = function () {
       foot(`<button class="btn primary block" id="nx">Next: answer in Bisaya</button>`); $('#nx').onclick = () => respond(c.say, c.ex);
     });
   }
-  $('#quit').onclick = () => { RB = null; go('home'); };
+  $('#quit').onclick = () => { RB = null; goTab(); };
 };
 
 /* ---------- accuracy log, leaderboard, and Padayon Rush (endless listening game) ---------- */
@@ -1358,7 +1440,7 @@ async function loadBoard() {
   boardAt = Date.now();
   try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => Object.assign({ uid: d.id }, d.data())); boardErr = ''; }
   catch (e) { boardErr = 'The leaderboard needs a Firebase rule update first.'; }
-  if (view === 'home') { const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }
+  if (view === 'home' || view === 'progress') { const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }
 }
 const BOARD_TABS = [
   ['streak', 'Streak', r => r.streak, r => r.streak + ' day' + (r.streak === 1 ? '' : 's') + (r.best > r.streak ? ` · best ${r.best}` : '')],
@@ -1371,7 +1453,7 @@ const BOARD_TABS = [
 ];
 function boardPanel() {
   const head = `<section class="panel" id="board"><div class="row spread"><h2>Leaderboard</h2><span class="muted small">This week · family</span></div>`;
-  if (!Sync.user) return head + `<p class="muted small" style="margin:0">Sign in with Google (below) to join the leaderboard.</p></section>`;
+  if (!Sync.user) return head + `<p class="muted small" style="margin:0">Sign in with Google on the Me tab to join the leaderboard.</p></section>`;
   if (boardErr) return head + `<p class="muted small" style="margin:0">${esc(boardErr)}</p></section>`;
   if (!BOARD) return head + `<p class="muted small" style="margin:0">Loading…</p></section>`;
   const tab = BOARD_TABS.find(t => t[0] === boardTab) || BOARD_TABS[0];
@@ -1408,7 +1490,7 @@ function rushOptions(c, pool) {
   for (const [, d] of near) { if (out.length >= 4) break; const v = norm(d.en); if (!v || used.has(v) || sameMeaning(c.en, d.en)) continue; used.add(v); out.push(d); }
   return shuffle(out);
 }
-function startRush() { if (!hasPack()) { toast('Load the content pack first.'); return go('home'); } RU = { pool: rushPool(), n: 0, seen: new Set() }; sess = newSess('rush'); view = 'rush'; rushQ(); }
+function startRush() { if (!hasPack()) { toast('Load the content pack first.'); return goTab(); } RU = { pool: rushPool(), n: 0, seen: new Set() }; sess = newSess('rush'); view = 'rush'; rushQ(); }
 async function rushQ() {
   const id = rushPick(); RU.seen.add(id);
   const c = card(id), opts = rushOptions(c, RU.pool), secs = Math.max(3, 8 - Math.floor(RU.n / 5) * 0.5);
@@ -1437,18 +1519,18 @@ function rushOver(why, c) {
     ${c && why ? `<div class="panel"><div class="small muted">${why === 'time' ? "Time ran out on" : 'The answer was'}</div><b>${esc(c.ceb)}</b> <span class="muted">· ${esc(c.en)}</span>${phonHtml(c.ceb)}</div>` : ''}
     ${binkoSays(isBest ? 'NEW RECORD! Binko is writing this one in the journal in BIG letters!' : n >= 10 ? 'Binko binks that was a great run!' : 'Loose bolt! Shake it off and go again.')}
     <button class="btn primary block" id="again">Go again</button><button class="btn ghost block" id="home2">Home</button></section>`;
-  $('#again').onclick = startRush; $('#home2').onclick = () => go('home');
+  $('#again').onclick = startRush; $('#home2').onclick = () => goTab();
 }
 /* ---------- shadowing ---------- */
 let SH = null;
 VIEWS.shadow = function () {
-  if (!hasPack()) { toast('Load the content pack first. Shadowing uses its recordings.'); return go('home'); }
+  if (!hasPack()) { toast('Load the content pack first. Shadowing uses its recordings.'); return goTab(); }
   if (drillLock('shadow')) return lockedScreen('Shadowing', 'shadow');
   const mine = UNITS.map(u => Object.assign({}, u, { ids: u.ids.filter(id => S.cards[id]) })).filter(u => u.ids.length);
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Shadowing</h2></div>
   <section class="panel"><p style="margin:0">Each phrase plays three times: once to listen, then twice to speak along, the last at ${Math.max(1.1, S.speed).toFixed(1)}×. Hands-free, so it works with headphones on a walk.</p></section>
   <section class="panel"><p class="muted small" style="margin:0">Only phrases you've already learned.</p>${mine.map((u, i) => `<div class="unit"><div class="nm"><b>${esc(u.ceb)}</b> <span class="muted small">${esc(u.name)} · ${u.ids.length}</span></div><button class="btn sm primary" data-u="${i}">Start</button></div>`).join('')}</section>`;
-  $('#quit').onclick = () => go('home');
+  $('#quit').onclick = () => goTab();
   document.querySelectorAll('[data-u]').forEach(b => b.onclick = () => runShadow(mine[+b.dataset.u]));
 };
 function runShadow(u) {
@@ -1460,7 +1542,7 @@ function runShadow(u) {
      <div class="ex"><div class="label">${esc(u.ceb)} · ${esc(u.name)}</div><div class="ceb">${esc(c.ceb)}</div><div class="muted" ${SH.showEn ? '' : 'hidden'}>${esc(c.en)}</div>
      <div class="stage"><span>Listen</span><span>Speak along</span><span>Faster</span></div>
      <div class="row"><button class="btn" id="pause">${SH.paused ? 'Resume' : 'Pause'}</button><button class="btn" id="skip">Next phrase</button><button class="btn ghost" id="hide">${SH.showEn ? 'Hide' : 'Show'} English</button></div></div>`;
-    $('#quit').onclick = () => { SH.tok = 0; stopAudio(); go('home'); };
+    $('#quit').onclick = () => { SH.tok = 0; stopAudio(); goTab(); };
     $('#pause').onclick = () => { SH.paused = !SH.paused; if (SH.paused) { SH.tok = 0; stopAudio(); draw(); } else loop(); };
     $('#skip').onclick = () => { SH.tok = 0; stopAudio(); SH.i++; SH.paused = false; loop(); };
     $('#hide').onclick = () => { SH.showEn = !SH.showEn; draw(); };
@@ -1496,7 +1578,7 @@ VIEWS.gaps = function () {
   <div class="row"><button class="btn primary" id="gadd">Add</button><span class="muted small" id="gmsg"></span></div></section>
   <section class="panel"><div class="row spread"><h2>Your list</h2><span class="muted small tnum">${S.custom.length}</span></div>
   <div>${S.custom.length ? S.custom.slice().reverse().map(x => `<div class="gap"><div style="min-width:0"><span class="c">${esc(x.ceb)}</span> <span class="muted">· ${esc(x.en)}</span>${x.ex ? `<div class="small">${esc(x.ex)} <span class="muted">${esc(x.exEn)}</span></div>` : ''}</div><button class="btn sm ghost" data-del="${x.id}">Remove</button></div>`).join('') : '<p class="muted" style="margin:0">Nothing yet.</p>'}</div></section>`;
-  $('#quit').onclick = () => go('home');
+  $('#quit').onclick = () => goTab();
   document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { if (b.dataset.armed) { S.custom = S.custom.filter(x => x.id !== b.dataset.del); delete S.cards[b.dataset.del]; save(); render(); } else { b.dataset.armed = 1; b.textContent = 'Tap to confirm'; } });
   $('#gadd').onclick = async () => {
     const en = $('#gen').value.trim(), ceb = $('#gceb').value.trim(); if (!en) return;
