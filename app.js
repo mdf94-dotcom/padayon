@@ -180,12 +180,22 @@ function fixFuture(st) { const rt = Math.floor((Date.now() - new Date().getTimez
 fixFuture(S);
 /* Streak reset: bump STREAK_RESET to start everyone's streak over at 1 (current and best). Carried through sync so an
    older device can't bring the old streak back, and the leaderboard shows 1 for anyone who hasn't opened the app since. */
-const STREAK_RESET = 2;
-// everyone restarts at 1, counted through yesterday, so finishing today's session makes it 2 (already finished today: 2 now)
+const STREAK_RESET = 3;
+// the reset was on Nov 2, 2026 (day 20759): everyone restarted at 1 counted through Nov 1, so finishing that day made it 2.
+// A streak can't be longer than the days since then, so anything above that is a sync mistake and gets trimmed.
+const STREAK_BASE = 20758;
+const streakCap = last => Math.max(1, last - STREAK_BASE + 1);
 function resetStreak(st) {
   if ((st.streakReset || 0) >= STREAK_RESET) return;
   const rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5), done = !!(st.plan && Object.keys(st.plan).some(k => +k >= rt && st.plan[k].session));
-  st.streak = done ? { count: 2, last: rt, best: 2 } : { count: 1, last: rt - 1, best: 1 }; st.streakReset = STREAK_RESET;
+  if ((st.streakReset || 0) < 2) st.streak = done ? { count: 2, last: rt, best: 2 } : { count: 1, last: rt - 1, best: 1 };
+  else {
+    const s = st.streak || { count: 1, last: rt - 1, best: 1 };
+    // on the reset day itself, only a finished session today counts
+    if (rt === STREAK_BASE + 1 && !done) { s.count = 1; s.last = rt - 1; }
+    s.count = Math.min(s.count, streakCap(s.last)); s.best = Math.max(s.count, Math.min(s.best || 1, streakCap(rt))); st.streak = s;
+  }
+  st.streakReset = STREAK_RESET;
 }
 resetStreak(S);
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
@@ -2013,7 +2023,8 @@ let BOARD = null, boardAt = 0, boardTab = 'streak', boardErr = '';
 async function loadBoard() {
   if (!Sync.user || !window.firebase || Date.now() - boardAt < 60000) return;
   boardAt = Date.now();
-  try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => Object.assign({ uid: d.id }, d.data())).map(r => (r.streakReset || 0) < STREAK_RESET ? Object.assign(r, { streak: 1, best: 1 }) : r); boardErr = ''; }
+  try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => Object.assign({ uid: d.id }, d.data())).map(r => (r.streakReset || 0) < 2 ? Object.assign(r, { streak: 1, best: 1 })
+      : (r.streakReset || 0) < STREAK_RESET ? Object.assign(r, { streak: Math.min(r.streak || 1, 2), best: Math.min(r.best || 1, 2) }) : r); boardErr = ''; }
   catch (e) { boardErr = 'The leaderboard needs a Firebase rule update first.'; }
   if (view === 'board') return render(); if (view === 'home') { const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }
 }
