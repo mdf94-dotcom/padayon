@@ -180,8 +180,13 @@ function fixFuture(st) { const rt = Math.floor((Date.now() - new Date().getTimez
 fixFuture(S);
 /* Streak reset: bump STREAK_RESET to start everyone's streak over at 1 (current and best). Carried through sync so an
    older device can't bring the old streak back, and the leaderboard shows 1 for anyone who hasn't opened the app since. */
-const STREAK_RESET = 1;
-function resetStreak(st) { if ((st.streakReset || 0) >= STREAK_RESET) return; const rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5); st.streak = { count: 1, last: rt, best: 1 }; st.streakReset = STREAK_RESET; }
+const STREAK_RESET = 2;
+// everyone restarts at 1, counted through yesterday, so finishing today's session makes it 2 (already finished today: 2 now)
+function resetStreak(st) {
+  if ((st.streakReset || 0) >= STREAK_RESET) return;
+  const rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5), done = !!(st.plan && Object.keys(st.plan).some(k => +k >= rt && st.plan[k].session));
+  st.streak = done ? { count: 2, last: rt, best: 2 } : { count: 1, last: rt - 1, best: 1 }; st.streakReset = STREAK_RESET;
+}
 resetStreak(S);
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
 function save() { S.updated = Date.now(); DAY_SHIFT = S.dayShift || 0; localSave(); schedulePush(); if (typeof pushBoard === 'function') pushBoard(); }
@@ -556,7 +561,7 @@ const urls = {}; const player = new Audio(); player.preservesPitch = true;
 let playToken = 0;
 /* ---------- computer voice: cards with no native recording ----------
    voice.bin holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
-const VOICE_V = 3; let VOICE = null, VOICE_BUF = null; const vurls = {};
+const VOICE_V = 4; let VOICE = null, VOICE_BUF = null; const vurls = {};
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
 function setVoice(buf) { const dv = new DataView(buf); if (String.fromCharCode(...new Uint8Array(buf, 0, 4)) !== 'PVOI') throw new Error('bad voice pack'); const hl = dv.getUint32(4, true); VOICE = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, hl))); VOICE_BUF = buf.slice(8 + hl); }
 async function loadVoice() {
@@ -632,9 +637,10 @@ const TI = {
   progress: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>',
   rushhome: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.5 2.5h11v6.5a5.5 5.5 0 0 1-11 0z"/><path d="M17.5 4.8h2.7v2.1a3.6 3.6 0 0 1-3.4 3.6M6.5 4.8H3.8v2.1a3.6 3.6 0 0 0 3.4 3.6" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><path fill="currentColor" d="M10.3 13.6h3.4v3.9h-3.4z"/><rect x="6.5" y="17.3" width="11" height="4.2" rx="1.4" fill="currentColor"/></svg>',
+  board: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V14h5v7M9.5 21V9h5v12M16 21v-9h5v9"/><path d="M12 3.2l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2L9.1 5.3l2-.3z" fill="currentColor" stroke-width="1"/></svg>',
   chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
 };
-const TABS = [['home', 'Today'], ['practice', 'Practice'], ['rushhome', 'Rush'], ['progress', 'Progress'], ['me', 'Me']];
+const TABS = [['home', 'Today'], ['practice', 'Practice'], ['rushhome', 'Rush'], ['board', 'Ranks'], ['me', 'Me']];
 const TAB_VIEWS = new Set(TABS.map(t => t[0]));
 let lastTab = 'home';
 const goTab = () => go(lastTab);
@@ -655,7 +661,7 @@ function statTrio() {
 }
 function stageMini() {
   const { stats, cur } = pathState(), x = stats[cur], tl = pathTimeline();
-  return `<section class="panel"><div class="row spread"><h2>Stage ${cur + 1} · ${esc(PATH[cur].name)}</h2><button class="linkbtn" data-tab="progress">Full path</button></div>
+  return `<section class="panel"><div class="row spread"><h2>Stage ${cur + 1} · ${esc(PATH[cur].name)}</h2><button class="linkbtn" data-tab="me">Full path</button></div>
     <div class="bar"><i style="width:${x.frac * 100}%"></i></div><div class="muted small">${x.learned} of ${x.total} learned${tl[cur] ? ' · done around ' + dateIn(tl[cur]) : ''}</div></section>`;
 }
 function sinceShort() {
@@ -763,10 +769,10 @@ VIEWS.rushhome = function () {
   $('#rushplay').onclick = startRush;
   if (Sync.user && !BOARD && !boardErr) loadBoard().then(() => { if (view === 'rushhome' && (BOARD || boardErr)) render(); });
 };
-VIEWS.progress = function () {
+function progressHtml() {
   const weak = weakList(5);
-  shell('progress', `<div class="ptitle"><h1>Progress</h1><p class="muted">${S.started ? 'Padayon since ' + new Date(S.started * 864e5 + new Date().getTimezoneOffset() * 60000 + 12 * 36e5).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + (today() - S.started + 1) + ' days in' : 'Your first day starts with today\'s session.'}</p></div>
-  <div class="prog-grid"><div class="prog-main">${statTrio()}${pathPanel()}</div><div class="prog-side">${boardPanel()}
+  return `<div class="ptitle"><h1>Me</h1><p class="muted">${S.started ? 'Padayon since ' + new Date(S.started * 864e5 + new Date().getTimezoneOffset() * 60000 + 12 * 36e5).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + (today() - S.started + 1) + ' days in' : 'Your first day starts with today\'s session.'}</p></div>
+  <div class="prog-grid"><div class="prog-main">${statTrio()}${pathPanel()}</div><div class="prog-side">
   ${weak.length ? `<section class="panel"><h2>Your weak spots</h2><div>${weak.map(([k, v]) => `<div class="weak"><span class="n tnum">${v.n}×</span><div style="min-width:0"><b>${esc(k)}</b><div class="small muted">${esc(v.fix)}</div></div></div>`).join('')}</div></section>` : ''}
   <section class="panel"><details><summary><b>Browse every unit</b> <span class="muted small">· jump ahead with Focus</span></summary><div style="display:grid;gap:12px;margin-top:10px">
   <div class="panel"><div class="row spread"><h2>Foundations</h2><span class="muted small tnum">${learned(F_ORDER)} of ${F.length} learned</span></div>
@@ -782,14 +788,19 @@ VIEWS.progress = function () {
   <div class="panel"><details><summary>Mega-deck topics <span class="muted small tnum">· ${learned(M_ORDER)} of ${M_ORDER.length} learned</span></summary>
     <p class="muted small" style="margin:8px 0 0">From the Cebuano Mega-Deck: Peace Corps phrases, everyday sayings, numbers, family, food, body, home and more. Tap Focus to study a topic first.</p>
     <div style="margin-top:8px">${M_UNITS.map((u, i) => unitRow(u, 'm' + i)).join('')}</div></details></div>` : ''}
-  </div></details></section></div></div>`);
+  </div></details></section></div></div>`;
+}
+function wireProgress() { document.querySelectorAll('[data-focus]').forEach(b => b.onclick = () => { S.focus = S.focus === b.dataset.focus ? null : b.dataset.focus; save(); render(); toast(S.focus ? 'New cards will come from this unit first' : 'Back to the normal order'); }); }
+VIEWS.progress = function () { go('me'); };
+VIEWS.board = function () {
+  shell('board', `<div class="ptitle"><h1>Leaderboard</h1><p class="muted">The family this week. Tap a tab to rank by something else.</p></div><div class="board-wrap">${boardPanel()}</div>`);
   wireBoard(); loadBoard();
-  document.querySelectorAll('[data-focus]').forEach(b => b.onclick = () => { S.focus = S.focus === b.dataset.focus ? null : b.dataset.focus; save(); render(); toast(S.focus ? 'New cards will come from this unit first' : 'Back to the normal order'); });
 };
 VIEWS.settings = function () { go('me'); };
 VIEWS.me = function () {
   const st = S.settings;
-  shell('me', `<div class="ptitle"><h1>Me</h1></div>
+  shell('me', `${progressHtml()}
+  <h2 class="glabel" style="color:var(--muted);margin-top:8px">Account and settings</h2>
   <div class="me-grid">
   <section class="panel acct"><img src="img/binko-face.webp" alt=""><div style="flex:1;min-width:0"><b style="font-size:1.1rem">${esc(displayName())}</b><div class="small syncline">${syncLine()}</div></div>
     <button class="btn sm ${Sync.user ? 'ghost' : 'primary'} syncbtn" id="syncset">${Sync.user ? 'Sign out' : 'Sign in with Google'}</button></section>
@@ -805,6 +816,7 @@ VIEWS.me = function () {
     <div class="row"><button class="btn ghost" id="pack3">${hasPack() ? 'Reload word pack' : 'Download word pack'}</button><button class="btn ghost" id="pack2">Load pack from a file</button></div></section>
   <section class="panel"><h2>About</h2><p class="small muted" style="margin:0">Made for the Balay Ta family. Computer voice: Meta MMS Cebuano (CC BY-NC 4.0). Pictures: Twemoji (CC BY 4.0).</p></section>
   </div>`);
+  wireProgress();
   $('#syncset').onclick = () => Sync.user ? signOutSync() : signIn();
   $('#savename').onclick = () => { S.settings.name = $('#myname').value.trim(); save(); toast('Saved'); };
   document.querySelectorAll('[data-set]').forEach(g => g.querySelectorAll('button').forEach(b => b.onclick = () => { S.settings[g.dataset.set] = +b.dataset.v; save(); render(); }));
@@ -978,13 +990,37 @@ function wireTip(c, slot, auto) {
 
 const playBlock = rate => `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">Playing at ${rate.toFixed(1)}×.<br>Turtle plays it at 0.8×.</span></div>`;
 function wirePlay(c, rate) { $('#pl').onclick = e => play(c.id, rate, e.currentTarget); $('#pls').onclick = e => play(c.id, 0.8, e.currentTarget); play(c.id, rate, $('#pl')); }
+/* ---------- why the answer you picked is wrong ----------
+   The wrong choices are built to trip you up (look-alikes, ko/ka, mo-/ni-), so a miss shows what your pick means
+   and which word makes the difference. */
+function diffNote(right, picked) {
+  const a = tokens(firstAlt(right)).map(t => t.replace(/[.,!?…]/g, '')), b = tokens(firstAlt(picked)).map(t => t.replace(/[.,!?…]/g, ''));
+  const la = a.map(lowTok), lb = b.map(lowTok);
+  if (la.length === lb.length && la.join(' ') !== lb.join(' ') && [...la].sort().join(' ') === [...lb].sort().join(' ')) return 'Same words, different order. Little words like ko, ka and ta ride right behind the first word.';
+  const shared = la.filter(t => lb.includes(t)).length; if (shared < Math.max(1, Math.ceil(Math.max(la.length, lb.length) / 2))) return '';
+  if (la.length !== lb.length) { const extra = lb.filter(t => !la.includes(t)), miss = la.filter(t => !lb.includes(t)); const g = t => glossOf(t) ? ` (${esc(glossOf(t))})` : '';
+    return [miss.length ? 'Missing: ' + miss.map(t => `<b>${esc(t)}</b>${g(t)}`).join(', ') : '', extra.length ? 'Extra: ' + extra.map(t => `<b>${esc(t)}</b>${g(t)}`).join(', ') : ''].filter(Boolean).join('. '); }
+  const pairs = []; la.forEach((t, i) => { if (t !== lb[i]) pairs.push([a[i], b[i]]); });
+  if (!pairs.length || pairs.length > 2) return '';
+  // only explain a swap when both sides have a real meaning (not just "na- = became")
+  if (pairs.some(([x, y]) => !glossOf(x) || !glossOf(y) || /^[a-z]+- =/.test(glossOf(x)) || /^[a-z]+- =/.test(glossOf(y)))) return '';
+  return pairs.map(([x, y]) => `<b>${esc(y)}</b> = ${esc(glossOf(y) || '?')}, but <b>${esc(x)}</b> = ${esc(glossOf(x) || '?')}`).join('. ');
+}
+const endDot = s => { s = String(s).trim().replace(/\.+$/, ''); return /[?!]$/.test(s) ? s : s + '.'; };
+function wrongWhy(c, o, field) {
+  if (!o || o.id === c.id) return '';
+  const d = diffNote(c.ceb, o.ceb || '');
+  const strip = s => String(s).trim().replace(/[.!]+$/, '');
+  if (field === 'en') return `You picked “${esc(strip(firstAlt(o.en)))}”. That would be <b>${esc(strip(firstAlt(o.ceb)))}</b>.${d ? ' ' + endDot(d) : ''}`.replace(/([?!])(<\/b>|”)\./g, '$1$2');
+  return `You picked <b>${esc(strip(firstAlt(o.ceb)))}</b>${o.en ? `, which means “${esc(strip(firstAlt(o.en)))}”` : ''}.${d ? ' ' + endDot(d) : ''}`.replace(/([?!])(<\/b>|”)\./g, '$1$2');
+}
 function choiceEx(c, item, opts, field, cls) {
   let sel = null;
   $('#ex').querySelector('.opts').innerHTML = opts.map((o, i) => `<button class="opt ${cls || ''}" data-i="${i}">${esc(optText(o, field))}</button>`).join('');
   foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
   const btns = [...document.querySelectorAll('.opt')];
   btns.forEach(b => b.onclick = () => { btns.forEach(x => x.classList.remove('sel')); b.classList.add('sel'); sel = +b.dataset.i; $('#chk').disabled = false; });
-  $('#chk').onclick = () => { const ok = opts[sel].id === c.id; btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === c.id) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); }); result(c, item, ok); };
+  $('#chk').onclick = () => { const ok = opts[sel].id === c.id; btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === c.id) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); }); result(c, item, ok, ok ? '' : wrongWhy(c, opts[sel], field)); };
 }
 function typedCheck(c, item, inp, tolFrac, dictMode) {
   const g = norm(inp.value); inp.disabled = true;
@@ -1166,7 +1202,7 @@ async function speedQ() {
     if (ok) { sess.right++; sess.xp += 5; addXP(5); SP.run++; if (SP.run >= 2) { SP.rate = Math.min(2, Math.round((SP.rate + 0.1) * 10) / 10); SP.run = 0; sess.peak = Math.max(sess.peak, SP.rate); } }
     else { SP.run = 0; SP.rate = Math.max(0.8, Math.round((SP.rate - 0.1) * 10) / 10); }
     const f = $('#foot'); f.hidden = false; f.className = 'foot ' + (ok ? 'good' : 'bad');
-    f.innerHTML = `<div class="row spread"><div style="min-width:0;flex:1"><div class="verdict">${ok ? 'Tama!' : sel == null ? "Time's up" : 'Dili pa.'}</div><div class="ans">${esc(c.ceb)} <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div></div><button class="play sm" id="fplay" aria-label="Replay at normal speed">${I.play}</button></div>${spCameo ? cameoHtml('streak') : ''}<button class="btn primary block" id="cont">Next</button>`;
+    f.innerHTML = `<div class="row spread"><div style="min-width:0;flex:1"><div class="verdict">${ok ? 'Tama!' : sel == null ? "Time's up" : 'Dili pa.'}</div><div class="ans">${esc(c.ceb)} <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${!ok && sel != null ? `<div class="small">${wrongWhy(c, opts[sel], 'en')}</div>` : ''}</div><button class="play sm" id="fplay" aria-label="Replay at normal speed">${I.play}</button></div>${spCameo ? cameoHtml('streak') : ''}<button class="btn primary block" id="cont">Next</button>`;
     $('#fplay').onclick = e => play(c.id, 1, e.currentTarget); $('#cont').onclick = () => { SP.i++; speedQ(); }; $('#cont').focus({ preventScroll: true });
   };
   btns.forEach((b, i) => b.onclick = () => finish(i));
@@ -1355,7 +1391,10 @@ function ruleChoice(c, item, opts, rightId, shown, extra) {
   $('#chk').onclick = () => {
     const ok = opts[sel].id === rightId;
     btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === rightId) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); });
-    result({ id: c.id, kind: 'r', ceb: shown.ceb, en: shown.en, audio: false }, item, ok, extra);
+    let why = '';
+    if (!ok) { const p = opts[sel], pr = RULE[p.id];
+      why = pr ? `You picked <b>${esc(pr.title)}</b>. That rule is about: ${esc(pr.short)}<br>` : `You picked <b>${esc(p.t)}</b>.${diffNote(shown.ceb, p.t) ? ' ' + diffNote(shown.ceb, p.t) + '.' : ''}<br>`; }
+    result({ id: c.id, kind: 'r', ceb: shown.ceb, en: shown.en, audio: false }, item, ok, why + extra);
   };
 }
 // a rule step's examples, keeping only sentences made of words you've met (plus the rule's own little words)
@@ -1719,7 +1758,7 @@ async function loadBoard() {
   boardAt = Date.now();
   try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => Object.assign({ uid: d.id }, d.data())).map(r => (r.streakReset || 0) < STREAK_RESET ? Object.assign(r, { streak: 1, best: 1 }) : r); boardErr = ''; }
   catch (e) { boardErr = 'The leaderboard needs a Firebase rule update first.'; }
-  if (view === 'home' || view === 'progress') { const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }
+  if (view === 'home' || view === 'board') { const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }
 }
 const BOARD_TABS = [
   ['streak', 'Streak', r => r.streak, r => r.streak + ' day' + (r.streak === 1 ? '' : 's') + (r.best > r.streak ? ` · best ${r.best}` : '')],
@@ -1787,15 +1826,15 @@ async function rushQ() {
     if (done) return; done = true; clearInterval(timerH);
     const ok = sel != null && opts[sel].id === c.id; logAnswer(ok);
     btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === c.id) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); });
-    if (ok) { RU.n++; addXP(2); setTimeout(() => { if (view === 'rush') rushQ(); }, 450); } else setTimeout(() => rushOver(sel == null ? 'time' : 'miss', c), 700);
+    if (ok) { RU.n++; addXP(2); setTimeout(() => { if (view === 'rush') rushQ(); }, 450); } else setTimeout(() => rushOver(sel == null ? 'time' : 'miss', c, sel == null ? null : opts[sel]), 700);
   };
   btns.forEach((b, i) => b.onclick = () => finish(i));
   timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / (secs * 1000); const tb = $('#tb'); if (tb) tb.style.width = Math.max(0, f * 100) + '%'; if (f <= 0) finish(null); }, 100);
 }
-function rushOver(why, c) {
+function rushOver(why, c, picked) {
   const n = RU ? RU.n : 0, best = S.rushBest || 0, isBest = n > best; if (isBest) S.rushBest = n; save(); view = 'summary';
   $('#app').innerHTML = `<section class="panel summary"><div class="label">Padayon Rush</div><h1 style="font-size:2.4rem;color:var(--sea)">${n}</h1><p class="muted">${isBest ? 'New personal best!' : 'Best: ' + best}</p>
-    ${c && why ? `<div class="panel"><div class="small muted">${why === 'time' ? "Time ran out on" : 'The answer was'}</div><b>${esc(c.ceb)}</b> <span class="muted">· ${esc(c.en)}</span>${phonHtml(c.ceb)}</div>` : ''}
+    ${c && why ? `<div class="panel"><div class="small muted">${why === 'time' ? "Time ran out on" : 'The answer was'}</div><b>${esc(c.ceb)}</b> <span class="muted">· ${esc(c.en)}</span>${phonHtml(c.ceb)}${picked ? `<div class="small" style="margin-top:6px">${wrongWhy(c, picked, 'en')}</div>` : ''}</div>` : ''}
     ${binkoSays(isBest ? 'NEW RECORD! Binko is writing this one in the journal in BIG letters!' : n >= 10 ? 'Binko binks that was a great run!' : 'Loose bolt! Shake it off and go again.')}
     <button class="btn primary block" id="again">Go again</button><button class="btn ghost block" id="home2">Home</button></section>`;
   $('#again').onclick = startRush; $('#home2').onclick = () => goTab();
