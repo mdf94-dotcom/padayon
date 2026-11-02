@@ -329,7 +329,7 @@ async function announceLesson() {
   const lines = ['BINKO REPORTING!', 'Log entry from Binko!', 'Binko binks this is worth announcing!', 'Ding ding ding! Binko has news!'];
   const fd = new FormData();
   fd.append('payload_json', JSON.stringify({
-    username: '🔧✨ Binko-SR157 ✨🔧', avatar_url: new URL('icon-512.png?v=face', location.href).href,
+    username: '🔧✨ Binko-SR157 ✨🔧', avatar_url: new URL('icon-512.png?v=full', location.href).href,
     embeds: [{ color: [0x34b8a3, 0xf2a7c3, 0xf0e278, 0x6cc4ee, 0xc9824a][Math.floor(Math.random() * 5)],
       author: { name: '🌈🤖 BINKO-SR157 · Lucky Clover Field Log 🍀⚙️', icon_url: new URL('img/binko-face.webp?v=2', location.href).href },
       footer: { text: '💛 Adventurer & Creator Binko · Bink bink! 🩵' }, description: `${lines[Math.floor(Math.random() * lines.length)]} **${who}** finished today's Bisaya lesson!\n🔥 Streak: **${n} day${n === 1 ? '' : 's'}**${n >= 7 && n % 7 === 0 ? ' · a whole week! SUPER DUPER!' : ''}` }]
@@ -648,7 +648,7 @@ function shell(tab, html) {
   lastTab = tab;
   $('#app').innerHTML = `<nav class="tabs" aria-label="Tabs"><div class="tabs-brand">Padayon</div>
     ${TABS.map(([k, l]) => `<button class="tab ${k === tab ? 'on' : ''}" data-tab="${k}" ${k === tab ? 'aria-current="page"' : ''}>${TI[k]}<span>${l}</span>${k === 'rushhome' && S.rushBest ? `<span class="tbadge tnum" aria-label="Best ${S.rushBest}">${S.rushBest}</span>` : ''}</button>`).join('')}
-    <div class="tabs-me">${Sync.user ? `<img src="img/binko-face.webp" alt=""><span><b>${esc(displayName())}</b><span class="small" style="color:var(--good)">Synced</span></span>` : ''}</div></nav>
+    <div class="tabs-me">${Sync.user ? `<img src="icon-192.png?v=full" alt=""><span><b>${esc(displayName())}</b><span class="small" style="color:var(--good)">Synced</span></span>` : ''}</div></nav>
     <div class="tabmain">${html}</div>`;
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => go(b.dataset.tab));
 }
@@ -802,7 +802,7 @@ VIEWS.me = function () {
   shell('me', `${progressHtml()}
   <h2 class="glabel" style="color:var(--muted);margin-top:8px">Account and settings</h2>
   <div class="me-grid">
-  <section class="panel acct"><img src="img/binko-face.webp" alt=""><div style="flex:1;min-width:0"><b style="font-size:1.1rem">${esc(displayName())}</b><div class="small syncline">${syncLine()}</div></div>
+  <section class="panel acct"><img src="icon-192.png?v=full" alt=""><div style="flex:1;min-width:0"><b style="font-size:1.1rem">${esc(displayName())}</b><div class="small syncline">${syncLine()}</div></div>
     <button class="btn sm ${Sync.user ? 'ghost' : 'primary'} syncbtn" id="syncset">${Sync.user ? 'Sign out' : 'Sign in with Google'}</button></section>
   <section class="panel"><h2>Your name</h2>
     <p class="small muted" style="margin:0">Binko uses this when he announces your finished lessons in the family Discord, and on the leaderboard.</p>
@@ -879,7 +879,7 @@ function result(c, item, ok, extra) {
   if (sentenceOnly) c = Object.assign({}, c, { audio: false });
   const f = $('#foot'); f.className = 'foot ' + (q > 0 ? 'good' : 'bad');
   const bxKind = q > 0 && sess.run >= 3 ? 'streak' : q > 0 ? 'right' : 'wrong';
-  f.innerHTML = `<div class="row spread" style="gap:12px;align-items:flex-start"><div class="bx ${bxKind}"><img src="img/binko-face.webp" alt="Binko">${bxKind === 'streak' ? `<span class="run">${sess.run}🔥</span>` : ''}</div><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
+  f.innerHTML = `<div class="row spread" style="gap:12px;align-items:flex-start"><div class="bx ${bxKind}"><img src="icon-192.png?v=full" alt="Binko">${bxKind === 'streak' ? `<span class="run">${sess.run}🔥</span>` : ''}</div><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
   <div class="ans">${c.kind !== 'r' ? picImg(picFile(c), 'in') : ''}<span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${phonHtml(c.ceb)}${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && c.kind !== 'r' && ruleFor(c.ceb) && ruleLearned(ruleFor(c.ceb).id) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
   ${canHear(c) ? `<button class="play sm" id="fplay" aria-label="Play">${I.play}</button>` : ''}</div>
   ${cameoKind ? cameoHtml(cameoKind) : ''}<button class="btn primary block" id="cont">Continue</button>`;
