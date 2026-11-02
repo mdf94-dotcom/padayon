@@ -178,6 +178,11 @@ let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && 
 DAY_SHIFT = S.dayShift || 0;
 function fixFuture(st) { const rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5); if (st.streak.last > rt) { st.streak.count = Math.max(1, st.streak.count - (st.streak.last - rt)); st.streak.last = rt; st.streak.best = Math.max(st.streak.count, Math.min(st.streak.best, st.streak.count + 0)); } if ((st.announced || 0) > rt) st.announced = rt; }
 fixFuture(S);
+/* Streak reset: bump STREAK_RESET to start everyone's streak over at 1 (current and best). Carried through sync so an
+   older device can't bring the old streak back, and the leaderboard shows 1 for anyone who hasn't opened the app since. */
+const STREAK_RESET = 1;
+function resetStreak(st) { if ((st.streakReset || 0) >= STREAK_RESET) return; const rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5); st.streak = { count: 1, last: rt, best: 1 }; st.streakReset = STREAK_RESET; }
+resetStreak(S);
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
 function save() { S.updated = Date.now(); DAY_SHIFT = S.dayShift || 0; localSave(); schedulePush(); if (typeof pushBoard === 'function') pushBoard(); }
 
@@ -207,7 +212,8 @@ function mergeState(a, b) {
     out.cards[id] = !x ? y : !y ? x : ((y.r + y.w) > (x.r + x.w) || ((y.r + y.w) === (x.r + x.w) && y.d > x.d)) ? y : x;
   });
   out.xp = {}; new Set(Object.keys(a.xp).concat(Object.keys(b.xp))).forEach(d => out.xp[d] = Math.max(a.xp[d] || 0, b.xp[d] || 0));
-  const sa = a.streak, sb = b.streak; out.streak = (sb.last > sa.last || (sb.last === sa.last && sb.count > sa.count)) ? { ...sb } : { ...sa }; out.streak.best = Math.max(sa.best, sb.best);
+  if ((a.streakReset || 0) !== (b.streakReset || 0)) { const w = (a.streakReset || 0) > (b.streakReset || 0) ? a : b; out.streakReset = w.streakReset; out.streak = { ...w.streak }; }
+  else { const sa = a.streak, sb = b.streak; out.streak = (sb.last > sa.last || (sb.last === sa.last && sb.count > sa.count)) ? { ...sb } : { ...sa }; out.streak.best = Math.max(sa.best, sb.best); }
   out.bestSpeed = Math.max(a.bestSpeed, b.bestSpeed);
   out.plan = {}; [a.plan, b.plan].forEach(p => Object.keys(p).forEach(d => { out.plan[d] = Object.assign(out.plan[d] || {}, p[d]); Object.keys(p[d]).forEach(k => { if (p[d][k]) out.plan[d][k] = p[d][k]; }); }));
   const t = today(); Object.keys(out.plan).forEach(d => { if (+d !== t) delete out.plan[d]; });
@@ -235,7 +241,7 @@ async function pushNow() {
 function applyRemote(json) {
   let remote; try { remote = JSON.parse(json); } catch (e) { return; }
   const merged = mergeState(S, remote), changed = JSON.stringify(merged) !== JSON.stringify(S);
-  fixFuture(merged); const changed2 = JSON.stringify(merged) !== JSON.stringify(S);
+  fixFuture(merged); resetStreak(merged); const changed2 = JSON.stringify(merged) !== JSON.stringify(S);
   if (changed || changed2) { S = merged; DAY_SHIFT = S.dayShift || 0; localSave(); if (view === 'home' || view === 'settings') render(); }
   if (JSON.stringify(merged) !== json) schedulePush();
 }
@@ -1704,14 +1710,14 @@ const weekStart = () => { const t = today(), dow = (t + 4) % 7; return t - ((dow
 const xpWeek = () => { const w = weekStart(); return Object.entries(S.xp).reduce((s, [k, v]) => s + (+k >= w ? v : 0), 0); };
 const learnedCount = () => Object.keys(S.cards).filter(id => id[0] !== 'r' && S.cards[id].b >= 2 && card(id)).length;
 // each signed-in person's public scoreboard row: board/{uid}. Nothing else of their progress is shared.
-function boardRow() { const a = acc7(); return { name: displayName(), streak: streakNow(), best: S.streak.best || 0, accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, updated: Date.now() }; }
+function boardRow() { const a = acc7(); return { name: displayName(), streakReset: STREAK_RESET, streak: streakNow(), best: S.streak.best || 0, accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, updated: Date.now() }; }
 let boardTimer = null;
 function pushBoard() { if (!Sync.user || !window.firebase) return; clearTimeout(boardTimer); boardTimer = setTimeout(() => { firebase.firestore().collection('board').doc(Sync.user.uid).set(boardRow()).catch(() => { }); }, 3000); }
 let BOARD = null, boardAt = 0, boardTab = 'streak', boardErr = '';
 async function loadBoard() {
   if (!Sync.user || !window.firebase || Date.now() - boardAt < 60000) return;
   boardAt = Date.now();
-  try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => Object.assign({ uid: d.id }, d.data())); boardErr = ''; }
+  try { const q = await firebase.firestore().collection('board').get(); BOARD = q.docs.map(d => Object.assign({ uid: d.id }, d.data())).map(r => (r.streakReset || 0) < STREAK_RESET ? Object.assign(r, { streak: 1, best: 1 }) : r); boardErr = ''; }
   catch (e) { boardErr = 'The leaderboard needs a Firebase rule update first.'; }
   if (view === 'home' || view === 'progress') { const el = $('#board'); if (el) el.outerHTML = boardPanel(); wireBoard(); }
 }
