@@ -232,6 +232,7 @@ function mergeState(a, b) {
   out.rules = Object.assign({}, b.rules || {}, a.rules || {}); out.ruleDay = Math.max(a.ruleDay || 0, b.ruleDay || 0);
   out.acc = Object.assign({}, b.acc || {}, a.acc || {}); [a.acc || {}, b.acc || {}].forEach(x => Object.keys(x).forEach(k => { const o = out.acc[k], v = x[k]; if (!o || v.t > o.t) out.acc[k] = v; }));
   out.rushBest = Math.max(a.rushBest || 0, b.rushBest || 0);
+  out.geoBest = { prov: Math.max((a.geoBest || {}).prov || 0, (b.geoBest || {}).prov || 0), lang: Math.max((a.geoBest || {}).lang || 0, (b.geoBest || {}).lang || 0) };
   out.freezeWk = Math.max(a.freezeWk || 0, b.freezeWk || 0); out.freezeDay = Math.max(a.freezeDay || 0, b.freezeDay || 0);
   out.pod = (a.pod && b.pod) ? (a.pod.d >= b.pod.d ? a.pod : b.pod) : (a.pod || b.pod);
   out.flags = Object.assign({}, b.flags || {}, a.flags || {}); out.storyDone = Object.assign({}, b.storyDone || {}, a.storyDone || {}); out.placed = Math.max(a.placed || 0, b.placed || 0);
@@ -651,9 +652,9 @@ let view = 'home';
 const VIEWS = {};
 // background music: upbeat in Rush, calm in lessons and practice, off on menus and whenever you're speaking
 function musicFor() {
-  if (view === 'rush') return 'rush';
+  if (view === 'rush' || (view === 'geogame' && GG && !GG.practice)) return 'rush';
   if (view === 'session') { const it = Q[qi]; return it && ['speak', 'shadow', 'pron', 'say'].includes(it.type) ? 'off' : 'calm'; }
-  return ['speedrun', 'build', 'real', 'story', 'stories'].includes(view) ? 'calm' : 'off';
+  return ['speedrun', 'build', 'real', 'story', 'stories', 'geo', 'geogame'].includes(view) ? 'calm' : 'off';
 }
 function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); if (typeof Music !== 'undefined') Music.set(musicFor()); }
 let BINKO_N = (() => { try { const n = (+localStorage.getItem('padayon-binko') || 0) + 1; localStorage.setItem('padayon-binko', n); return n; } catch (e) { return Math.floor(Math.random() * 20); } })();
@@ -681,7 +682,7 @@ const TI = {
   board: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V14h5v7M9.5 21V9h5v12M16 21v-9h5v9"/><path d="M12 3.2l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2L9.1 5.3l2-.3z" fill="currentColor" stroke-width="1"/></svg>',
   chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
 };
-const TABS = [['home', 'Today'], ['practice', 'Practice'], ['rushhome', 'Rush'], ['board', 'Ranks'], ['me', 'Me']];
+const TABS = [['home', 'Today'], ['practice', 'Practice'], ['rushhome', 'Games'], ['board', 'Ranks'], ['me', 'Me']];
 const TAB_VIEWS = new Set(TABS.map(t => t[0]));
 let lastTab = 'home';
 const goTab = () => go(lastTab);
@@ -816,22 +817,24 @@ VIEWS.practice = function () {
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
 };
 /* Padayon Rush has its own tab: your best, the family's best runs, and a big Play button */
+/* The Games tab: Padayon Rush, the two map games, and Study the map */
 VIEWS.rushhome = function () {
-  const rows = (Sync.user && BOARD ? BOARD.filter(r => r.rush > 0).sort((a, b) => b.rush - a.rush) : []), me = Sync.user && Sync.user.uid;
-  const myRank = rows.findIndex(r => r.uid === me);
-  shell('rushhome', `<div class="ptitle"><h1>Padayon Rush</h1><p class="muted">Every recorded word in the app, learned or not. Easy words first, then harder and faster. One miss ends the run.</p></div>
-  <div class="rush-grid">
-  <section class="rush-hero"><div class="rush-best"><span class="label">Your best</span><b class="tnum">${S.rushBest || 0}</b><span class="muted small">in a row${myRank >= 0 ? ' · #' + (myRank + 1) + ' in the family' : ''}</span></div>
-    <button class="btn" id="rushplay">Play<kbd>Enter</kbd></button>
-    <ul class="rush-how"><li>Hear a word, pick its meaning</li><li>The timer gets shorter every 5 right</li><li>Words get harder the longer you last</li></ul></section>
-  <section class="panel" id="rushboard"><div class="row spread"><h2>Family best runs</h2><span class="muted small">All time</span></div>
-    ${!Sync.user ? `<p class="muted small" style="margin:0">Sign in with Google on the Me tab to see everyone's best runs.</p>`
-      : boardErr ? `<p class="muted small" style="margin:0">${esc(boardErr)}</p>`
-      : !BOARD ? `<p class="muted small" style="margin:0">Loading…</p>`
-      : rows.length ? `<ol class="blist">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span><b>${esc(r.name || 'Someone')}</b><span class="muted small">${r.rush} in a row</span></li>`).join('')}</ol>`
-      : `<p class="muted small" style="margin:0">Nobody has played yet. Be the first!</p>`}</section>
+  const me = Sync.user && Sync.user.uid, gb = S.geoBest || {};
+  const top = (f, unit) => { if (!Sync.user || !BOARD) return ''; const rows = BOARD.filter(r => (r[f] || 0) > 0).sort((a, b) => b[f] - a[f]).slice(0, 3); return rows.length ? `<ol class="blist mini">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i]}</span><b>${esc(capName(r.name) || 'Someone')}</b><span class="muted small">${r[f]} ${unit}</span></li>`).join('')}</ol>` : '<p class="muted small" style="margin:0">Nobody has a score yet. Be the first!</p>'; };
+  const card = (id, emoji, name, desc, best, f, extra) => `<section class="game-card"><div class="row" style="gap:12px;align-items:center"><span class="game-emo">${emoji}</span><div style="flex:1;min-width:0"><b class="game-name">${name}</b><div class="small muted">${desc}</div></div><div class="game-best"><span class="label">Best</span><b class="tnum">${best}</b></div></div>
+    <div class="row">${extra || ''}<button class="btn primary" id="${id}">Play</button></div><div class="small muted" style="margin-top:2px">Family best</div>${top(f, 'in a row')}</section>`;
+  shell('rushhome', `<div class="ptitle"><h1>Games</h1><p class="muted">Every word in the app, and every province in the Philippines. One miss ends a run.</p></div>
+  <div class="games-grid">
+  ${card('rushplay', '🏆', 'Padayon Rush', 'Hear a word, pick its meaning. Easy to hard, faster and faster.', S.rushBest || 0, 'rush')}
+  ${card('geoprov', '🗺️', 'Province Rush', 'A province lights up on the map. Name it! Faster and faster.', gb.prov || 0, 'geoP', '<button class="btn ghost" id="geoprovp">Practice</button>')}
+  ${card('geolang', '🗣️', 'Language Rush', 'A province lights up. What do most people speak there? Faster and faster.', gb.lang || 0, 'geoL', '<button class="btn ghost" id="geolangp">Practice</button>')}
+  <section class="game-card study"><div class="row" style="gap:12px;align-items:center"><span class="game-emo">📍</span><div style="flex:1"><b class="game-name">Study the map</b><div class="small muted">Explore every province, its region and its language before you play. Practice rounds don't end on a miss and don't count for the leaderboard.</div></div></div><button class="btn ghost block" id="geostudy">Open the map</button></section>
   </div>`);
   $('#rushplay').onclick = startRush;
+  $('#geoprov').onclick = () => startGeo('prov'); $('#geoprovp').onclick = () => startGeo('prov', true);
+  $('#geolang').onclick = () => startGeo('lang'); $('#geolangp').onclick = () => startGeo('lang', true);
+  $('#geostudy').onclick = () => go('geo');
+  loadGeo();
   if (Sync.user && !BOARD && !boardErr) loadBoard().then(() => { if (view === 'rushhome' && (BOARD || boardErr)) render(); });
 };
 function progressHtml() {
@@ -1036,7 +1039,8 @@ const GUIDE = [
   { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'One new rule a day, inside your session'], ['📈', 'Questions get harder each time'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya']] },
-  { t: 'Rush and Ranks', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> easy to hard, one miss ends it'], ['📊', '<b>Ranks:</b> see how the family is doing'], ['🔑', 'Sign in on <b>Me</b> to join']] },
+  { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines'], ['📍', 'Study the map first, no pressure']] },
+  { t: 'Ranks', tab: 'board', art: '📊', pts: [['📊', 'See how the family is doing'], ['🎯', 'Streaks, accuracy, words, games'], ['🔑', 'Sign in on <b>Me</b> to join']] },
   { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day'], ['🎵', 'Background music on or off']], set: true },
   { t: 'One last thing', art: '🎯', pts: [['✏️', 'A quick check of what you already know'], ['⏭️', 'Words you know get skipped'], ['🤷', 'Not sure? Tap "I don\'t know". That\'s fine!']] }
 ];
@@ -1991,7 +1995,7 @@ const weekStart = () => { const t = today(), dow = (t + 4) % 7; return t - ((dow
 const xpWeek = () => { const w = weekStart(); return Object.entries(S.xp).reduce((s, [k, v]) => s + (+k >= w ? v : 0), 0); };
 const learnedCount = () => Object.keys(S.cards).filter(id => id[0] !== 'r' && S.cards[id].b >= 2 && card(id)).length;
 // each signed-in person's public scoreboard row: board/{uid}. Nothing else of their progress is shared.
-function boardRow() { const a = acc7(); return { name: displayName(), streakReset: STREAK_RESET, streak: streakNow(), best: S.streak.best || 0, accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, updated: Date.now() }; }
+function boardRow() { const a = acc7(); return { name: displayName(), streakReset: STREAK_RESET, streak: streakNow(), best: S.streak.best || 0, accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, geoP: (S.geoBest || {}).prov || 0, geoL: (S.geoBest || {}).lang || 0, updated: Date.now() }; }
 let boardTimer = null;
 function pushBoard() { if (!Sync.user || !window.firebase) return; clearTimeout(boardTimer); boardTimer = setTimeout(() => { firebase.firestore().collection('board').doc(Sync.user.uid).set(boardRow()).catch(() => { }); }, 3000); }
 let BOARD = null, boardAt = 0, boardTab = 'streak', boardErr = '';
@@ -2008,7 +2012,9 @@ const BOARD_TABS = [
   ['acc', 'Accuracy', r => r.accN >= 30 ? r.accR / r.accN : -1, r => r.accN >= 30 ? Math.round(r.accR / r.accN * 100) + '% · ' + r.accN + ' answers' : 'needs 30 answers in 7 days'],
   ['learned', 'Words', r => r.learned, r => r.learned + ' learned'],
   ['speed', 'Speed', r => r.speed, r => (+r.speed).toFixed(1) + '×'],
-  ['rush', 'Rush', r => r.rush, r => r.rush + ' in a row']
+  ['rush', 'Rush', r => r.rush, r => r.rush + ' in a row'],
+  ['geoP', 'Province Rush', r => r.geoP || 0, r => (r.geoP || 0) + ' in a row'],
+  ['geoL', 'Language Rush', r => r.geoL || 0, r => (r.geoL || 0) + ' in a row']
 ];
 function boardPanel() {
   const head = `<section class="panel" id="board"><div class="row spread"><h2>Leaderboard</h2><span class="muted small">This week · family</span></div>`;
@@ -2022,8 +2028,8 @@ function boardPanel() {
     <ol class="blist">${rows.map((r, i) => `<li class="${r.uid === me ? 'me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span><b>${esc(capName(r.name) || 'Someone')}</b><span class="muted small">${esc(tab[3](r))}</span></li>`).join('')}</ol></section>`;
 }
 // the Ranks tab: every ranking in its own box, one under the other
-const BOARD_DESC = { streak: 'Days in a row with a finished daily session.', best: 'The longest streak ever.', acc: 'Every answer in the last 7 days, right and wrong: lessons, grammar, practice drills, Rush, Real Bisaya and stories.', learned: 'Words and phrases learned so far.', speed: 'Fastest listening speed reached.', rush: 'Longest Padayon Rush run.' };
-const BOARD_ICON = { streak: '🔥', best: '🏅', acc: '🎯', learned: '📚', speed: '⚡', rush: '🏆' };
+const BOARD_DESC = { streak: 'Days in a row with a finished daily session.', best: 'The longest streak ever.', acc: 'Every answer in the last 7 days, right and wrong: lessons, grammar, practice drills, Rush, Real Bisaya and stories.', learned: 'Words and phrases learned so far.', speed: 'Fastest listening speed reached.', rush: 'Longest Padayon Rush run.', geoP: 'Longest Province Rush run.', geoL: 'Longest Language Rush run.' };
+const BOARD_ICON = { streak: '🔥', best: '🏅', acc: '🎯', learned: '📚', speed: '⚡', rush: '🏆', geoP: '🗺️', geoL: '🗣️' };
 function boardBoxes() {
   if (!Sync.user) return `<section class="panel"><p class="muted small" style="margin:0">Sign in with Google on the Me tab to join the leaderboard.</p></section>`;
   if (boardErr) return `<section class="panel"><p class="muted small" style="margin:0">${esc(boardErr)}</p></section>`;
