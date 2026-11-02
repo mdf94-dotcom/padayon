@@ -623,7 +623,7 @@ function musicFor() {
   if (view === 'session') { const it = Q[qi]; return it && ['speak', 'shadow', 'pron', 'say'].includes(it.type) ? 'off' : 'calm'; }
   return ['speedrun', 'build', 'real'].includes(view) ? 'calm' : 'off';
 }
-function render() { stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); if (typeof Music !== 'undefined') Music.set(musicFor()); }
+function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); (VIEWS[view] || VIEWS.home)(); window.scrollTo(0, 0); if (typeof Music !== 'undefined') Music.set(musicFor()); }
 function go(v) { view = v; render(); }
 function ringSvg(v, goal) { const r = 36, c = 2 * Math.PI * r, f = Math.min(1, v / goal); return `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - f)}" transform="rotate(-90 42 42)"/></svg>`; }
 function unitRow(u, key) {
@@ -837,7 +837,7 @@ VIEWS.me = function () {
   $('#imp').onclick = () => { const fi = $('#filein'); fi.accept = '.json,application/json'; fi.value = ''; fi.onchange = async () => { try { const s = JSON.parse(await fi.files[0].text()); if (s.v !== 1) throw 0; S = migrate(s); save(); toast('Progress loaded'); go('home'); } catch (e) { toast('That is not a Padayon backup file.'); } }; fi.click(); };
 };
 /* ---------- the guide: shown once to everyone after a big update (bump GUIDE_V), and any time from Me ---------- */
-const GUIDE_V = 1;
+const GUIDE_V = 2;
 const GUIDE = [
   { t: 'Maayong pag-abot!', b: "Binko rebuilt Padayon! Here's a quick tour of how everything works now. It takes about a minute.", i: 'home' },
   { t: 'Today: your daily session', b: "Start is your daily session, about 15 to 20 minutes of reviews and new words. Every new word comes with a picture, a <b>sounds like</b> guide, and an example sentence made only of words you already know. Your plan lists everything else for the day; finished items fold away. Finish the daily session to keep your streak, and Binko announces it in #streaks.", i: 'home' },
@@ -847,20 +847,24 @@ const GUIDE = [
   { t: 'Rush 🏆', b: 'The golden trophy is Padayon Rush: every word in the app, easiest first, getting harder and faster. One miss ends the run. Your best shows on the trophy, and the family best runs are right there too.', i: 'rushhome' },
   { t: 'Ranks', b: 'The family leaderboard: streak, accuracy, words learned, listening speed and Rush. Sign in with Google in Me to show up on it and to keep your progress on all your devices.', i: 'board' },
   { t: 'Me, and your daily cards', b: 'Me has your path through the five stages, your stats, weak spots, every unit, and your settings. You can change how many new cards you get each day any time:', i: 'me', cards: true },
+  { t: 'Music 🎵', b: "Lessons and practice have a calm background song, and Rush has an upbeat one that speeds up the longer your run goes. It goes quiet whenever a Bisaya word plays, and turns off when you're speaking. Want it?", i: 'me', music: true },
   { t: "You're all set!", b: "On a computer: <b>Space</b> replays the audio, <b>S</b> plays it slowly, <b>1 to 4</b> picks an answer and <b>Enter</b> continues. You can open this guide again from Me. Padayon!", i: 'home' }
 ];
 let guideAt = 0, guideBack = 'home';
 function openGuide(back) { guideAt = 0; guideBack = back || 'home'; go('guide'); }
 VIEWS.guide = function () {
   const g = GUIDE[guideAt], last = guideAt === GUIDE.length - 1, per = S.settings.newPerDay || 8;
-  $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Close">${I.x}</button><div class="gdots">${GUIDE.map((_, i) => `<i class="${i === guideAt ? 'on' : i < guideAt ? 'done' : ''}"></i>`).join('')}</div><button class="linkbtn" id="gskip">Skip</button></div>
+  const must = (S.guideV || 0) < GUIDE_V;
+  $('#app').innerHTML = `<div class="sbar">${must ? '<span style="width:44px"></span>' : `<button class="x" id="quit" aria-label="Close">${I.x}</button>`}<div class="gdots">${GUIDE.map((_, i) => `<i class="${i === guideAt ? 'on' : i < guideAt ? 'done' : ''}"></i>`).join('')}</div>${must ? `<span class="muted small tnum" style="width:44px;text-align:right">${guideAt + 1}/${GUIDE.length}</span>` : '<button class="linkbtn" id="gskip">Skip</button>'}</div>
     <div class="ex guide-page"><div class="gicon">${TI[g.i] || ''}</div><h1 class="gtitle">${g.t}</h1>${binkoSays(g.b, guideAt === 0)}
+    ${g.music ? `<div class="panel"><div class="label">Background music</div><div class="seg" id="gmusic"><button class="${S.settings.music !== false ? 'on' : ''}" data-m="1">On</button><button class="${S.settings.music === false ? 'on' : ''}" data-m="0">Off</button></div><p class="muted small" style="margin:0">You can change this any time in Me, under Daily cards.</p></div>` : ''}
     ${g.cards ? `<div class="panel"><div class="label">New cards per day</div><div class="seg" id="gseg">${[5, 8, 10, 15].map(n => `<button class="${per === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div><p class="muted small" style="margin:0">8 a day is about 15 to 20 minutes with reviews. Fewer keeps it light; more moves you along faster but means more reviews.</p></div>` : ''}</div>
     <div class="foot"><div class="row" style="gap:10px">${guideAt ? '<button class="btn ghost" id="gprev">Back</button>' : ''}<button class="btn primary block" id="gnext" style="flex:1">${last ? "Let's go!" : 'Next'}</button></div></div>`;
   const done = () => { S.guideV = GUIDE_V; save(); go(guideBack); };
-  $('#quit').onclick = done; $('#gskip').onclick = done;
+  if ($('#quit')) $('#quit').onclick = done; if ($('#gskip')) $('#gskip').onclick = done;
   $('#gnext').onclick = () => { if (last) return done(); guideAt++; render(); };
   if ($('#gprev')) $('#gprev').onclick = () => { guideAt--; render(); };
+  if ($('#gmusic')) $('#gmusic').querySelectorAll('button').forEach(b => b.onclick = () => { S.settings.music = b.dataset.m === '1'; save(); render(); });
   if ($('#gseg')) $('#gseg').querySelectorAll('button').forEach(b => b.onclick = () => { S.settings.newPerDay = +b.dataset.v; save(); render(); });
   $('#gnext').focus({ preventScroll: true });
 };
@@ -1850,6 +1854,7 @@ function rushOptions(c, pool) {
 }
 function startRush() { if (typeof Music !== 'undefined') Music.resetLevel(); if (!hasPack()) { toast('Load the content pack first.'); return goTab(); } RU = { pool: rushPool(), n: 0, seen: new Set() }; sess = newSess('rush'); view = 'rush'; rushQ(); }
 async function rushQ() {
+  if ((S.guideV || 0) < GUIDE_V) return go('guide');
   if (typeof Music !== 'undefined') { Music.level(RU.n); Music.set('rush'); }
   const id = rushPick(); RU.seen.add(id);
   const c = card(id), opts = rushOptions(c, RU.pool), secs = Math.max(3, 8 - Math.floor(RU.n / 5) * 0.5);
