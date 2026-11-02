@@ -1031,7 +1031,7 @@ VIEWS.place = function () {
 const GUIDE_V = 4;
 /* The guide: short, visual pages. Each page has a picture, a few short points, and shows where to find it. */
 const GUIDE = [
-  { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['🤖', 'Binko, the little robot, helps along the way']] },
+  { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
   { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone']] },
   { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'One new rule a day, inside your session'], ['📈', 'Questions get harder each time'], ['🤔', 'Miss one? See exactly why']] },
