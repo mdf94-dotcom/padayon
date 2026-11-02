@@ -635,7 +635,7 @@ const goTab = () => go(lastTab);
 function shell(tab, html) {
   lastTab = tab;
   $('#app').innerHTML = `<nav class="tabs" aria-label="Tabs"><div class="tabs-brand">Padayon</div>
-    ${TABS.map(([k, l]) => `<button class="tab ${k === tab ? 'on' : ''}" data-tab="${k}" ${k === tab ? 'aria-current="page"' : ''}>${TI[k]}<span>${l}</span></button>`).join('')}
+    ${TABS.map(([k, l]) => `<button class="tab ${k === tab ? 'on' : ''}" data-tab="${k}" ${k === tab ? 'aria-current="page"' : ''}>${TI[k]}<span>${l}</span>${k === 'rushhome' && S.rushBest ? `<span class="tbadge tnum" aria-label="Best ${S.rushBest}">${S.rushBest}</span>` : ''}</button>`).join('')}
     <div class="tabs-me">${Sync.user ? `<img src="img/binko-face.webp" alt=""><span><b>${esc(displayName())}</b><span class="small" style="color:var(--good)">Synced</span></span>` : ''}</div></nav>
     <div class="tabmain">${html}</div>`;
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => go(b.dataset.tab));
