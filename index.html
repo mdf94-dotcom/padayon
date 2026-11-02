@@ -264,6 +264,13 @@ details.rule.later{opacity:.72}
 .phon{font-size:.85rem;color:var(--muted);letter-spacing:.02em;margin:2px 0 4px}
 .phon span{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;opacity:.8}
 .gap .phon{grid-column:1/-1;margin:0}
+.btabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.btab{border:1px solid var(--line);background:var(--surface);color:inherit;border-radius:999px;padding:5px 11px;font:inherit;font-size:.85rem;white-space:nowrap;cursor:pointer}
+.btab.on{background:var(--sea);color:#0a1f1c;border-color:var(--sea);font-weight:700}
+.blist{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.blist li{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 8px;border-radius:10px}
+.blist li.me{background:var(--sea-soft)}
+.blist .rk{text-align:center}
 .vid{position:relative;width:100%;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:#000}
 .vid iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .good-note{background:#1a3532;border-color:#2c5a54}
@@ -306,6 +313,7 @@ details>summary{cursor:pointer}
 <script src="learn.js"></script>
 <script src="mega.js"></script>
 <script src="path.js"></script>
+<script src="fixes.js"></script>
 <script src="cast.js"></script>
 <script src="grammar.js"></script>
 <script src="real.js"></script>
