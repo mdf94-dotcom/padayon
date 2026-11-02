@@ -28,7 +28,7 @@ const BINKO_MORE = {
   session: ['BINKO REPORTING! Your daily session is fueled up and ready to launch!', 'Binko polished every new word himself. Some of them sparkle. Let\'s go!', 'Today\'s session has new words AND old friends. Binko loves a reunion!', 'Binko binks today is a GREAT day to learn Bisaya. Binko binks that every day.', 'Ding ding ding! Session time! Binko already did his warm-up stretches.', 'Fun fact from Binko: little words like ko and na make Bisaya sound real. Watch for them today!'],
   convo: ['Binko found a new conversation! Pretend Binko is the other person. Binko is very good at pretending.', 'Talk time! Say your lines out loud, even if the cat is listening.'],
   speed: ['VROOOM! The speed round is warmed up. Can your ears keep up with Binko\'s engine?', 'Fast Bisaya is real Bisaya. Lola talks at 2× speed, so let\'s practice!'],
-  dict: ['Dictation! Binko\'s ears are tiny microphones. Let\'s see if yours are better!', 'Type every word you hear. The little ones are sneaky. Binko caught three yesterday!'],
+  dict: ['Dictation! Binko\'s ears are giant microphones. Let\'s see if yours are better!', 'Type every word you hear. The little ones are sneaky. Binko caught three yesterday!'],
   shadow: ['Shadowing! Say it WITH the voice, like singing along to a song in the car.'],
   build: ['Binko has a new grammar gadget for you! Learn the rule, then build your own sentences.', 'Building sentences is like building robots. Binko would know!'],
   real: ['Real Bisaya from the internet! Binko only picks ones where you know every word.'],
