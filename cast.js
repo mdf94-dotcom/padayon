@@ -45,11 +45,11 @@ const CLOVER_FACTS = {"green": ["Big Green tells a holy story. In 1565, a Spanis
 const CLOVER_STYLE = {
   binko: { tag: '⍢ Binko-SR157 🔧', face: 'icon-192.png?v=full' },
   green: { tag: '🐊 Big Green', face: 'img/green-face.webp' },
-  ollie: { tag: '🔥 Ollie', face: 'img/ollie-face.webp' },
-  quickare: { tag: '🎩 Quickare', face: 'img/quickare-face.webp' },
-  penn: { tag: '🎭 Penn', face: 'img/penn-face.webp' },
-  triton: { tag: '⚓ Captain Triton', face: 'img/triton-face.webp' },
-  cat: { tag: '🐐 Cat', face: 'img/cat-face.webp' }
+  ollie: { tag: '🔥 Ollie', face: 'img/ollie-face.webp?v=4' },
+  quickare: { tag: '🎩 Quickare', face: 'img/quickare-face.webp?v=4' },
+  penn: { tag: '🎭 Penn', face: 'img/penn-face.webp?v=4' },
+  triton: { tag: '⚓ Captain Triton', face: 'img/triton-face.webp?v=4' },
+  cat: { tag: '🐐 Cat', face: 'img/cat-face.webp?v=4' }
 };
 const FACT_WHO = Object.keys(CLOVER_FACTS);
 function lsGet(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
@@ -94,7 +94,73 @@ const CHEERS = {
 };
 const castImg = (k, cls = '') => { const c = CAST[k]; return `<img class="art ${c.cut ? 'cut' : 'framed'} ${cls}" src="${c.img}" alt="${c.name}">`; };
 // cameos use a face-and-shoulders crop so the character is easy to see at small sizes
-const castFace = k => `<img class="face" src="img/${k}-face.webp" alt="${CAST[k].name}" width="72" height="72">`;
+const castFace = k => `<img class="face" src="img/${k}-face.webp?v=4" alt="${CAST[k].name}" width="72" height="72">`;
 const pickLine = kind => CHEERS[kind][Math.floor(Math.random() * CHEERS[kind].length)];
 function cameoHtml(kind) { const [k, line] = pickLine(kind); return `<div class="cameo">${castFace(k)}<div><div class="who">${CAST[k].name}</div><div class="line">${line}</div></div></div>`; }
 function binkoSays(text, big) { return `<div class="guide ${big ? 'big' : ''}"><img class="art face" src="icon-192.png?v=full" alt="Binko-SR157"><div class="bubble"><span class="who">⍢ Binko-SR157 🔧</span>${text}</div></div>`; }
+
+/* ---------- special moves: every few seconds the speaker on Today does something big, picked at random ---------- */
+const SPECIALS = {
+  binko: ['rainbow', 'spin', 'dj'],
+  green: ['chomp', 'heal', 'evolve'],
+  ollie: ['surge', 'flare', 'petals'],
+  quickare: ['quickdraw', 'hattoss', 'fan'],
+  penn: ['flip', 'echoes', 'shadow'],
+  triton: ['rings', 'song', 'glitch'],
+  cat: ['leap', 'bleat', 'headbutt']
+};
+const SP_LEN = { rainbow: 1600, spin: 900, dj: 1600, chomp: 900, heal: 1500, evolve: 1300, surge: 1200, flare: 1400, petals: 1700, quickdraw: 1000, hattoss: 1300, fan: 1100, flip: 1100, echoes: 1500, shadow: 1500, rings: 1800, song: 1700, glitch: 900, leap: 1000, bleat: 1100, headbutt: 1000 };
+function spawnFx(host, ch, n, cls, spread) {
+  for (let i = 0; i < n; i++) {
+    const e = document.createElement('b'); e.className = 'pt ' + (cls || ''); e.textContent = ch[i % ch.length];
+    const a = spread === 'up' ? (-Math.PI / 2 + (Math.random() - .5) * 1.4) : Math.random() * Math.PI * 2, d = 40 + Math.random() * 40;
+    e.style.setProperty('--dx', Math.cos(a) * d + 'px'); e.style.setProperty('--dy', Math.sin(a) * d + 'px'); e.style.setProperty('--r', (Math.random() * 120 - 60) + 'deg');
+    e.style.animationDelay = (i * (spread === 'seq' ? 220 : 60)) + 'ms'; host.appendChild(e); setTimeout(() => e.remove(), 2200);
+  }
+}
+function pop(host, text, cls) { const e = document.createElement('b'); e.className = 'popword ' + (cls || ''); e.textContent = text; host.appendChild(e); setTimeout(() => e.remove(), 1300); }
+function doSpecial(face, who, name) {
+  if (!face || face.classList.contains('sp')) return;
+  name = name || pick(SPECIALS[who] || []); if (!name) return;
+  face.classList.add('sp', 'sp-' + name);
+  const F = {
+    rainbow: () => { const r = document.createElement('i'); r.className = 'rainbow-ring'; face.appendChild(r); setTimeout(() => r.remove(), 1600); spawnFx(face, ['✦', '★', '✧'], 8, 'rainbow'); },
+    dj: () => spawnFx(face, ['♪', '♫', '♬'], 7, 'note', 'up'),
+    chomp: () => pop(face, 'CHOMP!', 'green'),
+    heal: () => spawnFx(face, ['✚'], 8, 'heal', 'up'),
+    evolve: () => spawnFx(face, ['✦'], 8, 'gold'),
+    surge: () => spawnFx(face, ['✦', '✸', '❋'], 12, 'surge'),
+    flare: () => spawnFx(face, ['🔥'], 6, 'fire', 'up'),
+    petals: () => spawnFx(face, ['❀', '✿'], 10, 'petal'),
+    quickdraw: () => { setTimeout(() => { pop(face, 'BANG!', 'bang'); spawnFx(face, ['✸'], 5, 'flash'); }, 450); },
+    hattoss: () => { const h = document.createElement('b'); h.className = 'hat'; h.textContent = '🎩'; face.appendChild(h); setTimeout(() => h.remove(), 1300); },
+    fan: () => spawnFx(face, ['✸'], 3, 'flash', 'seq'),
+    echoes: () => { for (let i = 0; i < 4; i++) { const g = document.createElement('i'); g.className = 'ghost'; g.style.setProperty('--a', (i * 90 + 45) + 'deg'); face.appendChild(g); setTimeout(() => g.remove(), 1500); } },
+    rings: () => { for (let i = 0; i < 3; i++) { const g = document.createElement('i'); g.className = 'smokering'; g.style.animationDelay = i * 300 + 'ms'; face.appendChild(g); setTimeout(() => g.remove(), 1900); } },
+    song: () => spawnFx(face, ['♪', '♫'], 6, 'note sea', 'up'),
+    bleat: () => pop(face, 'MEHH!', 'cat'),
+    headbutt: () => setTimeout(() => spawnFx(face, ['✸'], 4, 'flash'), 300)
+  };
+  (F[name] || (() => { }))();
+  setTimeout(() => face.classList.remove('sp', 'sp-' + name), SP_LEN[name] || 1200);
+}
+let spTimer = null;
+function startSpecials() {
+  clearTimeout(spTimer);
+  const loop = (first) => { spTimer = setTimeout(() => { const f = document.querySelector('.hero-guide .cface'), g = f && f.closest('.clover');
+    if (!f || document.hidden || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return loop();
+    doSpecial(f, (g.className.match(/c-(\w+)/) || [])[1]); loop(); }, first ? 1800 : 6000 + Math.random() * 4000); };
+  loop(true);
+}
+/* Start on Today: Binko zooms in from the left and bumps whoever is talking off the card, then the session begins */
+function binkoBump(then) {
+  const f = document.querySelector('.hero-guide .cface');
+  if (!f || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return then();
+  clearTimeout(spTimer);
+  const r = f.getBoundingClientRect(), self = /c-binko/.test(f.closest('.clover').className);
+  const b = document.createElement('img'); b.src = 'img/binko.webp'; b.alt = ''; b.className = 'binko-run';
+  b.style.top = (r.top + r.height / 2 - 48) + 'px'; b.style.setProperty('--to', (r.left - 30) + 'px');
+  document.body.appendChild(b);
+  setTimeout(() => { if (!self) f.classList.add('bumped'); else f.style.visibility = 'hidden'; b.classList.add('hit'); }, 330);
+  setTimeout(() => { b.remove(); then(); }, 720);
+}

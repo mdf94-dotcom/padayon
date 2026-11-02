@@ -789,7 +789,7 @@ VIEWS.home = function () {
     ${packState === 'loading' ? `<div class="small">Downloading 225 phrases and 1,002 words with native recordings… <b id="packpct">${packPct}%</b> (about 10 MB, one time only)</div>` : `<div class="small">${packState === 'error' ? "The phrases and recordings didn't download. Check your connection and try again." : 'Phrases and recordings are not loaded yet.'}</div><button class="btn primary" id="packretry">Download phrases and recordings</button>`}
   </section>` : ''}
   <div class="today-grid"><div class="today-main">
-  <section class="hero">
+  <section class="hero h-${HOME_SPK.who}">
     <div class="hero-guide">${cloverSays(HOME_SPK.who, HOME_SPK.who === 'binko' ? binkoPlan() : HOME_SPK.html, true)}</div>
     <div class="hero-text"><div class="label">Karon nga adlaw · Today</div><h2>${nextUp ? esc(nextUp.name) : 'All done today. Padayon!'}</h2>
       <p>${nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${due} review${due === 1 ? '' : 's'}, ${nw} new` : nextUp.d) : 'Come back tomorrow, or do another session.'}</p></div>
@@ -804,7 +804,8 @@ VIEWS.home = function () {
     ${done.length ? `<button class="donebar" id="showdone">${I.check}<span>Done: ${esc(done.map(i => i.name.replace("Today's ", '')).join(', '))}</span><b>${showDone ? 'Hide' : 'Show'}</b></button>` : ''}
   </section></div>
   <div class="today-side">${statTrio()}${stageMini()}${boardPanel()}</div></div>`);
-  $('#start').onclick = () => { if (!nextUp) return planDay().session ? go('again') : startSession(); if (nextUp.manual) { tick(nextUp.k); return render(); } nextUp.run(); };
+  $('#start').onclick = () => { if (!nextUp) return planDay().session ? go('again') : binkoBump(startSession); if (nextUp.manual) { tick(nextUp.k); return render(); } binkoBump(() => nextUp.run()); };
+  startSpecials();
   document.querySelectorAll('[data-run]').forEach(b => b.onclick = () => planItems().find(i => i.k === b.dataset.run).run());
   if ($('#showdone')) $('#showdone').onclick = () => { showDone = !showDone; render(); };
   wirePod();

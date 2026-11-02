@@ -320,7 +320,6 @@ details>summary{cursor:pointer}
 .c-green .cface{animation:cl-breathe 4.2s ease-in-out infinite}
 .c-green .cface .art.face{border-color:#c9a24a}
 .c-green .fx{inset:-7px;border-radius:50%;border:2px solid rgba(240,200,90,.55);animation:cl-halo 4.2s ease-in-out infinite}
-.c-green .bubble{background:#1d3626;color:#ece8d6;border-color:#c9a24a;box-shadow:0 3px 0 #0c1a12}.c-green .bubble .who{color:#c99be0}.c-green .bubble b{color:#f0d27a}
 @keyframes cl-breathe{0%,100%{transform:scale(1)}40%{transform:scale(1.05)}82%{transform:scale(1)}86%{transform:scale(1.03) rotate(-3deg)}90%{transform:scale(1) rotate(2deg)}94%{transform:rotate(0)}}
 @keyframes cl-halo{0%,100%{opacity:.35;transform:scale(.96)}45%{opacity:1;transform:scale(1.04)}}
 /* Ollie: fire. Flickering glow and embers rising off him */
@@ -328,14 +327,12 @@ details>summary{cursor:pointer}
 .c-ollie .cface .art.face{border-color:#e8833a}
 .c-ollie .fx,.c-ollie .fx2{bottom:4px;width:10px;height:14px;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;background:radial-gradient(circle at 50% 70%,#ffe08a,#ff8a2b 55%,rgba(230,60,30,0) 72%);z-index:2;animation:cl-ember 1.7s ease-out infinite}
 .c-ollie .fx{left:8px}.c-ollie .fx2{right:6px;animation-delay:.8s;width:8px;height:11px}
-.c-ollie .bubble{background:linear-gradient(160deg,#4a1418,#2c0d10);color:#f8e8dc;border-color:#e0a63e;box-shadow:0 3px 0 #170506,0 0 18px rgba(255,120,40,.18)}.c-ollie .bubble .who{color:#f49ac1}.c-ollie .bubble b{color:#ffc46b}
 @keyframes cl-flicker{0%,100%{filter:drop-shadow(0 0 4px rgba(255,140,40,.5))}30%{filter:drop-shadow(0 0 10px rgba(255,90,30,.8))}55%{filter:drop-shadow(0 0 5px rgba(255,170,60,.55))}75%{filter:drop-shadow(0 0 12px rgba(255,110,30,.85))}}
 @keyframes cl-ember{0%{opacity:0;transform:translateY(0) scale(.6)}15%{opacity:1}100%{opacity:0;transform:translateY(-58px) translateX(6px) scale(.2)}}
 /* Quickare: tips his top hat, and his monocle catches the light */
 .c-quickare .cface{animation:cl-tip 3s ease-in-out infinite;transform-origin:50% 90%}
 .c-quickare .cface .art.face{border-color:#a3263a}
 .c-quickare .fx{left:20px;top:38%;color:#fff6c8;font-style:normal;font-size:13px;z-index:2;opacity:0;animation:cl-glint 3s ease-in-out infinite}.c-quickare .fx::before{content:'✦'}
-.c-quickare .bubble{background:#1e4532;color:#f3ecd8;border-color:#a3263a;box-shadow:0 3px 0 #5e1220}.c-quickare .bubble .who{color:#fff;background:#a3263a;display:table;padding:1px 7px;border-radius:6px;margin-bottom:4px}.c-quickare .bubble b{color:#f2c94c}
 @keyframes cl-tip{0%,60%,100%{transform:rotate(0)}68%{transform:rotate(-10deg) translateY(-3px)}78%{transform:rotate(4deg)}86%{transform:rotate(0)}}
 @keyframes cl-glint{0%,40%,100%{opacity:0;transform:scale(.4)}48%{opacity:1;transform:scale(1.3) rotate(45deg)}56%{opacity:0;transform:scale(.4)}}
 /* Penn: the Echo Bound. His mask leaves a fading echo of itself */
@@ -343,7 +340,6 @@ details>summary{cursor:pointer}
 .c-penn .cface .art.face{border-color:#2a1f1a}
 .c-penn .fx,.c-penn .fx2{inset:0;border-radius:50%;background:var(--face) center/cover;z-index:0;opacity:0;animation:cl-echo 3.6s ease-out infinite}
 .c-penn .fx2{animation-delay:1.8s}
-.c-penn .bubble{background:#ece6da;color:#221a16;border-color:#2a1f1a;box-shadow:0 3px 0 #2a1f1a;border-left:5px solid #8e2b2b}.c-penn .bubble .who{color:#8e2b2b}
 @keyframes cl-still{0%,100%{transform:translateX(0)}50%{transform:translateX(1px)}}
 @keyframes cl-echo{0%{opacity:.5;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(16px,-6px) scale(1.12)}}
 /* Captain Triton: rocks like a ship, pipe smoke curling up */
@@ -351,17 +347,134 @@ details>summary{cursor:pointer}
 .c-triton .cface .art.face{border-color:#b08d57}
 .c-triton .fx,.c-triton .fx2{right:4px;top:4px;width:18px;height:18px;border-radius:50%;background:radial-gradient(circle,rgba(150,220,150,.55),rgba(120,190,120,0) 68%);z-index:2;animation:cl-smoke 3.4s ease-out infinite}
 .c-triton .fx2{animation-delay:1.7s;right:10px}
-.c-triton .bubble{background:#27302d;color:#e6e3d6;border-color:#b08d57;box-shadow:0 3px 0 #121816}.c-triton .bubble .who{color:#9fd39b}.c-triton .bubble b{color:#e0bf86}
 @keyframes cl-sway{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
 @keyframes cl-smoke{0%{opacity:0;transform:translate(0,0) scale(.5)}20%{opacity:.9}100%{opacity:0;transform:translate(-14px,-44px) scale(2.2)}}
 /* Cat: hop, hop, hop on three legs, then a rest */
 .c-cat .cface{animation:cl-hop 2s ease-in-out infinite}
 .c-cat .cface .art.face{border-color:#e8e0cc;background:#6b5240}
 .c-cat .fx{left:50%;bottom:-2px;width:30px;height:8px;margin-left:-15px;border-radius:50%;background:radial-gradient(ellipse,rgba(220,200,170,.6),rgba(220,200,170,0) 70%);z-index:0;animation:cl-dust 2s ease-out infinite}
-.c-cat .bubble{background:#5c4636;color:#f6efe0;border-color:#e8e0cc;box-shadow:0 3px 0 #2e2219}.c-cat .bubble .who{color:#f0e6cf}.c-cat .bubble b{color:#ffd9a0}
 @keyframes cl-hop{0%,75%,100%{transform:translateY(0) rotate(0)}10%{transform:translateY(-10px) rotate(-6deg)}20%{transform:translateY(0) rotate(2deg)}32%{transform:translateY(-10px) rotate(-6deg)}42%{transform:translateY(0) rotate(2deg)}54%{transform:translateY(-10px) rotate(-6deg)}64%{transform:translateY(0) rotate(3deg)}}
 @keyframes cl-dust{0%,18%,40%,62%,100%{opacity:0;transform:scale(.6)}20%,42%,64%{opacity:1;transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.clover .cface,.clover .cface i{animation:none!important}.clover .cface i{display:none}}
+
+/* ---------- the Today card takes on the look of whoever is talking ---------- */
+.clover{align-items:center}.clover .cface{align-self:center}
+.hero-guide .guide.clover::before{display:none}
+.hero.h-binko,.hero.h-green,.hero.h-ollie,.hero.h-quickare,.hero.h-penn,.hero.h-triton,.hero.h-cat{background:var(--hbg);border-color:var(--hbd);transition:background .4s,border-color .4s}
+.hero[class*=" h-"]::before{background:var(--hstripe);height:6px}
+.hero[class*=" h-"] .btn{background:var(--hbtn);color:var(--hink);box-shadow:0 3px 0 var(--hshadow);border:var(--hbtnbd,0)}
+.hero[class*=" h-"] .label{color:var(--hlabel)}
+.hero[class*=" h-"] .hero-foot{border-top-color:var(--hline);color:var(--hlabel)}
+.hero[class*=" h-"] .bubble .who{margin-bottom:4px}
+/* Binko: a toy robot's screen panel, with rivets in the corners */
+.hero.h-binko{--hbg:linear-gradient(160deg,#1e5550,#163c38 70%);--hbd:#2c6a62;--hstripe:var(--iri);--hbtn:var(--iri);--hink:#1a1a12;--hshadow:#9a5a3a;--hlabel:var(--muted);--hline:#2c6a62}
+.c-binko .bubble{border-radius:18px;border:3px solid #2a9e8c;padding:12px 16px;background:radial-gradient(circle at 9px 9px,#2a9e8c 2.5px,transparent 3.5px),radial-gradient(circle at calc(100% - 9px) 9px,#2a9e8c 2.5px,transparent 3.5px),radial-gradient(circle at 9px calc(100% - 9px),#2a9e8c 2.5px,transparent 3.5px),radial-gradient(circle at calc(100% - 9px) calc(100% - 9px),#2a9e8c 2.5px,transparent 3.5px),#f6f3e6;box-shadow:0 4px 0 #13403a}
+/* Big Green: a big, rounded, scaly hide, gold trim and a purple-scarf stripe */
+.hero.h-green{--hbg:radial-gradient(circle at 85% 0,rgba(201,162,74,.16),transparent 45%),linear-gradient(160deg,#25472f,#132619 75%);--hbd:#8a7232;--hstripe:linear-gradient(90deg,#c9a24a,#8e5bb0 40%,#8e5bb0 60%,#c9a24a);--hbtn:linear-gradient(180deg,#e2c06a,#b98c30);--hink:#1d1407;--hshadow:#5e4412;--hlabel:#a9c3a0;--hline:#3b5a3c}
+.c-green .bubble{border-radius:34px 30px 38px 14px/30px 36px 30px 14px;border:3px solid #c9a24a;padding:14px 18px;color:#ece8d6;background:radial-gradient(circle at 10px 10px,rgba(255,255,255,.035) 7px,transparent 8px) 0 0/22px 18px,radial-gradient(circle at 21px 19px,rgba(255,255,255,.035) 7px,transparent 8px) 0 0/22px 18px,#1d3626;box-shadow:0 5px 0 #0c1a12}
+.c-green .bubble .who{color:#c99be0}.c-green .bubble b{color:#f0d27a}
+/* Ollie: an oleander petal, glowing like an ember */
+.hero.h-ollie{--hbg:radial-gradient(circle at 90% 100%,rgba(255,120,40,.22),transparent 50%),linear-gradient(160deg,#4d1a1e,#250b0e 75%);--hbd:#9b4a2a;--hstripe:linear-gradient(90deg,#ff6a2b,#ffc65c 45%,#f49ac1);--hbtn:linear-gradient(90deg,#ff7e3a,#ffc35c);--hink:#2a0a05;--hshadow:#7c2410;--hlabel:#e9b7a8;--hline:#5e2a26}
+.hero.h-ollie .btn{box-shadow:0 3px 0 #7c2410,0 0 18px rgba(255,140,50,.35)}
+.c-ollie .bubble{border-radius:6px 40px 6px 40px;border:2px solid #e0a63e;padding:14px 20px;color:#f8e8dc;background:linear-gradient(160deg,#5a1a1e,#2c0d10);box-shadow:0 4px 0 #170506,0 0 22px rgba(255,120,40,.2)}
+.c-ollie .bubble .who{color:#f49ac1}.c-ollie .bubble b{color:#ffc46b}
+/* Quickare: a fancy gilded nameplate, the way a hill dwarf imagines nobility */
+.hero.h-quickare{--hbg:radial-gradient(circle at 0 0,rgba(217,180,90,.14),transparent 40%),linear-gradient(160deg,#245039,#14301f 75%);--hbd:#b5944a;--hstripe:repeating-linear-gradient(135deg,#d9b45a 0 8px,#245039 8px 16px);--hbtn:linear-gradient(180deg,#2e6a4c,#1d4a33);--hink:#f6e6b8;--hshadow:#0e2418;--hbtnbd:2px solid #d9b45a;--hlabel:#b9cfa9;--hline:#3c6a4c}
+.c-quickare .cface .art.face{border-color:#d9b45a}
+.c-quickare .bubble{position:relative;border-radius:8px;border:4px double #d9b45a;padding:14px 20px;color:#f3ecd8;background:linear-gradient(180deg,rgba(255,255,255,.04),transparent 40%),#1c4230;box-shadow:0 4px 0 #0c2216}
+.c-quickare .bubble::before,.c-quickare .bubble::after{content:'❦';position:absolute;color:#d9b45a;font-size:14px;line-height:1}
+.c-quickare .bubble::before{left:5px;top:3px;transform:scaleX(-1)}.c-quickare .bubble::after{right:5px;bottom:3px;transform:rotate(180deg) scaleX(-1)}
+.c-quickare .bubble .who{color:#1c3a2a;background:linear-gradient(180deg,#f0d27a,#c9a24a);display:table;padding:1px 10px;border-radius:4px;letter-spacing:.06em}.c-quickare .bubble b{color:#f2c94c}
+/* Penn: a torn page from his journal to Nigel, lined, with a red margin */
+.hero.h-penn{--hbg:linear-gradient(160deg,#2c241e,#14100d 75%);--hbd:#5a4836;--hstripe:linear-gradient(90deg,#c9b58c,#8e2b2b 50%,#c9b58c);--hbtn:linear-gradient(180deg,#efe8d6,#cfc4a8);--hink:#221a16;--hshadow:#5e1d1d;--hlabel:#a99b86;--hline:#3e342b}
+.c-penn .bubble{border:0;border-radius:2px;padding:14px 18px 22px 30px;color:#221a16;background:linear-gradient(90deg,transparent 20px,rgba(142,43,43,.55) 20px 22px,transparent 22px),repeating-linear-gradient(180deg,transparent 0 23px,rgba(60,80,110,.18) 23px 24px),#ece6da;box-shadow:0 4px 0 #0d0a08;clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),94% 100%,86% calc(100% - 7px),77% 100%,66% calc(100% - 6px),55% 100%,44% calc(100% - 8px),33% 100%,22% calc(100% - 6px),11% 100%,0 calc(100% - 7px))}
+.c-penn .bubble .who{color:#8e2b2b;font-style:italic}
+/* Captain Triton: a brass ship's plaque with a rope border, green smoke drifting through */
+.hero.h-triton{--hbg:radial-gradient(circle at 12% 30%,rgba(120,190,120,.14),transparent 40%),linear-gradient(160deg,#28322f,#121816 75%);--hbd:#8a6d42;--hstripe:repeating-linear-gradient(-45deg,#c9a46a 0 5px,#7a5d33 5px 10px);--hbtn:linear-gradient(180deg,#dcbb82,#a8834a);--hink:#1d1a12;--hshadow:#4f3b1d;--hlabel:#a8b8a6;--hline:#36423d}
+.c-triton .bubble{border-radius:20px;border:3px solid #b08d57;outline:2px dashed rgba(201,164,106,.55);outline-offset:-9px;padding:16px 20px;color:#e6e3d6;background:#27302d;box-shadow:0 4px 0 #0c100f}
+.c-triton .bubble .who{color:#9fd39b}.c-triton .bubble b{color:#e0bf86}
+/* Cat: a soft, shaggy, cloud-round bubble with little hoofprints */
+.hero.h-cat{--hbg:linear-gradient(160deg,#5c4535,#33251b 75%);--hbd:#9c8466;--hstripe:repeating-linear-gradient(90deg,#efe6d2 0 14px,transparent 14px 24px);--hbtn:linear-gradient(180deg,#f6eedc,#dccdaa);--hink:#3a2b20;--hshadow:#20160f;--hlabel:#d4c3a8;--hline:#6a5340}
+.c-cat .bubble{position:relative;border-radius:36px 36px 36px 14px;border:3px solid #e8e0cc;padding:14px 22px 18px;color:#f6efe0;background:radial-gradient(circle at 20% 0,rgba(255,255,255,.07),transparent 50%),#6a5241;box-shadow:0 4px 0 #2e2219}
+.c-cat .bubble::after{content:'ᐢ ᐢ  ᐢ ᐢ';position:absolute;right:16px;bottom:3px;font-size:10px;letter-spacing:1px;color:rgba(232,224,204,.55)}
+.c-cat .bubble .who{color:#f0e6cf}.c-cat .bubble b{color:#ffd9a0}
+
+/* ---------- spacing: every face keeps clear of its bubble, halos and glows included ---------- */
+.clover{gap:24px}.clover .cface{margin:12px 2px 12px 12px}
+.c-green .fx{inset:-6px}
+/* livelier Quickare idle: a jaunty bob and his hat-tip */
+.c-quickare .cface{animation:cl-tip 3s ease-in-out infinite,cl-jaunt 1.5s ease-in-out infinite}
+@keyframes cl-jaunt{0%,100%{translate:0 0}50%{translate:0 -3px}}
+/* ---------- special moves ---------- */
+.cface .pt{position:absolute;left:50%;top:50%;z-index:3;font-style:normal;font-weight:700;font-size:16px;line-height:1;pointer-events:none;opacity:0;animation:pt-burst 1.1s ease-out forwards}
+@keyframes pt-burst{0%{opacity:0;transform:translate(-50%,-50%) scale(.3)}15%{opacity:1}100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(var(--r)) scale(1.1)}}
+.pt.rainbow:nth-child(6n+1){color:#ff6b6b}.pt.rainbow:nth-child(6n+2){color:#ffb347}.pt.rainbow:nth-child(6n+3){color:#f0e278}.pt.rainbow:nth-child(6n+4){color:#7ee08a}.pt.rainbow:nth-child(6n+5){color:#6cc4ee}.pt.rainbow:nth-child(6n){color:#c58cf2}
+.pt.note{color:#f2a7c3;font-size:18px}.pt.note.sea{color:#9fd39b}.pt.heal{color:#7ee08a;text-shadow:0 0 6px #7ee08a}.pt.gold{color:#f0d27a}
+.pt.surge:nth-child(3n){color:#ff7ad9}.pt.surge:nth-child(3n+1){color:#7af0ff}.pt.surge:nth-child(3n+2){color:#ffd36b}
+.pt.fire{font-size:15px}.pt.petal{color:#f7a8c8;font-size:15px;animation-duration:1.6s}.pt.flash{color:#fff3a8;font-size:22px;text-shadow:0 0 10px #ffd84a;animation-duration:.45s}
+.popword{position:absolute;left:50%;top:-6px;z-index:4;font-family:var(--f-display);font-weight:800;font-size:17px;white-space:nowrap;pointer-events:none;animation:pop-word 1.2s ease-out forwards}
+.popword.green{color:#f0d27a;text-shadow:0 2px 0 #1d3626}.popword.bang{color:#ffd84a;text-shadow:0 2px 0 #7a2a12}.popword.cat{color:#f6efe0;text-shadow:0 2px 0 #3a2b20}
+@keyframes pop-word{0%{opacity:0;transform:translate(-50%,10px) scale(.4) rotate(-8deg)}20%{opacity:1;transform:translate(-50%,-6px) scale(1.2) rotate(4deg)}70%{opacity:1;transform:translate(-50%,-10px) scale(1)}100%{opacity:0;transform:translate(-50%,-18px)}}
+/* Binko */
+.cface.sp-rainbow .art.face{animation:sp-hue 1.6s linear}
+@keyframes sp-hue{0%{filter:hue-rotate(0) saturate(1.4)}100%{filter:hue-rotate(360deg) saturate(1)}}
+.rainbow-ring{position:absolute;inset:-4px;border-radius:50%;z-index:0;background:conic-gradient(#ff6b6b,#ffb347,#f0e278,#7ee08a,#6cc4ee,#c58cf2,#ff6b6b);-webkit-mask:radial-gradient(circle,transparent 60%,#000 62%);mask:radial-gradient(circle,transparent 60%,#000 62%);animation:rr 1.6s ease-out forwards}
+@keyframes rr{0%{transform:scale(.8) rotate(0);opacity:0}20%{opacity:1}100%{transform:scale(1.25) rotate(360deg);opacity:0}}
+.cface.sp-spin{animation:sp-spin .9s cubic-bezier(.3,1.4,.5,1)!important}
+@keyframes sp-spin{0%{transform:translateY(0) rotate(0)}40%{transform:translateY(-16px) rotate(200deg) scale(1.1)}80%{transform:translateY(0) rotate(360deg) scale(1.1,.88)}100%{transform:rotate(360deg) scale(1)}}
+.cface.sp-dj{animation:sp-bop .4s ease-in-out 4!important}
+@keyframes sp-bop{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-6px) rotate(6deg)}}
+/* Big Green */
+.cface.sp-chomp{animation:sp-chomp .9s ease-in-out!important}
+@keyframes sp-chomp{0%{transform:scale(1)}25%{transform:scale(1.15,.9) translateX(6px)}40%{transform:scale(.92,1.08)}55%{transform:scale(1.15,.9) translateX(6px)}75%,100%{transform:scale(1)}}
+.cface.sp-heal .art.face{animation:sp-healglow 1.5s ease-in-out}
+@keyframes sp-healglow{50%{box-shadow:0 0 0 4px rgba(126,224,138,.5),0 0 18px #7ee08a}}
+.cface.sp-evolve{animation:sp-evolve 1.3s ease-in-out!important}
+@keyframes sp-evolve{0%,100%{transform:scale(1);filter:none}40%{transform:scale(1.18);filter:brightness(1.6) drop-shadow(0 0 10px #f0d27a)}60%{transform:scale(1.12)}}
+/* Ollie */
+.cface.sp-surge .art.face{animation:sp-surge 1.2s steps(6)}
+@keyframes sp-surge{0%{filter:hue-rotate(0)}20%{filter:hue-rotate(120deg) saturate(2)}40%{filter:hue-rotate(250deg) invert(.15)}60%{filter:hue-rotate(60deg) saturate(2)}80%{filter:hue-rotate(300deg)}100%{filter:none}}
+.cface.sp-surge{animation:sp-shake .12s linear 8!important}
+.cface.sp-flare{animation:sp-flare 1.4s ease-in-out!important}
+@keyframes sp-flare{0%,100%{filter:drop-shadow(0 0 4px rgba(255,140,40,.5))}45%{filter:drop-shadow(0 0 22px #ff7a2b) drop-shadow(0 0 8px #ffd36b);transform:scale(1.08)}}
+.cface.sp-petals{animation:sp-twirl 1.7s ease-in-out!important}
+@keyframes sp-twirl{0%,100%{transform:rotate(0)}30%{transform:rotate(-12deg)}60%{transform:rotate(10deg)}}
+@keyframes sp-shake{0%,100%{transform:translate(0,0)}25%{transform:translate(-3px,1px)}75%{transform:translate(3px,-1px)}}
+/* Quickare */
+.cface.sp-quickdraw{animation:sp-draw 1s cubic-bezier(.2,1.3,.4,1)!important}
+@keyframes sp-draw{0%{transform:rotate(0)}40%{transform:rotate(-720deg) scale(.9)}50%{transform:rotate(-720deg) scale(1.15)}60%{transform:rotate(-712deg) translateX(-6px)}100%{transform:rotate(-720deg)}}
+.cface .hat{position:absolute;left:50%;top:0;z-index:4;font-style:normal;font-size:26px;pointer-events:none;animation:sp-hat 1.3s cubic-bezier(.3,.7,.4,1) forwards}
+@keyframes sp-hat{0%{transform:translate(-50%,0) rotate(0)}45%{transform:translate(-50%,-60px) rotate(540deg)}90%{transform:translate(-50%,-4px) rotate(720deg);opacity:1}100%{transform:translate(-50%,0) rotate(720deg);opacity:0}}
+.cface.sp-fan{animation:sp-recoil .22s ease-out 3 .1s!important}
+@keyframes sp-recoil{0%{transform:translateX(0) rotate(0)}30%{transform:translateX(-7px) rotate(-6deg)}100%{transform:translateX(0) rotate(0)}}
+/* Penn */
+.cface.sp-flip{animation:sp-flip 1.1s ease-in-out!important}
+@keyframes sp-flip{0%{transform:perspective(300px) rotateY(0)}50%{transform:perspective(300px) rotateY(180deg) scale(.9);filter:brightness(.3)}100%{transform:perspective(300px) rotateY(360deg)}}
+.cface .ghost{position:absolute;inset:0;border-radius:50%;background:var(--face) center/cover;z-index:0;opacity:0;animation:sp-ghost 1.5s ease-out forwards}
+@keyframes sp-ghost{0%{opacity:.6;transform:rotate(var(--a)) translateX(0) rotate(calc(-1*var(--a)))}100%{opacity:0;transform:rotate(var(--a)) translateX(34px) rotate(calc(-1*var(--a))) scale(.9)}}
+.cface.sp-shadow{animation:sp-shadow 1.5s ease-in-out!important}
+@keyframes sp-shadow{0%,100%{opacity:1;filter:none;transform:scale(1)}40%,55%{opacity:.08;filter:blur(4px) brightness(0);transform:scale(.85)}}
+/* Captain Triton */
+.cface .smokering{position:absolute;left:50%;top:10%;width:22px;height:12px;margin-left:-11px;border-radius:50%;border:3px solid rgba(150,220,150,.7);z-index:3;opacity:0;animation:sp-ring 1.6s ease-out forwards}
+@keyframes sp-ring{0%{opacity:0;transform:translateY(0) scale(.5)}20%{opacity:1}100%{opacity:0;transform:translateY(-60px) scale(2.4)}}
+.cface.sp-song{animation:sp-dance .85s ease-in-out 2!important}
+@keyframes sp-dance{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg) translateY(-4px)}}
+.cface.sp-glitch .art.face{animation:sp-glitch .9s steps(2)}
+@keyframes sp-glitch{0%{transform:translate(0);filter:none}15%{transform:translate(-4px,1px);filter:hue-rotate(90deg) contrast(1.6);clip-path:inset(10% 0 40% 0 round 50%)}30%{transform:translate(4px,-1px);clip-path:inset(50% 0 5% 0 round 50%)}45%{transform:translate(-2px,0);filter:saturate(3) hue-rotate(-60deg);clip-path:none}60%{transform:translate(3px,2px);clip-path:inset(30% 0 30% 0 round 50%)}75%,100%{transform:none;filter:none;clip-path:none}}
+/* Cat */
+.cface.sp-leap{animation:sp-leap 1s cubic-bezier(.3,.6,.4,1)!important}
+@keyframes sp-leap{0%{transform:translateY(0) rotate(0)}15%{transform:scale(1.1,.85)}55%{transform:translateY(-34px) rotate(-360deg)}85%{transform:translateY(0) rotate(-360deg) scale(1.1,.85)}100%{transform:rotate(-360deg)}}
+.cface.sp-bleat{animation:sp-shake .1s linear 6!important}
+.cface.sp-headbutt{animation:sp-butt 1s ease-in-out!important}
+@keyframes sp-butt{0%{transform:translateX(0) rotate(0)}25%{transform:translateX(-8px) rotate(-10deg)}40%{transform:translateX(16px) rotate(8deg)}55%{transform:translateX(-4px)}100%{transform:none}}
+/* ---------- Start: Binko zooms in and bumps the speaker away ---------- */
+.binko-run{position:fixed;left:-120px;width:96px;height:96px;object-fit:contain;z-index:200;pointer-events:none;animation:br-run .34s cubic-bezier(.5,0,.8,.6) forwards}
+.binko-run.hit{animation:br-hit .38s ease-out forwards}
+@keyframes br-run{0%{transform:translateX(0) rotate(14deg)}100%{transform:translateX(calc(var(--to) + 120px)) rotate(14deg)}}
+@keyframes br-hit{0%{transform:translateX(calc(var(--to) + 120px)) rotate(14deg) scale(1.1,.9)}40%{transform:translateX(calc(var(--to) + 90px)) rotate(-6deg) scale(1)}100%{transform:translateX(calc(var(--to) + 110px)) rotate(0) scale(1.05)}}
+.cface.bumped{animation:bumped .4s cubic-bezier(.2,.7,.3,1) forwards!important}
+@keyframes bumped{0%{transform:translate(0,0) rotate(0)}100%{transform:translate(110vw,-80px) rotate(540deg);opacity:.9}}
+@media (prefers-reduced-motion:reduce){.cface .pt,.cface .popword,.cface .hat,.cface .ghost,.cface .smokering,.rainbow-ring{display:none}}
 </style>
 <style>
 /* ---------- tabs layout (Today / Practice / Progress / Me) ---------- */
