@@ -1079,7 +1079,7 @@ const GUIDE_V = 4;
 /* The guide: short, visual pages. Each page has a picture, a few short points, and shows where to find it. */
 const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
-  { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone']] },
+  { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['🍀', 'Come back to Today and a Lucky Clover tells a Cebu fun fact, with their own music']] },
   { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'One new rule a day, inside your session'], ['📈', 'Questions get harder each time'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya']] },
