@@ -677,7 +677,18 @@ function musicFor() {
   if (TAB_VIEWS.has(view) && HOME_SPK) return HOME_SPK.who;
   return ['speedrun', 'build', 'real', 'story', 'stories', 'geo', 'geogame'].includes(view) ? 'calm' : 'off';
 }
-function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); try { (VIEWS[view] || VIEWS.home)(); } catch (e) { renderCrash(e); } window.scrollTo(0, 0); if (typeof Music !== 'undefined') try { Music.set(musicFor()); } catch (e) { } }
+function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); try { (VIEWS[view] || VIEWS.home)(); } catch (e) { renderCrash(e); } window.scrollTo(0, 0); if (typeof Music !== 'undefined') try { Music.set(musicFor()); } catch (e) { } try { muteBtn(); } catch (e) { } }
+/* A small speaker button pinned to the top-right corner of every screen: one tap mutes or unmutes the music. */
+const MUTE_ON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+const MUTE_OFF = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+function muteBtn() {
+  let b = $('#mutebtn');
+  if (!b) { b = document.createElement('button'); b.id = 'mutebtn'; b.type = 'button'; document.body.appendChild(b);
+    b.onclick = () => { S.settings.music = S.settings.music === false; save(); if (typeof Music !== 'undefined') Music.set(musicFor()); muteBtn(); if (view === 'me') render(); toast(S.settings.music ? 'Music on' : 'Music off'); }; }
+  const on = S.settings.music !== false; b.innerHTML = on ? MUTE_ON : MUTE_OFF; b.classList.toggle('off', !on);
+  b.setAttribute('aria-label', on ? 'Mute music' : 'Turn music on'); b.title = on ? 'Mute music' : 'Turn music on';
+  b.hidden = view === 'guide';
+}
 /* If a page fails to draw (usually a half-finished app update: a mix of old and new files), show the tabs and a
    reload button instead of a blank screen, and quietly fetch a clean copy of the app once. */
 function renderCrash(e) {
@@ -1103,7 +1114,7 @@ const GUIDE = [
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
   { t: 'Ranks', tab: 'board', art: '📊', pts: [['📊', 'See how the family is doing'], ['🎯', 'Streaks, accuracy, words, games'], ['⌨️', 'Game scores say if they were typed or multiple choice'], ['🔑', 'Sign in on <b>Me</b> to join']] },
-  { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day'], ['🎵', 'Background music on or off']], set: true },
+  { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day'], ['🎵', 'Background music on or off, or tap the speaker in the top corner of any screen']], set: true },
   { t: 'One last thing', art: '🎯', pts: [['✏️', 'A quick check of what you already know'], ['⏭️', 'Words you know get skipped'], ['🤷', 'Not sure? Tap "I don\'t know". That\'s fine!']] }
 ];
 let guideAt = 0, guideBack = 'home';
