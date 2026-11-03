@@ -1348,7 +1348,30 @@ function distract(c, n, field) {
 }
 // show every option in the same style so punctuation and capitals don't give the answer away
 // after answering, every option shows what it means (the other side of the card), right or wrong
-function showOptMeanings(btns, opts, field) { btns.forEach((b, i) => { const o = opts[i]; if (!o || b.querySelector('.otr')) return; const other = optText(o, field === 'en' ? 'ceb' : 'en'); if (other) b.insertAdjacentHTML('beforeend', `<span class="otr">${esc(other)}</span>`); }); }
+// after answering, every option shows what it means (the other side of the card), right or wrong. For Bisaya choices
+// that are near-copies of the answer, the words that differ are highlighted, with what they mean.
+function wordDiff(a, b) { // which tokens of a aren't matched in b (longest common run)
+  const A = a.map(t => lowTok(t)), B = b.map(t => lowTok(t)), L = Array.from({ length: A.length + 1 }, () => new Array(B.length + 1).fill(0));
+  for (let i = A.length - 1; i >= 0; i--) for (let j = B.length - 1; j >= 0; j--) L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const mark = new Array(A.length).fill(true); let i = 0, j = 0;
+  while (i < A.length && j < B.length) { if (A[i] === B[j]) { mark[i] = false; i++; j++; } else if (L[i + 1][j] >= L[i][j + 1]) i++; else j++; }
+  return mark;
+}
+function showOptMeanings(btns, opts, field) {
+  const ri = btns.findIndex(b => b.classList.contains('right')), right = ri >= 0 ? opts[ri] : null;
+  const rTok = right && field === 'ceb' ? firstAlt(optText(right, 'ceb')).split(/\s+/) : null;   // compare with the answer's first way of saying it
+  btns.forEach((b, i) => { const o = opts[i]; if (!o || b.querySelector('.otr')) return;
+    let other = optText(o, field === 'en' ? 'ceb' : 'en');
+    if (rTok && i !== ri) { const full = optText(o, 'ceb'), mine = (full.includes('/') ? null : full.split(/\s+/)) || firstAlt(full).split(/\s+/), m = wordDiff(mine, rTok), theirs = wordDiff(rTok, mine);
+      const diff = mine.filter((_, k) => m[k]), was = rTok.filter((_, k) => theirs[k]);
+      if (diff.length && diff.length <= 3 && mine.length > 1) {
+        [...b.childNodes].forEach(n => { if (n.nodeType === 3) n.remove(); });
+        b.insertAdjacentHTML('afterbegin', mine.map((t, k) => m[k] ? `<mark class="dif">${esc(t)}</mark>` : esc(t)).join(' ') + (full.includes('/') ? esc(full.slice(firstAlt(full).length)) : ''));
+        if (!other) { const g = t => { const x = glossOf(t); return x ? `${esc(lowTok(t))} = ${esc(String(x).split(' · ')[0])}` : esc(lowTok(t)); };
+          other = null; b.insertAdjacentHTML('beforeend', `<span class="otr">${diff.map(g).join(', ')}${was.length ? ` · the answer has ${was.map(g).join(', ')}` : ''}</span>`); }
+      } }
+    if (other) b.insertAdjacentHTML('beforeend', `<span class="otr">${esc(other)}</span>`); });
+}
 const optText = (o, field) => { let t = String(o[field] || '').trim().replace(/[.!]+$/, ''); return t ? t[0].toUpperCase() + t.slice(1) : t; };
 
 /* ---------- examples only use words you've already met ----------
