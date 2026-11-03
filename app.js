@@ -194,8 +194,11 @@ function resetStreak(st) {
   const rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5), done = !!(st.plan && Object.keys(st.plan).some(k => +k >= rt && st.plan[k].session));
   st.streak = done ? { count: 1, last: rt, best: 1 } : { count: 0, last: 0, best: 0 };
   st.rushBest = 0; st.rushHow = 'pick'; st.geoBest = {}; st.geoHow = {}; st.bestSpeed = 1;
-  st.newMax = st.newDay && st.newDay.d === rt ? st.newDay.n || 0 : 0;
-  st.acc = st.acc && st.acc[rt] ? { [rt]: st.acc[rt] } : {};
+  // today's answers and new words are kept. They're filed under the app's day, which runs ahead of the calendar for
+  // anyone who started the next day early, so "today" is the real day plus that shift.
+  const td = rt + (st.dayShift || 0);
+  st.newMax = st.newDay && st.newDay.d >= td ? st.newDay.n || 0 : 0;
+  st.acc = Object.fromEntries(Object.entries(st.acc || {}).filter(([k]) => +k >= td));
   st.freezeWk = 0; st.freezeDay = 0;
   // anyone who already finished today gets announced again with the new count
   // (who was already announced by hand is handled later in pushBoard, once sign-in is known)
@@ -220,6 +223,8 @@ function capStreak(st) {
   s.best = Math.max(s.count, Math.min(s.best || 0, maxEver)); return st;
 }
 capStreak(S);
+function fixNewMax(st) { if ((st.streakReset || 0) < STREAK_RESET) return; let m = st.newMax || 0; if (st.newReal && st.newReal.d >= STREAK_BASE) m = Math.max(m, st.newReal.n || 0); if (st.newDay && st.newDay.d >= STREAK_BASE + (st.dayShift || 0)) m = Math.max(m, st.newDay.n || 0); st.newMax = m; }
+fixNewMax(S);
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
 function save() { S.updated = Date.now(); DAY_SHIFT = S.dayShift || 0; localSave(); schedulePush(); if (typeof pushBoard === 'function') pushBoard(); }
 
@@ -268,7 +273,13 @@ function mergeState(a, b) {
   { const ga = a.geoBest || {}, gb = b.geoBest || {}, ha = a.geoHow || {}, hb = b.geoHow || {}; out.geoBest = {}; out.geoHow = {};
     ['prov', 'lang'].forEach(k => { const r = bestWith(ga[k] || 0, ha[k], gb[k] || 0, hb[k] || 'pick'); out.geoBest[k] = r.best; out.geoHow[k] = r.how; }); }
   if ((a.streakReset || 0) !== (b.streakReset || 0)) { const w = (a.streakReset || 0) > (b.streakReset || 0) ? a : b;
-    ['rushBest', 'rushHow', 'geoBest', 'geoHow', 'newMax', 'bestSpeed', 'acc', 'freezeWk', 'freezeDay'].forEach(k => out[k] = w[k]); out.announced = w.announced || 0; out.reannounce = w.reannounce || 0; }
+    ['rushBest', 'rushHow', 'geoBest', 'geoHow', 'newMax', 'bestSpeed', 'acc', 'freezeWk', 'freezeDay'].forEach(k => out[k] = w[k]); out.announced = w.announced || 0; out.reannounce = w.reannounce || 0;
+    // the copy from before the reset may hold answers and new words from the reset day itself (a lesson finished on
+    // another phone before it updated): those count, so they aren't thrown away with the old records
+    const l = w === a ? b : a, from = STREAK_BASE + (l.dayShift || 0); out.acc = Object.assign({}, out.acc || {});
+    Object.entries(l.acc || {}).forEach(([k, v]) => { if (+k >= from && (!out.acc[k] || v.t > out.acc[k].t)) out.acc[k] = v; });
+    if (l.newDay && l.newDay.d >= from) out.newMax = Math.max(out.newMax || 0, l.newDay.n || 0);
+    if (l.newReal && l.newReal.d >= STREAK_BASE) out.newMax = Math.max(out.newMax || 0, l.newReal.n || 0); }
   // another device finished today's session: count it
   { const td = calDay() + (out.dayShift || 0); if (out.plan[td] && out.plan[td].session && (out.streakReset || 0) >= STREAK_RESET && out.streak.last < calDay()) { const c = calDay(); out.streak.count = out.streak.last === c - 1 ? out.streak.count + 1 : 1; out.streak.last = c; out.streak.best = Math.max(out.streak.best || 0, out.streak.count); } }
   if ((a.streakReset || 0) === (b.streakReset || 0)) { out.freezeWk = Math.max(a.freezeWk || 0, b.freezeWk || 0); out.freezeDay = Math.max(a.freezeDay || 0, b.freezeDay || 0); }
@@ -276,7 +287,7 @@ function mergeState(a, b) {
   out.flags = Object.assign({}, b.flags || {}, a.flags || {}); out.storyDone = Object.assign({}, b.storyDone || {}, a.storyDone || {}); out.placed = Math.max(a.placed || 0, b.placed || 0);
   out.realDone = {}; [a.realDone || {}, b.realDone || {}].forEach(x => Object.keys(x).forEach(k => out.realDone[k] = Math.max(out.realDone[k] || 0, x[k])));
   out.updated = Math.max(a.updated || 0, b.updated || 0);
-  capStreak(out);
+  capStreak(out); fixNewMax(out);
   return out;
 }
 function schedulePush() { if (!Sync.user) return; clearTimeout(Sync.timer); Sync.timer = setTimeout(pushNow, 2000); }
@@ -2217,7 +2228,7 @@ const BOARD_TABS = [
   ['streak', 'Streak', r => r.streak, r => r.streak + ' day' + (r.streak === 1 ? '' : 's') + (r.best > r.streak ? ` · best ${r.best}` : '')],
   ['best', 'Best streak', r => r.best, r => r.best + ' day' + (r.best === 1 ? '' : 's')],
   ['acc', 'Accuracy', r => r.accN >= 30 ? r.accR / r.accN : -1, r => r.accN >= 30 ? Math.round(r.accR / r.accN * 100) + '% · ' + r.accN + ' answers' : 'needs 30 answers in 7 days'],
-  ['learned', 'Words', r => r.learned, r => r.learned + ' learned'],
+  ['learned', 'Words', r => r.learned, r => r.learned + ' learned · all time'],
   ['newMax', 'Most in one day', r => r.newMax || 0, r => (r.newMax || 0) + ' new words'],
   ['speed', 'Speed', r => r.speed, r => (+r.speed).toFixed(1) + '×'],
   ['rush', 'Rush', r => r.rush, r => r.rush + ' in a row' + (r.rush ? ' · ' + HOW(r.rushHow) : '')],
