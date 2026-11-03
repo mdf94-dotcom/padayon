@@ -649,7 +649,7 @@ const stillWanted = (r, cx) => r === playReq && cx === audioCtx();
 /* ---------- computer voice: cards with no native recording ----------
    voice/ holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
-const VOICE_V = 9; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
+const VOICE_V = 10; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
 /* The computer voice comes in pieces: a small index, then one piece per stage. You only download the pieces for
    where you are on the path (plus the next one); the rest arrive when a sentence from them is first played. */
 async function loadVoice() {
@@ -1160,7 +1160,7 @@ VIEWS.place = function () {
     if (PL.qi - PL.right > PL.qs.length - 5) { PL.qi = PL.qs.length; }
     else if (PL.right >= 5) { PL.qi = PL.qs.length; }
     setTimeout(render, 250); };
-  document.querySelectorAll('.opt').forEach(b => b.onclick = () => { const ok = o[+b.dataset.i].id === c.id; b.classList.add(ok ? 'right' : 'wrong'); answer(ok); });
+  document.querySelectorAll('.opt').forEach(b => b.onclick = () => { const ok = o[+b.dataset.i].id === c.id; b.classList.add(ok ? 'right' : 'wrong'); showOptMeanings([...document.querySelectorAll('.opt')], o, 'en'); answer(ok); });
   $('#pldk').onclick = () => answer(false);
   if ($('#quit')) $('#quit').onclick = () => { if (PL.marked) toast(PL.marked + ' words marked as known'); go('home'); };
 };
@@ -1175,7 +1175,7 @@ const GUIDE_V = 4;
 const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
   { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
-  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
+  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'One new rule a day, inside your session'], ['📈', 'Questions get harder each time'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
@@ -1345,6 +1345,8 @@ function distract(c, n, field) {
   return out;
 }
 // show every option in the same style so punctuation and capitals don't give the answer away
+// after answering, every option shows what it means (the other side of the card), right or wrong
+function showOptMeanings(btns, opts, field) { btns.forEach((b, i) => { const o = opts[i]; if (!o || b.querySelector('.otr')) return; const other = optText(o, field === 'en' ? 'ceb' : 'en'); if (other) b.insertAdjacentHTML('beforeend', `<span class="otr">${esc(other)}</span>`); }); }
 const optText = (o, field) => { let t = String(o[field] || '').trim().replace(/[.!]+$/, ''); return t ? t[0].toUpperCase() + t.slice(1) : t; };
 
 /* ---------- examples only use words you've already met ----------
@@ -1361,22 +1363,28 @@ function knownExample(c) {
 function glossOf(tok) {
   const t = lowTok(tok); if (!t) return null;
   if (GLOSS[t]) return GLOSS[t];
-  const w = W.findIndex((x, i) => norm(x[0]) === t && !HIDE.has('w' + i)); if (w >= 0) return EN_FIX['w' + w] || W[w][1];
-  const p = P.findIndex(x => tokens(x[0]).length === 1 && alts(x[0]).includes(t)); if (p >= 0) return P[p][1];
-  for (const [re, txt] of AFFIX) if (re.test(t) && t.length > 5) { const root = t.replace(re, ''); const ri = W.findIndex(x => norm(x[0]) === root); return txt + (ri >= 0 ? ' · ' + root + ' = ' + (EN_FIX['w' + ri] || W[ri][1]) : ''); }
+  const w = W.findIndex((x, i) => !HIDE.has('w' + i) && norm(cebOf('w' + i)) === t); if (w >= 0) return EN_FIX['w' + w] || W[w][1];
+  const p = P.findIndex((x, i) => { const c = cebOf('p' + i); return c && tokens(c).length === 1 && alts(c).includes(t); }); if (p >= 0) return EN_FIX['p' + p] || P[p][1];
+  const m = (typeof MEGA !== 'undefined' ? MEGA : []).findIndex((x, i) => { const c = cebOf('m' + i); return c && tokens(c).length === 1 && alts(c).map(norm).includes(t); }); if (m >= 0) return card('m' + m).en;
+  if (typeof GLOSS_MORE !== 'undefined' && GLOSS_MORE[t]) return GLOSS_MORE[t];
+  // a prefix is only explained when the word left after it is one we know (Kamatis isn't ka- + matis)
+  for (const [re, txt] of AFFIX) if (re.test(t) && t.length > 5) { const root = t.replace(re, ''); const ri = W.findIndex((x, i) => norm(cebOf('w' + i)) === root); if (ri >= 0) return txt + ' · ' + root + ' = ' + (EN_FIX['w' + ri] || W[ri][1]); }
   return null;
 }
 function breakdown(ceb) {
-  const toks = tokens(ceb); if (toks.length < 2) return '';
+  const toks = tokens(ceb).filter(t => /[a-z0-9]/i.test(t)); if (toks.length < 2) return '';   // emoticons like :) aren't words
   return `<div><div class="label">Word by word <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· tap a word to see it</span></div><div class="wbw">${toks.map(t => { const g = glossOf(t), w = t.replace(/[.,!?…]/g, ''); return `<button type="button" class="wb" data-tok="${esc(w)}" aria-label="${esc(w)}: ${esc(g || 'see this word')}"><b>${esc(w)}</b><i>${esc(g || '·')}</i></button>`; }).join('')}</div></div>`;
 }
 /* Tapping a word in "Word by word" opens its vocabulary card in a sheet over the lesson, so you keep your place. */
+const cebOf = id => { const c = card(id); return c ? c.ceb : ''; };
 function cardForTok(tok) {
   const t = lowTok(tok); if (!t) return null;
-  const w = W.findIndex((x, i) => norm(x[0]) === t && !HIDE.has('w' + i) && card('w' + i)); if (w >= 0) return 'w' + w;
-  const p = P.findIndex((x, i) => tokens(x[0]).length === 1 && alts(x[0]).includes(t) && card('p' + i)); if (p >= 0) return 'p' + p;
-  const m = (typeof MEGA !== 'undefined' ? MEGA : []).findIndex((x, i) => tokens(x[0]).length === 1 && alts(x[0]).map(norm).includes(t) && card('m' + i)); if (m >= 0) return 'm' + m;
-  for (const [re] of AFFIX) if (re.test(t) && t.length > 5) { const root = t.replace(re, ''), ri = W.findIndex((x, i) => norm(x[0]) === root && card('w' + i)); if (ri >= 0) return 'w' + ri; }
+  // match on each card's corrected wording (some source rows had English and Bisaya swapped, fixed in fixes.js)
+  const w = W.findIndex((x, i) => !HIDE.has('w' + i) && norm(cebOf('w' + i)) === t); if (w >= 0) return 'w' + w;
+  const one = id => { const c = cebOf(id); return c && tokens(c).length === 1 ? alts(c).map(norm) : []; };
+  const p = P.findIndex((x, i) => one('p' + i).includes(t)); if (p >= 0) return 'p' + p;
+  const m = (typeof MEGA !== 'undefined' ? MEGA : []).findIndex((x, i) => one('m' + i).includes(t)); if (m >= 0) return 'm' + m;
+  for (const [re] of AFFIX) if (re.test(t) && t.length > 5) { const root = t.replace(re, ''), ri = W.findIndex((x, i) => norm(cebOf('w' + i)) === root); if (ri >= 0) return 'w' + ri; }
   return null;
 }
 function wordSheet(tok) {
@@ -1405,7 +1413,7 @@ document.addEventListener('click', e => { const b = e.target.closest && e.target
 function usedIn(c) {
   if (c.kind !== 'w' && !(c.kind === 'p' && tokens(c.ceb).length === 1)) return '';
   const t = norm(firstAlt(c.ceb)); if (!t) return '';
-  const hits = P.map((x, i) => [x, i]).filter(([x, i]) => 'p' + i !== c.id && S.cards['p' + i] && tokens(x[0]).length > 1 && tokens(x[0]).map(lowTok).includes(t)).slice(0, 2);
+  const hits = P.map((x, i) => [x, i]).filter(([x, i]) => 'p' + i !== c.id && S.cards['p' + i] && tokens(cebOf('p' + i)).length > 1 && tokens(cebOf('p' + i)).map(lowTok).includes(t)).slice(0, 2);
   return hits.length ? `<div><div class="label">You'll hear it in</div>${hits.map(([x]) => `<div class="small"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span></div>`).join('')}</div>` : '';
 }
 const tipFor = c => c.trick ? { trick: c.trick } : (S.tips || {})[c.id] || null;
@@ -1452,7 +1460,7 @@ function choiceEx(c, item, opts, field, cls) {
   foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
   const btns = [...document.querySelectorAll('.opt')];
   btns.forEach(b => b.onclick = () => { btns.forEach(x => x.classList.remove('sel')); b.classList.add('sel'); sel = +b.dataset.i; $('#chk').disabled = false; });
-  $('#chk').onclick = () => { const ok = opts[sel].id === c.id; btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === c.id) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); }); result(c, item, ok, ok ? '' : wrongWhy(c, opts[sel], field)); };
+  $('#chk').onclick = () => { const ok = opts[sel].id === c.id; btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === c.id) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); }); showOptMeanings(btns, opts, field); result(c, item, ok, ok ? '' : wrongWhy(c, opts[sel], field)); };
 }
 function typedCheck(c, item, inp, tolFrac, dictMode) {
   const g = norm(inp.value); inp.disabled = true;
@@ -1628,7 +1636,7 @@ async function speedQ() {
   const finish = sel => {
     if (done) return; done = true; clearInterval(timerH);
     const ok = sel != null && opts[sel].id === c.id; logAnswer(ok);
-    btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === c.id) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); });
+    btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === c.id) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); }); showOptMeanings(btns, opts, 'en');
     sess.total++;
     const spCameo = ok && (sess.right + 1) % 5 === 0;
     if (ok) { sess.right++; sess.xp += 5; addXP(5); SP.run++; if (SP.run >= 2) { SP.rate = Math.min(2, Math.round((SP.rate + 0.1) * 10) / 10); SP.run = 0; sess.peak = Math.max(sess.peak, SP.rate); } }
@@ -2347,7 +2355,7 @@ async function rushQ() {
   const finish = (sel, text) => {
     if (done) return; done = true; clearInterval(timerH);
     const ok = typed ? text != null && meaningOk(text, c.en) : sel != null && opts[sel].id === c.id; logAnswer(ok);
-    btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === c.id) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); });
+    btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === c.id) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); }); if (!typed) showOptMeanings(btns, opts, 'en');
     if (typed) { const i = $('#tans'); if (i) { i.disabled = true; i.classList.add(ok ? 'right' : 'wrong'); } const g = $('#tgo'); if (g) g.disabled = true;
       if (ok) $('#tslot').insertAdjacentHTML('beforeend', `<div class="small muted" style="margin-top:6px">${esc(c.en)}</div>`); }
     const miss = typed ? text == null : sel == null;
