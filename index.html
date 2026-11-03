@@ -629,6 +629,8 @@ html.embed .toast{bottom:20px}
   .app.lesson{max-width:720px;min-height:calc(100vh - 56px)}
   .app.lesson .sbar{background:transparent;margin-bottom:auto}
   .app.lesson .foot{margin-bottom:auto}
+  /* screens with no bottom panel (speed round, placement, numbers…): keep the question centred instead of sinking to the bottom */
+  .app.lesson:not(:has(> .foot:not([hidden]))) > .ex{margin-bottom:auto}
   .app.lesson:has(input.field,#ans,textarea) .playrow::after{content:none}
   .app.lesson .ex{justify-content:center;min-height:0;padding-top:4vh}
   .app.lesson .ceb{font-size:3.2rem}
