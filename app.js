@@ -1619,7 +1619,7 @@ VIEWS.summary = function () {
 VIEWS.speed = function () {
   if (!hasPack()) { toast('Load the content pack first. The speed round uses its recordings.'); return goTab(); }
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Speed round</h2></div>
-  <section class="panel"><p style="margin:0">20 clips. Each plays once at your speed, then you get 7 seconds to answer. Two right in a row speeds it up by 0.1×. A miss slows it down.</p>
+  <section class="panel"><p style="margin:0">20 clips. Each plays at your speed, then you get 7 seconds to answer. Tap the speaker to hear it again; the timer waits while it plays. Two right in a row speeds it up by 0.1×. A miss slows it down.</p>
     <div class="row"><span class="label">Starting speed</span><span class="speedchip">${S.speed.toFixed(1)}×</span><span class="muted small">Best ${S.bestSpeed.toFixed(1)}×</span></div>
     <button class="btn primary block" id="go">Start</button></section>
   <section class="panel"><b>Padayon Rush</b><p class="small" style="margin:0">Endless mode with every recorded word in the app, not just the ones you&rsquo;ve learned, starting easy and getting harder. Keep going until you miss. Best: ${S.rushBest || 0}.</p><button class="btn ghost block" id="rush">Play Rush</button></section>`;
@@ -1649,17 +1649,22 @@ async function speedQ() {
   view = 'speedrun';
   const c = card(SP.list[SP.i]), opts = shuffle([c, ...distract(c, 3, 'en')]);
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End">${I.x}</button><div class="prog"><i style="width:${SP.i / SP.list.length * 100}%"></i></div><span class="speedchip">${SP.rate.toFixed(1)}×</span></div>
-   <div class="ex"><h2>Listen once</h2><div class="playrow"><button class="play playing" id="pl" aria-label="Playing" disabled>${I.play}</button><span class="muted small" id="st">Playing…</span></div>
+   <div class="ex"><h2>Listen</h2><div class="playrow"><button class="play playing" id="pl" aria-label="Playing" disabled>${I.play}</button><span class="muted small" id="st">Playing…</span></div>
    <div class="timer"><i id="tb"></i></div><div class="opts">${opts.map((o, i) => `<button class="opt" data-i="${i}" disabled>${esc(optText(o, 'en'))}</button>`).join('')}</div></div><div class="foot" id="foot" hidden></div>`;
   $('#quit').onclick = () => { clearInterval(timerH); stopAudio(); if (sess.total) endSpeed(); else goTab(); };
   const myI = SP.i;
   await play(c.id, SP.rate, $('#pl'));
   if (view !== 'speedrun' || SP.i !== myI) return;
-  $('#st').textContent = 'Pick the meaning';
+  $('#st').textContent = 'Pick the meaning. Tap to hear it again.';
   const btns = [...document.querySelectorAll('.opt')]; btns.forEach(b => b.disabled = false);
-  const t0 = Date.now(); let done = false;
+  let left = 7000, last = Date.now(), replaying = false, done = false;
+  const pl = $('#pl'); pl.disabled = false; pl.classList.remove('playing'); pl.setAttribute('aria-label', 'Play again');
+  pl.onclick = async () => {
+    if (done || replaying) return;
+    replaying = true; await play(c.id, SP.rate, pl); replaying = false; last = Date.now();
+  };
   const finish = sel => {
-    if (done) return; done = true; clearInterval(timerH);
+    if (done) return; done = true; clearInterval(timerH); pl.disabled = true; pl.classList.remove('playing'); if (replaying) stopAudio();
     const ok = sel != null && opts[sel].id === c.id; logAnswer(ok);
     btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === c.id) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); }); showOptMeanings(btns, opts, 'en');
     sess.total++;
@@ -1671,7 +1676,7 @@ async function speedQ() {
     $('#fplay').onclick = e => play(c.id, 1, e.currentTarget); $('#cont').onclick = () => { SP.i++; speedQ(); }; $('#cont').focus({ preventScroll: true });
   };
   btns.forEach((b, i) => b.onclick = () => finish(i));
-  timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / 7000; const tb = $('#tb'); if (tb) tb.style.width = Math.max(0, f * 100) + '%'; if (f <= 0) finish(null); }, 100);
+  timerH = setInterval(() => { const now = Date.now(); if (!replaying) left -= now - last; last = now; const f = left / 7000; const tb = $('#tb'); if (tb) tb.style.width = Math.max(0, f * 100) + '%'; if (f <= 0) finish(null); }, 100);
 }
 
 
