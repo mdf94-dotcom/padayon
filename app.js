@@ -651,7 +651,7 @@ const stillWanted = (r, cx) => r === playReq && cx === audioCtx();
 /* ---------- computer voice: cards with no native recording ----------
    voice/ holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
-const VOICE_V = 11; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
+const VOICE_V = 12; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
 /* The computer voice comes in pieces: a small index, then one piece per stage. You only download the pieces for
    where you are on the path (plus the next one); the rest arrive when a sentence from them is first played. */
 async function loadVoice() {
@@ -1408,7 +1408,7 @@ function wordSheet(tok) {
   const onKey = e => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
   $('#wsbg').onclick = close; $('#wsx').onclick = close;
-  $('#wsplay').onclick = e => { if (c && !derived && c.audio) play(c.id, 1, e.currentTarget); else playSentence(tok, e.currentTarget); };
+  $('#wsplay').onclick = e => { if (c && !derived && c.audio) play(c.id, 1, e.currentTarget); else if (hasVoice(tok)) playSentence(tok, e.currentTarget); else if (c) play(c.id, 1, e.currentTarget); else sayFallback(lowTok(tok)); };
   $('#wsx').focus({ preventScroll: true });
 }
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('.wb[data-tok]'); if (b) { e.preventDefault(); wordSheet(b.dataset.tok); } });
