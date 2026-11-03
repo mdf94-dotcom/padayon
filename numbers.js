@@ -64,7 +64,8 @@ const numAnswer = q => q.time ? NUM.time(q.h, q.m) : (q.sys === 'spanish' ? NUM.
 // play a number phrase: the whole phrase if it was recorded, otherwise its parts one after another
 async function sayNum(s, btn) {
   if (hasVoice(s)) return playSentence(s, btn);
-  for (const p of NUM.parts(s)) { const u = await voiceUrlA(p).catch(() => null); if (!u) continue; await playUrl(u, 1, btn); if (view !== 'numbers' && view !== 'numround') return; }
+  const r = ++playReq, cx = audioCtx();
+  for (const p of NUM.parts(s)) { const u = await voiceUrlA(p).catch(() => null); if (!stillWanted(r, cx)) return; if (!u) continue; await playUrl(u, 1, btn); if (!stillWanted(r, cx)) return; }
 }
 const digitsOk = (typed, q) => { const d = String(typed).replace(/[^0-9:]/g, ''); return q.time ? d.replace(/^0/, '') === fmtTime(q.h, q.m) || d === String(q.h) + String(q.m).padStart(2, '0') : d === String(q.n); };
 

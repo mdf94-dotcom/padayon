@@ -95,7 +95,8 @@ function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = fals
 function lev(a, b) { const m = a.length, n = b.length; if (!m) return n; if (!n) return m; let p = Array.from({ length: n + 1 }, (_, i) => i); for (let i = 1; i <= m; i++) { const c = [i]; for (let j = 1; j <= n; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; } return p[n]; }
 const norm = s => s.toLowerCase().replace(/\([^)]*\)/g, '').replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…]/g, ' ').replace(/\bug\b/g, 'og').replace(/\s+/g, ' ').trim();
 const alts = ceb => ceb.split(/\s*\/\s*/).map(norm).filter(Boolean);
-const firstAlt = ceb => ceb.split(/\s*\/\s*/)[0].replace(/\s*\([^)]*\)/g, '').trim();
+// the first way of saying it: notes in brackets come off first (a slash inside them isn't a second option), then the first of any options split by / or ·
+const firstAlt = ceb => String(ceb).replace(/\s*\([^)]*\)/g, '').split(/\s*[\/·]\s*/)[0].trim();
 /* ---------- "sounds like": an English-friendly respelling, split into syllables ----------
    Bisaya is spelled the way it sounds, so this is built from the spelling. Stress isn't marked: it changes from word to word. */
 const PH_V = { a: 'ah', e: 'eh', i: 'ee', o: 'oh', u: 'oo' };
@@ -629,10 +630,15 @@ function buildSession() {
 /* ---------- audio playback ---------- */
 const urls = {}; const player = new Audio(); player.preservesPitch = true;
 let playToken = 0;
+/* Every request to play something gets a number. A clip that is still downloading when you've moved on (or asked for
+   something else) is dropped instead of playing late over the next word. */
+let playReq = 0;
+const audioCtx = () => view + ':' + (typeof qi !== 'undefined' ? qi : '') + ':' + (typeof NR !== 'undefined' && NR ? NR.i : '');
+const stillWanted = (r, cx) => r === playReq && cx === audioCtx();
 /* ---------- computer voice: cards with no native recording ----------
    voice/ holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
-const VOICE_V = 8; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
+const VOICE_V = 9; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
 /* The computer voice comes in pieces: a small index, then one piece per stage. You only download the pieces for
    where you are on the path (plus the next one); the rest arrive when a sentence from them is first played. */
 async function loadVoice() {
@@ -676,8 +682,8 @@ async function playUrl(u, rate, btn) {
   await new Promise(res => { player.onended = res; player.onerror = res; player.onpause = res; player.play().then(() => { player.playbackRate = rate || 1; }).catch(res); });
   if (btn && tok === playToken) btn.classList.remove('playing');
 }
-const play = async (id, rate, btn) => { let u = clipUrl(id); const c = card(id); if (!u && c && hasVoice(c.ceb)) u = await voiceUrlA(c.ceb); if (u) return playUrl(u, rate, btn); if (c) sayFallback(firstAlt(c.ceb)); };
-function stopAudio() { playToken++; player.pause(); }
+const play = async (id, rate, btn) => { const r = ++playReq, cx = audioCtx(); let u = clipUrl(id); const c = card(id); if (!u && c && hasVoice(c.ceb)) { u = await voiceUrlA(c.ceb); if (!stillWanted(r, cx)) return; } if (u) return playUrl(u, rate, btn); if (c) sayFallback(firstAlt(c.ceb)); };
+function stopAudio() { playToken++; playReq++; player.pause(); }
 
 function weakList(n = 6) { return Object.entries(S.mistakes || {}).sort((a, b) => b[1].n - a[1].n).slice(0, n); }
 /* ---------- keyboard: 1-9 picks an answer, Enter presses the main button ---------- */
@@ -1653,7 +1659,7 @@ VIEWS.convos = function () {
   DL = { d: p.d, idx: p.i, m: p.unknown.length ? 'learn' : 'read', i: 0, show: {}, right: 0, unknown: p.unknown };
   view = 'convo'; render();
 };
-const lineSay = async (t, btn) => { const u = await voiceUrlA(t); if (u) playUrl(u, 1, btn); };
+const lineSay = async (t, btn) => { const r = ++playReq, cx = audioCtx(); const u = await voiceUrlA(t); if (u && stillWanted(r, cx)) playUrl(u, 1, btn); };
 function bubble(d, l, j, opts = {}) {
   const me = l[0] === 'b', showEn = opts.en || DL.show[j];
   return `<div class="msg ${me ? 'me' : 'them'}"><div class="small" style="opacity:.75">${esc(me ? d.b : d.a)}</div><div style="font-weight:700">${esc(l[1])}</div>
@@ -1792,7 +1798,7 @@ function ruleOpts(r, ceb) {
   const others = RULES.filter(x => !hits.has(x.id)), mine = shuffle(others.filter(x => ruleLearned(x.id))), rest = shuffle(others.filter(x => !ruleLearned(x.id)));
   return shuffle([r, ...mine.concat(rest).slice(0, 3)]);
 }
-const playSentence = async (s, btn) => { const u = await voiceUrlA(s); if (u) playUrl(u, 1, btn); };
+const playSentence = async (s, btn) => { const r = ++playReq, cx = audioCtx(); const u = await voiceUrlA(s); if (u && stillWanted(r, cx)) return playUrl(u, 1, btn); };
 const sayBtn = s => hasVoice(s) ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><span class="muted small">Computer voice</span></div>` : '';
 function ruleChoice(c, item, opts, rightId, shown, extra) {
   let sel = null;
