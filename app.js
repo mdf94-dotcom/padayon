@@ -56,8 +56,10 @@ const M_UNITS = MEGA_UNITS.map(([name, idx]) => ({ ceb: name, name: idx.length +
 const M_ORDER = M_UNITS.flatMap(u => u.ids); M_UNITS.forEach((u, i) => u.ids.forEach(id => UNIT_OF[id] = 'm' + i));
 const D_ORDER = DIALOGS.flatMap((d, i) => d.lines.map((_, j) => 'd' + i + '_' + j)); D_ORDER.forEach(id => UNIT_OF[id] = 'd' + id.slice(1).split('_')[0]);
 const SPR = { p: null, w: null };
+let PACK_HV = 0;
 function setPack(h, pbuf, wbuf) {
-  P = h.P; W = h.W; UNITS = h.UNITS; IDX = h.IDX; SPR.p = pbuf; SPR.w = wbuf;
+  P = h.P; W = h.W; UNITS = h.UNITS; IDX = h.IDX; SPR.p = pbuf; SPR.w = wbuf; PACK_HV = h.v || 1;
+  if (typeof urls !== 'undefined') Object.keys(urls).forEach(k => { try { URL.revokeObjectURL(urls[k]); } catch (e) { } delete urls[k]; });
   PHRASE_ORDER = UNITS.flatMap(u => u.ids);
   try { buildPath(); } catch (e) { }
   UNITS.forEach((u, i) => u.ids.forEach(id => UNIT_OF[id] = 'u' + i));
@@ -151,7 +153,7 @@ async function autoPack() {
   packState = 'loading'; if (view === 'home') render();
   try {
     const r = await fetch('pack.bin', { cache: 'no-store' }); if (!r.ok) throw new Error(r.status);
-    const total = +r.headers.get('content-length') || 10114753; const reader = r.body.getReader(); const parts = []; let got = 0;
+    const total = +r.headers.get('content-length') || 9770000; const reader = r.body.getReader(); const parts = []; let got = 0;
     for (;;) { const { done, value } = await reader.read(); if (done) break; parts.push(value); got += value.length; const p = Math.min(99, Math.round(got / total * 100)); if (p !== packPct) { packPct = p; const el = $('#packpct'); if (el) el.textContent = p + '%'; } }
     const buf = new Uint8Array(got); let o = 0; parts.forEach(x => { buf.set(x, o); o += x.length; });
     const x = parsePack(buf.buffer); await idbSet('pack', buf.buffer); setPack(x.h, x.p, x.w); packState = 'done';
@@ -2452,7 +2454,11 @@ initSync();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
 if ((S.guideV || 0) < GUIDE_V) { guideAt = 0; guideBack = 'home'; view = 'guide'; }
 render();
-loadStoredPack().then(ok => { if (ok) { if (view === 'home') render(); } else autoPack(); }); loadVoice();
+// pack 2: the native recordings cleaned up (background hiss lowered, empty time at the start and end cut).
+// Someone with the older pack gets the new one quietly in the background; the old one keeps working until then.
+const PACK_V = 2;
+async function refreshPack() { try { const r = await fetch('pack.bin?v=' + PACK_V, { cache: 'no-store' }); if (!r.ok) return; const buf = await r.arrayBuffer(); const x = parsePack(buf); if ((x.h.v || 1) < PACK_V) return; await idbSet('pack', buf); setPack(x.h, x.p, x.w); } catch (e) { } }
+loadStoredPack().then(ok => { if (ok) { if (view === 'home') render(); if (PACK_HV < PACK_V) refreshPack(); } else autoPack(); }); loadVoice();
 
 /* Picking the day's new words is the slowest thing the Today page does, and it asks more than once per draw.
    Remember the answer until anything about progress changes (every save bumps S.updated) or the day turns over. */
