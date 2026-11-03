@@ -425,7 +425,7 @@ function card(id) {
   if (HIDE.has(id)) return null;
   if (k === 'r') { const r = RULES[n]; return r && { id, kind: 'r', ceb: r.title, en: r.short, audio: false, rule: r }; }
   if (k === 'p') return P[n] && { id, kind: 'p', ceb: CEB_FIX[id] || P[n][0], en: EN_FIX[id] || P[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
-  if (k === 'w') return W[n] && wn({ id, kind: 'w', ceb: CEB_FIX[id] || W[n][0], en: EN_FIX[id] || W[n][1], note: NOTES[id], trick: TRICKS[id], audio: true });
+  if (k === 'w') return W[n] && wn({ id, kind: 'w', ceb: CEB_FIX[id] || W[n][0], en: EN_FIX[id] || W[n][1], note: NOTES[id], trick: TRICKS[id], audio: !RECORDING_OFF.has(id) });
   if (k === 'g') return G[n] && { id, kind: 'g', ceb: G[n][0], en: EN_FIX[id] || G[n][1], note: G[n][2], audio: false };
   if (k === 'd') { const [di, li] = id.slice(1).split('_').map(Number), d = DIALOGS[di], l = d && d.lines[li]; return l && { id, kind: 'd', ceb: l[1], en: l[2], note: l[3] || '', audio: false, convo: d.title }; }
   if (k === 'm') return MEGA[n] && wn({ id, kind: 'm', ceb: CEB_FIX[id] || MEGA[n][0], en: EN_FIX[id] || MEGA[n][1], audio: false });
@@ -668,9 +668,11 @@ async function voiceUrlA(s) { const ix = VIDX && VIDX.k[vkey(s)]; if (!ix) retur
 function sayFallback(text) { try { if (typeof Music !== 'undefined') { Music.duck(true); setTimeout(() => Music.duck(false), 2500); } const v = speechSynthesis.getVoices().find(x => /^(ceb|fil|tl)/i.test(x.lang)); const u = new SpeechSynthesisUtterance(text); if (v) u.voice = v; u.lang = v ? v.lang : 'fil-PH'; u.rate = 0.9; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) { } }
 const canHear = c => !!c && (c.audio || hasVoice(c.ceb) || c.kind === 'c');
 const voiceNote = c => c.audio ? 'Say it out loud with the recording.' : hasVoice(c.ceb) ? 'Computer voice, not a native speaker. Say it out loud with it.' : "Your phone's voice, so it may sound Tagalog. Say it out loud.";
+// cards whose wording was corrected to a different form than the native speaker recorded: use the voice for the corrected words
+const RECORDING_OFF = new Set(['w225', 'w879']);   // makililimos → mangililimos, permerong → primero nga
 function clipUrl(id) {
   if (urls[id]) return urls[id];
-  const buf = SPR[id[0]]; const ix = IDX[id]; if (!buf || !ix) { const c = card(id); return c ? voiceUrl(c.ceb) : null; }
+  const buf = SPR[id[0]]; const ix = !RECORDING_OFF.has(id) && IDX[id]; if (!buf || !ix) { const c = card(id); return c ? voiceUrl(c.ceb) : null; }
   return (urls[id] = URL.createObjectURL(new Blob([buf.slice(ix[0], ix[0] + ix[1])], { type: 'audio/mpeg' })));
 }
 async function playUrl(u, rate, btn) {
