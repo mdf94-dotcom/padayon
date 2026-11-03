@@ -31,15 +31,18 @@ const Store={d:blank(),ref:null,saving:null,dirty:false,
   this.connect();
  },
  async connect(){
-  // Sign-in and sync are shared with the rest of the practice site (same Google account as Padayon).
+  // Sign-in and sync are shared with the rest of the practice site. Progress from every device is combined, never overwritten.
   if(!window.Cloud){sync("Saved in this browser");return}
   Cloud.on(c=>{
-   if(!c.user){this.signed=false;sync(c.available?"Saved in this browser":"Saved in this browser");return}
+   if(!c.user){this.signed=false;sync("Saved in this browser");return}
    this.signed=true;
    if(c.data){
     const remote=c.get("chess");
-    if(remote&&(remote.updated||0)>(this.d.updated||0)){this.d=Object.assign(blank(),remote);this.local();if(!SESS&&!(Game&&!Game.over))rerender()}
-    else if((this.d.updated||0)>((remote&&remote.updated)||0))this.push();
+    if(remote&&remote.v===2){
+     const merged=mergeChess(this.d,remote),was=JSON.stringify(this.d);
+     if(JSON.stringify(merged)!==was){this.d=merged;this.local();if(!SESS&&!(Game&&!Game.over))rerender()}
+     if(JSON.stringify(merged)!==JSON.stringify(remote))this.push();
+    }else if(this.d.updated)this.push();
    }
    sync("Synced to your account");
   });
@@ -54,6 +57,27 @@ const Store={d:blank(),ref:null,saving:null,dirty:false,
  }};
 function sync(t){const s=$("#sync");if(s)s.textContent=t}
 const D=()=>Store.d;
+/* Combine two copies of chess progress (this device and your account) so nothing done on either is lost. */
+function mergeChess(a,b){
+ a=a||blank();b=b||blank();
+ const newer=(b.updated||0)>(a.updated||0)?b:a,o=Object.assign(blank(),JSON.parse(JSON.stringify(newer)));
+ const keys=(x,y)=>[...new Set(Object.keys(x||{}).concat(Object.keys(y||{})))];
+ o.solved={};keys(a.solved,b.solved).forEach(k=>{if((a.solved||{})[k]||(b.solved||{})[k])o.solved[k]=true});
+ o.failed={};keys(a.failed,b.failed).forEach(k=>o.failed[k]=Math.max((a.failed||{})[k]||0,(b.failed||{})[k]||0));
+ o.checks={};keys(a.checks,b.checks).forEach(k=>o.checks[k]=!!((a.checks||{})[k]||(b.checks||{})[k]));
+ o.srs={};keys(a.srs,b.srs).forEach(k=>{const x=(a.srs||{})[k],y=(b.srs||{})[k];o.srs[k]=!x?y:!y?x:((y.seen||0)>(x.seen||0)||((y.seen||0)===(x.seen||0)&&(y.due||"")>(x.due||"")))?y:x});
+ o.lines={};keys(a.lines,b.lines).forEach(k=>{const x=(a.lines||{})[k],y=(b.lines||{})[k];o.lines[k]=!x?y:!y?x:((y.reps||0)>(x.reps||0)||((y.reps||0)===(x.reps||0)&&(y.last||"")>(x.last||"")))?y:x});
+ o.days={};keys(a.days,b.days).forEach(k=>{const x=(a.days||{})[k]||{},y=(b.days||{})[k]||{},d={};
+  keys(x,y).forEach(f=>{const u=x[f],v=y[f];d[f]=typeof u==="number"||typeof v==="number"?Math.max(+u||0,+v||0):!!(u||v)});o.days[k]=d});
+ o.xp={};keys(a.xp,b.xp).forEach(k=>o.xp[k]=Math.max((a.xp||{})[k]||0,(b.xp||{})[k]||0));
+ o.rush={best:Math.max((a.rush||{}).best||0,(b.rush||{}).best||0),runs:Math.max((a.rush||{}).runs||0,(b.rush||{}).runs||0)};
+ const gm={};(a.games||[]).concat(b.games||[]).forEach(g=>{if(g&&g.id&&(!gm[g.id]||(g.review&&!gm[g.id].review)))gm[g.id]=g});
+ o.games=Object.values(gm).sort((x,y)=>x.id-y.id).slice(-60);
+ const tl=new Set();o.thinkLog=(a.thinkLog||[]).concat(b.thinkLog||[]).filter(t=>{const k=JSON.stringify(t);if(tl.has(k))return false;tl.add(k);return true}).slice(-200);
+ o.peak=Math.max(a.peak||0,b.peak||0);o.updated=Math.max(a.updated||0,b.updated||0);
+ return o;
+}
+
 function today(){const k=dayKey();if(!D().days[k])D().days[k]={warm:0,warmDone:false,opening:false,game:false};return D().days[k]}
 function streak(){let n=0,k=dayKey();const ok=d=>d&&(d.session||(d.warmDone&&(d.opening||d.game)));if(!ok(D().days[k]))k=addDays(k,-1);while(ok(D().days[k])){n++;k=addDays(k,-1)}return n}
 

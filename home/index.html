@@ -156,7 +156,9 @@ const chessOk = d => !!(d && (d.session || (d.warmDone && (d.opening || d.game))
 const APPS = [
   {k:'bisaya', name:'Padayon', tab:'Bisaya', cls:'sea', color:'--sea', src:'/padayon/',
     did(off){ const s = newest('padayon-app-v1', 's'); if (!s) return false; const n = pday(dayAt(off));
-      if (off === 0) return !!(s.plan && s.plan[n] && s.plan[n].session); return !!(s.xp && s.xp[n] > 0); },
+      // Padayon's "Start the next day" moves its plan ahead, which only happens after today is finished
+      if (off === 0){ const plan = s.plan || {}; return !!(plan[n] && plan[n].session) || Object.keys(plan).some(k => +k > n); }
+      return !!(s.xp && s.xp[n] > 0); },
     line(){ const s = newest('padayon-app-v1', 's'); if (!s) return 'Not started on this site yet'; const t = pday(dayAt(0)), st = s.streak || {};
       const n = (st.last === t || st.last === t - 1) ? st.count : 0; return `${n} day streak${s.xp && s.xp[t] ? ` · ${s.xp[t]} XP today` : ''}`; }},
   {k:'words', name:'Word Hoard', tab:'Words', cls:'ind', color:'--ind', src:'words/',
