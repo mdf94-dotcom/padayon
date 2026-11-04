@@ -266,6 +266,7 @@ function mergeState(a, b) {
   out.tips = Object.assign({}, a.tips, b.tips);
   out.announced = Math.max(a.announced || 0, b.announced || 0);
   out.credit = Object.assign({}, a.credit || {}, b.credit || {}); out.sessAt = Math.max(a.sessAt || 0, b.sessAt || 0);
+  out.redoAt = Math.max(a.redoAt || 0, b.redoAt || 0); out.redoDone = Object.assign({}, a.redoDone || {}, b.redoDone || {});
   out.dayShift = Math.max(a.dayShift || 0, b.dayShift || 0);
   out.convoDone = {}; [a.convoDone || {}, b.convoDone || {}].forEach(x => Object.keys(x).forEach(k => out.convoDone[k] = Math.max(out.convoDone[k] || 0, x[k])));
   out.started = Math.min(...[a.started, b.started].filter(Boolean).concat([out.started || Infinity])) || 0; if (!isFinite(out.started)) out.started = 0;
@@ -288,6 +289,9 @@ function mergeState(a, b) {
   out.pod = (a.pod && b.pod) ? (a.pod.d >= b.pod.d ? a.pod : b.pod) : (a.pod || b.pod);
   out.flags = Object.assign({}, b.flags || {}, a.flags || {}); out.storyDone = Object.assign({}, b.storyDone || {}, a.storyDone || {}); out.placed = Math.max(a.placed || 0, b.placed || 0);
   out.realDone = {}; [a.realDone || {}, b.realDone || {}].forEach(x => Object.keys(x).forEach(k => out.realDone[k] = Math.max(out.realDone[k] || 0, x[k])));
+  // a day that was opened again: a finished session from before the do-over doesn't count, and new words start fresh
+  if (out.redoAt && (out.sessAt || 0) < out.redoAt) { const td = calDay() + (out.dayShift || 0); if (out.plan[td]) delete out.plan[td].session; }
+  if (out.redoAt) { const nd = [a.newDay, b.newDay].find(x => x && x.redo === out.redoAt); if (nd && nd.d === out.newDay.d) out.newDay = Object.assign({}, nd, { n: Math.max(nd.n, (out.newDay.redo === out.redoAt ? out.newDay.n : 0)) }); }
   out.updated = Math.max(a.updated || 0, b.updated || 0);
   capStreak(out); fixNewMax(out);
   return out;
@@ -387,6 +391,16 @@ function tick(k) { const p = planDay(); if (!p[k]) { p[k] = true; if (k === 'ses
 const capName = s => { s = String(s || '').trim(); return s ? s[0].toUpperCase() + s.slice(1) : s; };
 // names fixed by account, so they stay the same everywhere no matter what the Google account or name setting says
 const NAME_BY_UID = { NB6NEkBWqkQ0mfggPTAot5fPbJ43: 'Mykha' };
+// a do-over of one day's lesson, asked for by that person (by account id prefix): the day's session opens again with
+// today's new-word rules. The streak and the Discord post for that day stay as they are.
+const REDO_DAY_BY_UID = { '3YRz8p': 20761 };
+function redoCheck() {
+  if (!Sync.user) return; const k = Object.keys(REDO_DAY_BY_UID).find(p => Sync.user.uid.startsWith(p)); if (!k) return;
+  const d = REDO_DAY_BY_UID[k]; if (calDay() !== d || (S.redoDone || {})[d]) return;
+  S.redoDone = Object.assign({}, S.redoDone || {}, { [d]: 1 }); S.redoAt = Date.now();
+  const p = planDay(); delete p.session; clearResume(); S.newDay = { d: today(), n: 0, redo: S.redoAt };
+  save(); if (view === 'home') render(); toast('Your lesson for today is open again. Padayon!');
+}
 const displayName = () => (typeof Sync !== 'undefined' && Sync.user && NAME_BY_UID[Sync.user.uid]) || capName((S.settings.name || (Sync.user && Sync.user.displayName) || '').trim().split(/\s+/)[0]) || 'Someone';
 const rowName = r => NAME_BY_UID[r.uid] || capName(r.name) || 'Someone';
 let hookCache = null;
@@ -448,15 +462,48 @@ function card(id) {
   return c && { id, kind: 'c', ceb: c.ceb, en: c.en, ex: c.ex, exEn: c.exEn, audio: false };
 }
 const IV = [0, 1, 2, 4, 7, 14, 30, 60];
-function grade(id, q) {
+/* ---------- memory model: FSRS-6 (the scheduler Anki uses), with its published default weights ----------
+   Each card keeps how stable its memory is (s, in days) and how hard it is for you (df, 1-10). The next review is set
+   for when you'd still remember it 90% of the time: hard words come back sooner, easy ones wait longer.
+   Recognising a word (picking it from choices) counts for less than producing it (typing, saying, building), and a
+   miss brings the word back the next day with its memory weakened. b (0-7) is kept as the card's level for the rest
+   of the app (which exercises it gets, whether it counts as learned). */
+const FW = [0.212, 1.2931, 2.3065, 8.2956, 6.4133, 0.8334, 3.0194, 0.001, 1.8722, 0.1666, 0.796, 1.4835, 0.0614, 0.2629, 1.6483, 0.6014, 1.8729, 0.5425, 0.0912, 0.0658, 0.1542];
+const F_DECAY = -FW[20], F_FACTOR = Math.exp(Math.log(0.9) / F_DECAY) - 1, RETAIN = 0.9;
+const fClamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const fRecall = (days, st) => Math.pow(1 + F_FACTOR * days / st, F_DECAY);
+const fInterval = st => Math.max(1, Math.round(st / F_FACTOR * (Math.pow(RETAIN, 1 / F_DECAY) - 1)));
+const fInitD = g => FW[4] - Math.exp((g - 1) * FW[5]) + 1;
+const levelOf = st => st < 1 ? 0 : st < 2 ? 1 : st < 4 ? 2 : st < 7 ? 3 : st < 14 ? 4 : st < 30 ? 5 : st < 60 ? 6 : 7;
+// cards from before this model: estimate their memory from the old level and how they've done
+function memOf(c) {
+  if (c.s == null) { c.s = Math.max(0.3, IV[c.b] || 0.4); const tot = (c.r || 0) + (c.w || 0); c.df = fClamp(5 + 4 * ((c.w || 0) / (tot + 1)) - (c.b || 0) * 0.3, 1, 10); c.lr = Math.min(today(), (c.d || today()) - Math.max(1, IV[c.b] || 1)); }
+  return c;
+}
+const recallNow = c => { memOf(c); return fRecall(Math.max(0, today() - c.lr), c.s); };
+const RECOG = new Set(['mc', 'listen', 'tiles', 'rq', 'rid']);   // picking from choices
+function fsrsStep(c, g, t, first) {
+  if (first) { c.s = FW[g - 1]; c.df = fClamp(fInitD(g), 1, 10); c.lr = t; return; }
+  memOf(c); const el = Math.max(0, t - c.lr), r = fRecall(el, c.s), d = c.df, st = c.s;
+  if (el === 0) { const sinc = Math.pow(st, -FW[19]) * Math.exp(FW[17] * (g - 3 + FW[18])); c.s = st * (g >= 2 ? Math.max(sinc, 1) : sinc); }
+  else if (g === 1) { const f = FW[11] * Math.pow(d, -FW[12]) * (Math.pow(st + 1, FW[13]) - 1) * Math.exp((1 - r) * FW[14]); c.s = Math.min(f, st / Math.exp(FW[17] * FW[18])); }
+  else c.s = st * (1 + Math.exp(FW[8]) * (11 - d) * Math.pow(st, -FW[9]) * (Math.exp((1 - r) * FW[10]) - 1) * (g === 2 ? FW[15] : 1) * (g === 4 ? FW[16] : 1));
+  c.s = fClamp(c.s, 0.001, 36500);
+  const dd = -FW[6] * (g - 3), nd = d + dd * (10 - d) / 9; c.df = fClamp(FW[7] * fInitD(4) + (1 - FW[7]) * nd, 1, 10); c.lr = t;
+}
+function grade(id, q, type) {
   const t = today(); const c = S.cards[id] || (S.cards[id] = { b: 0, d: t, r: 0, w: 0 });
-  if (q === 2) { c.b = Math.min(c.b + 1, 7); c.r++; } else if (q === 1) { c.r++; } else { c.b = Math.max(0, c.b - 2); c.w++; c.wd = t; }
-  c.d = t + (q === 0 ? 1 : Math.max(1, IV[c.b]));
+  const g = q === 0 ? 1 : q === 1 ? 2 : RECOG.has(type) ? 2 : 3;   // again / hard / good; picking from choices is 'hard' credit
+  const first = c.s == null && !c.r && !c.w;
+  if (q > 0) c.r++; else { c.w++; c.wd = t; }
+  fsrsStep(c, g, t, first);
+  c.b = levelOf(c.s); c.d = t + (q === 0 ? 1 : fInterval(c.s));
 }
 const learned = ids => ids.filter(id => S.cards[id] && S.cards[id].b >= 2).length;
 const seen = ids => ids.filter(id => S.cards[id]).length;
 const needsWork = () => { const t = today(); return dueIds().filter(id => { const c = S.cards[id]; return c.w > 0 && (c.wd ? c.wd >= t - 7 : c.b <= 1); }); };
-function dueIds() { const t = today(); return Object.keys(S.cards).filter(id => S.cards[id].d <= t && card(id)).sort((a, b) => S.cards[a].d - S.cards[b].d); }
+// due cards, the ones you're most likely to have forgotten first (so a short session saves the most)
+function dueIds() { const t = today(); const ids = Object.keys(S.cards).filter(id => S.cards[id].d <= t && card(id)); const rc = {}; ids.forEach(id => rc[id] = recallNow(S.cards[id])); return ids.sort((a, b) => rc[a] - rc[b]); }
 /* New words per day: the setting is the most you'll get, not a promise. When reviews pile up or recent answers are
    shaky, fewer new words come in, so the old ones get practiced before they're forgotten. Reviews that would have
    been crowded out get the room instead. */
@@ -643,12 +690,16 @@ function buildSession() {
     q.splice(Math.min(q.length, pos + 2 + Math.floor(Math.random() * 3)), 0, { id, type: exType(id, true) });
   }
   // one new grammar rule a day, taught inside the session, then two quick questions on it
-  const nr = nextRule();
+  // a new rule only when the earlier ones are holding: if a rule you've learned keeps tripping you up, it gets practiced instead
+  const nr = [...nwk].some(id => id[0] === 'r') ? null : nextRule();
   if (nr && !S.cards[ruleCardId(nr)]) { const id = ruleCardId(nr), pos = Math.min(q.length, 3 + Math.floor(Math.random() * 3)); q.splice(pos, 0, { id, type: 'rteach' }); q.splice(Math.min(q.length, pos + 2), 0, { id, type: 'rq' }); q.splice(Math.min(q.length, pos + 6), 0, { id, type: 'rq' }); }
   const sh = [...new Set(shuffle(Object.keys(S.cards).filter(id => id[0] === 'p' && card(id)).concat(nw.filter(id => id[0] === 'p'))))].slice(0, 2);
   sh.forEach((id, i) => { const taught = q.findIndex(x => x.id === id && x.type === 'teach'); q.splice(Math.max(Math.floor(q.length * (0.45 + i * 0.4)), taught + 2), 0, { id, type: 'shadow' }); });
   if (q.filter(x => x.type !== 'shadow').length < 4) shuffle(Object.keys(S.cards).filter(card)).slice(0, 10).forEach(id => q.push({ id, type: exType(id) }));
   if (!q.length) GRAM_ORDER.slice(0, 4).forEach(id => q.push({ id, type: 'teach' }, { id, type: 'mc' }));
+  // one more try at today's new words near the end, after other questions in between: recalling a word again
+  // after a gap fixes it much better than seeing it twice in a row (successive relearning)
+  if (nw.length && nw.length <= 10) shuffle(nw.slice()).forEach(id => q.push({ id, type: exType(id, true), recap: 1 }));
   q.forEach(x => { if (x.type === 'say' || x.type === 'pron') x.type = 'speak'; });
   return q;
 }
@@ -1193,7 +1244,7 @@ const GUIDE_V = 4;
 const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
   { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
-  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
+  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'One new rule a day, inside your session'], ['📈', 'Questions get harder each time'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
@@ -1279,10 +1330,9 @@ function result(c, item, ok, extra) {
   const q = ok === true ? 2 : ok === false ? 0 : ok;
   if (!sess.graded.has(c.id) && item.type !== 'teach' && item.type !== 'shadow') {
     sess.graded.add(c.id);
-    if (!sess.newIds.has(c.id)) grade(c.id, q);
-    else if (!S.cards[c.id]) grade(c.id, q);
-    else if (q === 0) S.cards[c.id].d = today();
-    else { S.cards[c.id].b = Math.max(S.cards[c.id].b, 1); S.cards[c.id].r++; }
+    if (!sess.newIds.has(c.id)) grade(c.id, q, item.type);
+    else if (!S.cards[c.id]) grade(c.id, q, item.type);
+    else { const k = S.cards[c.id]; if (k.s == null || k.fresh) { delete k.fresh; delete k.s; delete k.lr; } grade(c.id, q, item.type); if (q === 0) k.d = today(); else k.b = Math.max(k.b, 1); }
   }
   logAnswer(q > 0); sess.total++; if (q > 0) { sess.right++; const g = q === 2 ? 10 : 6; sess.xp += g; addXP(g); }
   // the party drops in now and then: a streak, a comeback, or a rough patch
@@ -1519,7 +1569,7 @@ function typedCheck(c, item, inp, tolFrac, dictMode) {
 const EX = {
   teach(c, item) {
     sess.newIds.add(c.id);
-    if (!S.cards[c.id]) { S.cards[c.id] = { b: 0, d: today() + 1, r: 0, w: 0 }; const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; S.newDay.n++; const rd = calDay(); if (!S.newReal || S.newReal.d !== rd) S.newReal = { d: rd, n: 0 }; S.newReal.n++; S.newMax = Math.max(S.newMax || 0, S.newReal.n); save(); }
+    if (!S.cards[c.id]) { S.cards[c.id] = { b: 0, d: today() + 1, r: 0, w: 0, fresh: 1 }; const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; S.newDay.n++; const rd = calDay(); if (!S.newReal || S.newReal.d !== rd) S.newReal = { d: rd, n: 0 }; S.newReal.n++; S.newMax = Math.max(S.newMax || 0, S.newReal.n); save(); }
     $('#ex').innerHTML = `<div class="teachhead"><div class="th-text"><div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : c.kind === 'd' ? 'Line from a conversation: ' + esc(c.convo) : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
       <div class="ceb">${esc(c.ceb)}</div>${phonHtml(c.ceb)}</div>${picImg(picFile(c), 'big')}</div><div class="prompt" style="font-weight:500">${esc(c.en)}</div>
       ${breakdown(c.ceb)}
@@ -2236,7 +2286,7 @@ const learnedCount = () => Object.keys(S.cards).filter(id => id[0] !== 'r' && S.
 function boardRow() { const a = acc7(); return { name: displayName(), streakReset: STREAK_RESET, streak: streakNow(), best: S.streak.best || 0, sLast: S.streak.last || 0, sCount: S.streak.count || 0, fWk: S.freezeWk || 0, tzo: new Date().getTimezoneOffset(), accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, rushHow: S.rushHow || 'pick', newMax: S.newMax || 0, geoP: (S.geoBest || {}).prov || 0, geoL: (S.geoBest || {}).lang || 0, geoPHow: (S.geoHow || {}).prov || 'pick', geoLHow: (S.geoHow || {}).lang || 'pick', updated: Date.now() }; }
 let boardTimer = null;
 function pushBoard() {
-  if (!Sync.user || !window.firebase) return; const uid = Sync.user.uid, t = calDay();
+  if (!Sync.user || !window.firebase) return; const uid = Sync.user.uid, t = calDay(); if (typeof redoCheck === 'function') redoCheck();
   if (ANNOUNCED_BY_HAND[uid] === t && S.announced !== t) { S.announced = t; S.reannounce = 0; }
   // a session finished before the app could record it: credit that day once, for good (it carries through sync)
   const cd = DONE_ON_RESET[uid];
