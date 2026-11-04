@@ -457,7 +457,20 @@ const learned = ids => ids.filter(id => S.cards[id] && S.cards[id].b >= 2).lengt
 const seen = ids => ids.filter(id => S.cards[id]).length;
 const needsWork = () => { const t = today(); return dueIds().filter(id => { const c = S.cards[id]; return c.w > 0 && (c.wd ? c.wd >= t - 7 : c.b <= 1); }); };
 function dueIds() { const t = today(); return Object.keys(S.cards).filter(id => S.cards[id].d <= t && card(id)).sort((a, b) => S.cards[a].d - S.cards[b].d); }
-function newAllowance() { const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; return Math.max(0, (S.settings.newPerDay || 8) - S.newDay.n); }
+/* New words per day: the setting is the most you'll get, not a promise. When reviews pile up or recent answers are
+   shaky, fewer new words come in, so the old ones get practiced before they're forgotten. Reviews that would have
+   been crowded out get the room instead. */
+function newPlan() {
+  const pref = S.settings.newPerDay || 8; if (window.__noThrottle) return { n: pref, why: '' };
+  const backlog = dueIds().filter(id => id[0] !== 'r').length, a = acc7();
+  let n = pref, why = '';
+  if (backlog > 20) { n = Math.round(pref * Math.max(0, 1 - (backlog - 20) / 40)); why = 'backlog'; }
+  if (a.n >= 20 && a.pct < 75) { const m = a.pct < 60 ? Math.min(2, pref) : Math.round(pref / 2); if (m < n) { n = m; why = 'accuracy'; } }
+  return { n: Math.max(0, Math.min(pref, n)), why, backlog, pct: a.n >= 20 ? a.pct : null, pref };
+}
+function newAllowance() { const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; if (S.newDay.cap == null || S.newDay.capV !== S.settings.newPerDay) { S.newDay.cap = newPlan().n; S.newDay.capV = S.settings.newPerDay; } return Math.max(0, S.newDay.cap - S.newDay.n); }
+// how many reviews fit in today's session: the usual 16, plus two for each new word held back (up to 40)
+const reviewRoom = () => { const pref = S.settings.newPerDay || 8, cap = S.newDay && S.newDay.d === today() && S.newDay.cap != null ? S.newDay.cap : pref; return Math.min(40, 16 + 2 * Math.max(0, pref - cap)); };
 /* ---------- the learning path ---------- */
 let PATH = [];
 function buildPath() {
@@ -620,7 +633,7 @@ function exType(id, isNew) {
 }
 function buildSession() {
   ensureRuleCards();
-  const nwk = new Set(needsWork()), due = [...nwk, ...dueIds().filter(id => !nwk.has(id))], q = due.filter(id => id[0] !== 'r').slice(0, 16).concat(due.filter(id => id[0] === 'r').slice(0, 3)).map(id => ({ id, type: exType(id) }));
+  const nwk = new Set(needsWork()), due = [...nwk, ...dueIds().filter(id => !nwk.has(id))], q = due.filter(id => id[0] !== 'r').slice(0, (newAllowance(), reviewRoom())).concat(due.filter(id => id[0] === 'r').slice(0, 3)).map(id => ({ id, type: exType(id) }));
   shuffle(q); q.sort((x, y) => (nwk.has(y.id) ? 1 : 0) - (nwk.has(x.id) ? 1 : 0));
   const nw = pickNew(); let lastPos = 0;
   for (const id of nw) {
@@ -848,9 +861,12 @@ function binkoPlan() {
   let s = 'Binko here!';
   const rs = loadResume(); if (rs) return [s + ` You stopped at question <b>${rs.qi + 1} of ${rs.Q.length}</b> last time. Binko saved your spot, so tap Continue and we'll pick right back up!`, `${hi}${name}!`];
   if (!plan.session) {
-    const parts = []; const dueN = Math.min(due, 16); if (dueN) parts.push(`<b>${dueN}</b> review${dueN === 1 ? '' : 's'}`); if (nw) parts.push(`<b>${nw}</b> new word${nw === 1 ? '' : 's'}`);
+    const parts = []; const dueN = Math.min(due, reviewRoom()); if (dueN) parts.push(`<b>${dueN}</b> review${dueN === 1 ? '' : 's'}`); if (nw) parts.push(`<b>${nw}</b> new word${nw === 1 ? '' : 's'}`);
     s += parts.length ? ` Today's session has ${list(parts)}` : ' Today\'s session is ready'; s += nr && !S.cards[ruleCardId(nr)] ? `, plus a new grammar rule: <b>${esc(nr.title)}</b>.` : '.';
-    if (nw) s += ' Ooh, new words! Binko can\'t wait to find out what they mean with you!';
+    const np = newPlan(), pref = S.settings.newPerDay || 8, cap = S.newDay.cap != null ? S.newDay.cap : np.n;
+    if (cap < pref && np.why === 'backlog') s += ` You picked ${pref} new words a day, but <b>${due}</b> old ones are waiting, so Binko is giving you ${cap ? cap + ' new today' : 'no new ones today'} and more room for reviews. Words you don't practice slip away!`;
+    else if (cap < pref && np.why === 'accuracy') s += ` Recent answers were ${np.pct}% right, so Binko is holding new words to ${cap} today until the old ones feel solid.`;
+    else if (nw) s += ' Ooh, new words! Binko can\'t wait to find out what they mean with you!';
     if (weak.length) s += ` Last time, ${list(weak)} gave you trouble, so Binko put ${weak.length === 1 ? 'it' : 'them'} first today. Watch closely!`;
     else if (Object.keys(S.cards).length) s += ' Nothing tripped you up last time. SUPER DUPER!';
     else s += ' This is your very first lesson. Binko is SO excited!';
@@ -864,7 +880,7 @@ VIEWS.home = function () {
   const items = planItems(), nextUp = planNext(), doneN = items.filter(i => isDone(i, plan)).length;
   const resumeAt = (!nextUp || nextUp.k === 'session') ? loadResume() : null;
   const open = items.filter(i => !isDone(i, plan)), done = items.filter(i => isDone(i, plan));
-  const mins = Math.max(5, Math.round((Math.min(due, 16) + nw * 2 + 2) * 0.6));
+  const mins = Math.max(5, Math.round((Math.min(due, reviewRoom()) + nw * 2 + 2) * 0.6));
   const SHORT = { session: 'Reviews and new words', convo: 'Read it, then say your part', speed: 'Listening at ' + S.speed.toFixed(1) + '×', dict: 'Type what you hear', shadow: 'Speak along with one unit', talk: 'Call or chat with family, then tick it' };
   const shortOf = it => it.locked ? 'Opens soon' : it.k === 'build' ? (nextRule() ? 'New rule: ' + nextRule().title : 'Make your own sentences') : it.k === 'real' ? (it.d || '').split('.')[0] : SHORT[it.k] || it.d;
   const row = it => { const d = isDone(it, plan), nx = nextUp && it.k === nextUp.k;
@@ -1014,7 +1030,7 @@ VIEWS.me = function () {
   <section class="panel"><h2>Daily cards</h2>
     ${[['newPerDay', 'New cards per day', [5, 8, 10, 15]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}
     <div><div class="label">Background music</div><div class="seg" id="musicseg"><button class="${S.settings.music !== false ? 'on' : ''}" data-m="1">On</button><button class="${S.settings.music === false ? 'on' : ''}" data-m="0">Off</button></div></div>
-    <p class="muted small" style="margin:0">${minsText(st.newPerDay || 8)} More moves you along the path faster but brings more reviews.</p><p class="muted small" style="margin:0">🎵 ${IPHONE_MUSIC}</p></section>
+    <p class="muted small" style="margin:0">${minsText(st.newPerDay || 8)} This is the most you'll get: when old words pile up or answers get shaky, Binko gives fewer new ones until you catch up.</p><p class="muted small" style="margin:0">🎵 ${IPHONE_MUSIC}</p></section>
   <section class="panel"><h2>Your data</h2>
     <p class="small muted" style="margin:0">${hasPack() ? `Word pack loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Word pack not loaded yet.'}</p>
     <div class="row"><button class="btn" id="exp">Save a backup</button><button class="btn ghost" id="imp">Restore a backup</button></div>
@@ -1182,7 +1198,7 @@ const GUIDE = [
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
   { t: 'Ranks', tab: 'board', art: '📊', pts: [['📊', 'See how the family is doing'], ['🎯', 'Streaks, accuracy, words, games'], ['⌨️', 'Game scores say if they were typed or multiple choice'], ['🔑', 'Sign in on <b>Me</b> to join']] },
-  { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day'], ['🎵', 'Background music on or off, or tap the speaker in the top corner of any screen']], set: true },
+  { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day (the most you\'ll get: fewer when reviews pile up)'], ['🎵', 'Background music on or off, or tap the speaker in the top corner of any screen']], set: true },
   { t: 'One last thing', art: '🎯', pts: [['✏️', 'A quick check of what you already know'], ['⏭️', 'Words you know get skipped'], ['🤷', 'Not sure? Tap "I don\'t know". That\'s fine!']] }
 ];
 let guideAt = 0, guideBack = 'home';
