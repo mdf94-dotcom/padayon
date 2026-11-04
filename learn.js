@@ -420,6 +420,23 @@ const EXTRA = [
   ["alas dos kinse", "2:15 (quarter past two)", "Time uses Spanish-based numbers. Say the hour with alas (ala una for one o'clock), then the minutes: alas dos kinse = 2:15."],
   ["alas dos y medya", "2:30 (half past two)", "y medya = and a half. Ala una y medya = 1:30."],
   ["alas tres menos kinse", "2:45 (quarter to three)", "menos = minus: fifteen before three. Lots of people just say the minutes instead: alas dos kwarentay singko."],
-  ["alas siyete sa buntag", "seven in the morning", "Add the time of day: sa kaadlawon (before dawn), sa buntag (morning), sa udto (noon), sa hapon (afternoon), sa gabii (evening)."]
+  ["alas siyete sa buntag", "seven in the morning", "Add the time of day: sa kaadlawon (before dawn), sa buntag (morning), sa udto (noon), sa hapon (afternoon), sa gabii (evening)."],
+  // from the family group chat: texting words and sentence types (langga, ganina, ni-cancel, ga-/gi-, para unsa, naa kay…)
+  ["Langga", "Sweetheart; dear (for your kids or your partner)", "Short for palangga = beloved. Mama starts a text with \"Langga,\" the way you'd say \"Hon,\" in English."],
+  ["ganina", "earlier (today)", "Ganina = earlier today. Gahapon = yesterday, unya = later. Also said kaganina."],
+  ["Para unsa?", "What for?", "Para = for, unsa = what. Ask it when someone tells you a plan: \"Para unsa, Mama?\""],
+  ["Naa kay tutor?", "Do you have tutoring?", "Naa ka + y = naa kay: do you have …? (y is short for ug.) Here tutor means a tutoring session. Swap in anything: Naa kay kwarta? (Do you have money?)"],
+  ["Naa koy tutor ganina.", "I had tutoring earlier.", "Naa koy = I have. Naa doesn't change for the past; ganina tells you it was earlier. Tutor here = a tutoring session."],
+  ["gibalhin", "moved (it); rescheduled", "Root balhin = move or transfer. Gi- = it was done: Gibalhin niya ugma = she moved it to tomorrow."],
+  ["Ni-cancel ang akong alas siyete.", "My 7 o'clock cancelled.", "English verbs take Bisaya fronts: ni-cancel (cancelled), mo-cancel (will cancel), gi-cancel (got cancelled). Texts often write it as two words: ni cancel."],
+  ["Mahuman na ko sa alas siyete.", "I'll be done by 7.", "Mahuman = will be finished. In texts the time is usually a number: Mahuman na ko sa alas 7."],
+  ["Palihug ko sulti kay Kuya nga mopalit siya ug tuwalya.", "I'll be done at 7.", "Palihug ko + action = please do this for me. Sulti kay Kuya = tell Kuya. Nga (often na in texts) = that."],
+  ["prito", "fried; fry", "From Spanish frito. Pritong isda = fried fish. Prito nalang = just fry it."],
+  ["Pritong saging nalang among panihapon.", "We're just having fried bananas for dinner.", "Nalang = just (nothing fancier). Among = our, not including you."],
+  ["Ga-prito si Tatay.", "Dad is frying (it).", "Ga- = nag-, doing it right now. Common in texts and in Mindanao: ga-kaon (eating), ga-luto (cooking)."],
+  ["Gikaon namo sa panihapon.", "We ate it for dinner.", "Ga- = nag-: is doing (or did). Common in texts and in Mindanao: ga-kaon (eating), ga-luto (cooking). With ni Tatay (by Dad) you'd use gi- instead: Gi-prito ni Tatay = Dad fried it."],
+  ["alas siyete hangtod alas otso", "7 to 8 o'clock", "Hangtod = until. In texts people just write 7-8."],
+  ["Oo, Tatay.", "Yes, Dad.", "Oo = yes. Add Tatay, Mama, Kuya or Ate to sound respectful."],
+  ["Gi-prito ni Tatay ang saging.", "Dad fried the bananas.", "Gi- = it was done, ni Tatay = by Dad. Compare Ga-prito si Tatay = Dad is frying (it)."]
 ];
 const E_ORDER = EXTRA.map((_, i) => 'e' + i);
