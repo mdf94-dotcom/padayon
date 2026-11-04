@@ -58,7 +58,7 @@ const D_ORDER = DIALOGS.flatMap((d, i) => d.lines.map((_, j) => 'd' + i + '_' + 
 const SPR = { p: null, w: null };
 let PACK_HV = 0;
 function setPack(h, pbuf, wbuf) {
-  P = h.P; W = h.W; UNITS = h.UNITS; IDX = h.IDX; SPR.p = pbuf; SPR.w = wbuf; PACK_HV = h.v || 1;
+  P = h.P; W = h.W; UNITS = h.UNITS; IDX = h.IDX; SPR.p = pbuf; SPR.w = wbuf; PACK_HV = h.v || 1; NATIVE_FOR = null;
   if (typeof urls !== 'undefined') Object.keys(urls).forEach(k => { try { URL.revokeObjectURL(urls[k]); } catch (e) { } delete urls[k]; });
   PHRASE_ORDER = UNITS.flatMap(u => u.ids);
   try { buildPath(); } catch (e) { }
@@ -747,6 +747,14 @@ const canHear = c => !!c && (c.audio || hasVoice(c.ceb) || c.kind === 'c');
 const voiceNote = c => c.audio ? 'Say it out loud with the recording.' : hasVoice(c.ceb) ? 'Computer voice, not a native speaker. Say it out loud with it.' : "Your phone's voice, so it may sound Tagalog. Say it out loud.";
 // cards whose wording was corrected to a different form than the native speaker recorded: use the voice for the corrected words
 const RECORDING_OFF = new Set(['w225', 'w879']);   // makililimos → mangililimos, permerong → primero nga
+// a sentence or word that a native speaker recorded on its own (one way of saying it, spelled the same) plays that
+// recording instead of the computer voice, wherever it shows up
+let NATIVE_FOR = null;
+function nativeUrl(s) {
+  if (!NATIVE_FOR) { if (!P.length) return null; NATIVE_FOR = {};
+    [...P.map((_, i) => 'p' + i), ...W.map((_, i) => 'w' + i)].forEach(id => { const c = card(id); if (!c || !IDX[id] || RECORDING_OFF.has(id) || HIDE.has(id) || /[\/·(]/.test(c.ceb) || CEB_FIX[id]) return; const k = vkey(c.ceb); if (k && !NATIVE_FOR[k]) NATIVE_FOR[k] = id; }); }
+  const id = NATIVE_FOR[vkey(s)]; return id ? clipUrl(id) : null;
+}
 function clipUrl(id) {
   if (urls[id]) return urls[id];
   const buf = SPR[id[0]]; const ix = !RECORDING_OFF.has(id) && IDX[id]; if (!buf || !ix) { const c = card(id); return c ? voiceUrl(c.ceb) : null; }
@@ -1773,7 +1781,7 @@ VIEWS.convos = function () {
   DL = { d: p.d, idx: p.i, m: p.unknown.length ? 'learn' : 'read', i: 0, show: {}, right: 0, unknown: p.unknown };
   view = 'convo'; render();
 };
-const lineSay = async (t, btn) => { const r = ++playReq, cx = audioCtx(); const u = await voiceUrlA(t); if (u && stillWanted(r, cx)) playUrl(u, 1, btn); };
+const lineSay = async (t, btn) => { const r = ++playReq, cx = audioCtx(); const u = nativeUrl(t) || await voiceUrlA(t); if (u && stillWanted(r, cx)) playUrl(u, 1, btn); };
 function bubble(d, l, j, opts = {}) {
   const me = l[0] === 'b', showEn = opts.en || DL.show[j];
   return `<div class="msg ${me ? 'me' : 'them'}"><div class="small" style="opacity:.75">${esc(me ? d.b : d.a)}</div><div style="font-weight:700">${esc(l[1])}</div>
@@ -1912,7 +1920,7 @@ function ruleOpts(r, ceb) {
   const others = RULES.filter(x => !hits.has(x.id)), mine = shuffle(others.filter(x => ruleLearned(x.id))), rest = shuffle(others.filter(x => !ruleLearned(x.id)));
   return shuffle([r, ...mine.concat(rest).slice(0, 3)]);
 }
-const playSentence = async (s, btn) => { const r = ++playReq, cx = audioCtx(); const u = await voiceUrlA(s); if (u && stillWanted(r, cx)) return playUrl(u, 1, btn); };
+const playSentence = async (s, btn) => { const r = ++playReq, cx = audioCtx(); const u = nativeUrl(s) || await voiceUrlA(s); if (u && stillWanted(r, cx)) return playUrl(u, 1, btn); };
 const sayBtn = s => hasVoice(s) ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><span class="muted small">Computer voice</span></div>` : '';
 function ruleChoice(c, item, opts, rightId, shown, extra) {
   let sel = null;
