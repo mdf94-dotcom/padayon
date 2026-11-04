@@ -651,7 +651,7 @@ const stillWanted = (r, cx) => r === playReq && cx === audioCtx();
 /* ---------- computer voice: cards with no native recording ----------
    voice/ holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
-const VOICE_V = 13; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
+const VOICE_V = 14; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
 /* The computer voice comes in pieces: a small index, then one piece per stage. You only download the pieces for
    where you are on the path (plus the next one); the rest arrive when a sentence from them is first played. */
 async function loadVoice() {
@@ -1391,6 +1391,7 @@ function glossOf(tok) {
   const w = W.findIndex((x, i) => !HIDE.has('w' + i) && norm(cebOf('w' + i)) === t); if (w >= 0) return EN_FIX['w' + w] || W[w][1];
   const p = P.findIndex((x, i) => { const c = cebOf('p' + i); return c && tokens(c).length === 1 && alts(c).includes(t); }); if (p >= 0) return EN_FIX['p' + p] || P[p][1];
   const m = (typeof MEGA !== 'undefined' ? MEGA : []).findIndex((x, i) => { const c = cebOf('m' + i); return c && tokens(c).length === 1 && alts(c).map(norm).includes(t); }); if (m >= 0) return card('m' + m).en;
+  const e = (typeof EXTRA !== 'undefined' ? EXTRA : []).findIndex((x, i) => { const c = cebOf('e' + i); return c && tokens(c).length === 1 && alts(c).map(norm).includes(t); }); if (e >= 0) return card('e' + e).en;
   if (typeof GLOSS_MORE !== 'undefined' && GLOSS_MORE[t]) return GLOSS_MORE[t];
   // a prefix is only explained when the word left after it is one we know (Kamatis isn't ka- + matis)
   for (const [re, txt] of AFFIX) if (re.test(t) && t.length > 5) { const root = t.replace(re, ''); const ri = W.findIndex((x, i) => norm(cebOf('w' + i)) === root); if (ri >= 0) return txt + ' · ' + root + ' = ' + (EN_FIX['w' + ri] || W[ri][1]); }
@@ -1409,6 +1410,7 @@ function cardForTok(tok) {
   const one = id => { const c = cebOf(id); return c && tokens(c).length === 1 ? alts(c).map(norm) : []; };
   const p = P.findIndex((x, i) => one('p' + i).includes(t)); if (p >= 0) return 'p' + p;
   const m = (typeof MEGA !== 'undefined' ? MEGA : []).findIndex((x, i) => one('m' + i).includes(t)); if (m >= 0) return 'm' + m;
+  const e = (typeof EXTRA !== 'undefined' ? EXTRA : []).findIndex((x, i) => one('e' + i).includes(t)); if (e >= 0) return 'e' + e;
   for (const [re] of AFFIX) if (re.test(t) && t.length > 5) { const root = t.replace(re, ''), ri = W.findIndex((x, i) => norm(cebOf('w' + i)) === root); if (ri >= 0) return 'w' + ri; }
   return null;
 }

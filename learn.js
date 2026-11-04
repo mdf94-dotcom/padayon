@@ -437,6 +437,22 @@ const EXTRA = [
   ["Gikaon namo sa panihapon.", "We ate it for dinner.", "Ga- = nag-: is doing (or did). Common in texts and in Mindanao: ga-kaon (eating), ga-luto (cooking). With ni Tatay (by Dad) you'd use gi- instead: Gi-prito ni Tatay = Dad fried it."],
   ["alas siyete hangtod alas otso", "7 to 8 o'clock", "Hangtod = until. In texts people just write 7-8."],
   ["Oo, Tatay.", "Yes, Dad.", "Oo = yes. Add Tatay, Mama, Kuya or Ate to sound respectful."],
-  ["Gi-prito ni Tatay ang saging.", "Dad fried the bananas.", "Gi- = it was done, ni Tatay = by Dad. Compare Ga-prito si Tatay = Dad is frying (it)."]
+  ["Gi-prito ni Tatay ang saging.", "Dad fried the bananas.", "Gi- = it was done, ni Tatay = by Dad. Compare Ga-prito si Tatay = Dad is frying (it)."],
+  // from the family chat, part 2: replies and plans (mao ba, opo, unsa man, wala pa si…, dili nalang mi moanha, puhon)
+  ["Mao ba?", "Is that so? / Really?", "Mao = that's it, ba = question particle. What you say back when someone tells you news."],
+  ["Opo.", "Yes (polite, to elders).", "Borrowed from Tagalog, and many Bisaya families use it with parents. Plain Bisaya says Oo, Mama or Oo, Tatay."],
+  ["Unsa man?", "What is it? / What's up?", "Man softens the question. Tatay's reply when you call him: Unsa man, kuya?"],
+  ["Tubag ug Bisaya.", "Answer in Bisaya.", "Tubag = answer. Ug before a language = in: ug Bisaya, ug Ingles."],
+  ["Dili ta pwede motubag ug Ingles.", "We can't answer in English.", "Dili pwede = not allowed / can't. Mo- + tubag = (to) answer. Texts shorten dili to di and split mo: di ta pwede mo tubag."],
+  ["dapit", "around; near (a place)", "Dapit sa gym = around the gym, somewhere near it. Asa dapit? = Where exactly?"],
+  ["Naa siya dapit sa gym, nagpaabot.", "She's around the gym, waiting.", "Nagpaabot = waiting (for someone). Mama texted it as Mhitz dia dapit sa gym nag apa-abot: dia points to where she is, and nag apa-abot is a texting spelling of nagpaabot."],
+  ["Wala pa si Kuya?", "Kuya isn't here yet?", "Wala pa = not yet. In texts si is often written c: Wala pa c Kuya?"],
+  ["Naghunahuna pa mi.", "We're still thinking (about it).", "Naghunahuna = thinking. The chat spells it naghunhuna. Mi = short for kami (we, not including you)."],
+  ["Alas singko na man.", "It's already five o'clock.", "Na man = already (with a little push). Tatay's text writes it as one word: naman."],
+  ["Naa na siya sa balay.", "She's home already.", "Naa na = is (there) already. Mama's text, Dia na minsa Balay, is a quick texting spelling saying they're home now."],
+  ["Kabalo ka kung moadto si Mykha sa balay ugma?", "Do you know if Mykha is coming to the house tomorrow?", "Kabalo = know (also kahibalo or kahibaw; texts write kaybaw). Kung = if."],
+  ["Dili nalang mi moanha.", "We won't come over after all.", "Anha = there (where you are); moanha = will go there. Nalang = after all, instead."],
+  ["Magkita nalang ta sa balay ugma, puhon.", "Let's just see each other at the house tomorrow, God willing.", "Magkita ta = let's meet. Puhon = hopefully, God willing (texts: pohon)."],
+  ["Nahadlok ko sa unggoy sa balay.", "I'm scared of the monkey at the house.", "Nahadlok ko sa … = I'm scared of …. Unggoy = monkey."]
 ];
 const E_ORDER = EXTRA.map((_, i) => 'e' + i);
