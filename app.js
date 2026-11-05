@@ -270,7 +270,7 @@ function mergeState(a, b) {
   out.dayShift = Math.max(a.dayShift || 0, b.dayShift || 0);
   out.convoDone = {}; [a.convoDone || {}, b.convoDone || {}].forEach(x => Object.keys(x).forEach(k => out.convoDone[k] = Math.max(out.convoDone[k] || 0, x[k])));
   out.started = Math.min(...[a.started, b.started].filter(Boolean).concat([out.started || Infinity])) || 0; if (!isFinite(out.started)) out.started = 0;
-  out.rules = Object.assign({}, b.rules || {}, a.rules || {}); out.ruleDay = Math.max(a.ruleDay || 0, b.ruleDay || 0);
+  out.rules = Object.assign({}, b.rules || {}, a.rules || {}); out.ruleDay = Math.max(a.ruleDay || 0, b.ruleDay || 0); out.ruleCnt = (a.ruleDay || 0) === (b.ruleDay || 0) ? Math.max(a.ruleCnt || 1, b.ruleCnt || 1) : ((a.ruleDay || 0) > (b.ruleDay || 0) ? a.ruleCnt : b.ruleCnt);
   out.acc = Object.assign({}, b.acc || {}, a.acc || {}); [a.acc || {}, b.acc || {}].forEach(x => Object.keys(x).forEach(k => { const o = out.acc[k], v = x[k]; if (!o || v.t > o.t) out.acc[k] = v; }));
   { const r = bestWith(a.rushBest || 0, a.rushHow, b.rushBest || 0, b.rushHow || 'pick'); out.rushBest = r.best; out.rushHow = r.how; } out.newMax = Math.max(a.newMax || 0, b.newMax || 0);
   { const ga = a.geoBest || {}, gb = b.geoBest || {}, ha = a.geoHow || {}, hb = b.geoHow || {}; out.geoBest = {}; out.geoHow = {};
@@ -448,8 +448,20 @@ function sectionDone(label, line) {
 // little words get Binko's explanation and an example sentence (WORD_NOTE in fixes.js)
 function wn(c) { const x = WORD_NOTE[String(c.ceb).toLowerCase().replace(/[.!?]/g, '').trim()]; if (x && !c.note) { c.note = x.note; c.ex = c.ex || x.ex; c.exEn = c.exEn || x.exEn; } return c; }
 function card(id) {
+  const c = card0(id); if (!c) return c;
+  // one way to say it per card; the others are their own cards (VARIANTS) and are still accepted when typed
+  const sp = SPLIT[id];
+  if (GNOTES[id]) c.note = GNOTES[id];   // little and confusing words: what it is, what it isn't, two examples
+  if (sp) { c.ceb = sp.p; if (sp.en) c.en = sp.en; c.also = sp.also; if (id[0] === 'p') c.audio = false;
+    const others = (VAR_OF[id] || []).map(v => VARIANTS[+v.slice(1)][1]);
+    c.note = [GNOTES[id] ? '' : sp.n, c.note].filter(Boolean).join(' ');
+    if (others.length) c.note += ' (' + others.map(o => '"' + o + '"').join(', ') + (others.length > 1 ? ' each have' : ' has') + ' its own card.)'; }
+  return c;
+}
+function card0(id) {
   const k = id[0], n = +id.slice(1);
   if (HIDE.has(id)) return null;
+  if (k === 'v') { const v = VARIANTS[n], src = v && card0(v[0]); return v && src && { id, kind: 'p', ceb: v[1], en: v[2] || (SPLIT[v[0]] && SPLIT[v[0]].en) || src.en, note: v[3], also: v[4], audio: false, alt: v[0] }; }
   if (k === 'r') { const r = RULES[n]; return r && { id, kind: 'r', ceb: r.title, en: r.short, audio: false, rule: r }; }
   if (k === 'p') return P[n] && { id, kind: 'p', ceb: CEB_FIX[id] || P[n][0], en: EN_FIX[id] || P[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
   if (k === 'w') return W[n] && wn({ id, kind: 'w', ceb: CEB_FIX[id] || W[n][0], en: EN_FIX[id] || W[n][1], note: NOTES[id], trick: TRICKS[id], audio: !RECORDING_OFF.has(id) });
@@ -528,7 +540,7 @@ function buildPath() {
   };
   PATH = STAGES.map(st => {
     const lists = [];
-    const add = (ids, front) => { ids = ids.filter(id => !used.has(id)); ids.forEach(id => used.add(id)); if (ids.length) lists.push({ ids, front }); };
+    const add = (ids, front) => { ids = ids.flatMap(id => [id, ...(VAR_OF[id] || [])]).filter(id => !used.has(id)); ids.forEach(id => used.add(id)); if (ids.length) lists.push({ ids, front }); };
     // [start, span] within the stage: building blocks and set phrases open it, frequency words start a little later,
     // conversation lines come once some of their words are in
     add(st.f.flatMap(i => (F_UNITS[i] || { ids: [] }).ids), [0, 0.6]);
@@ -544,7 +556,7 @@ function buildPath() {
     return Object.assign({}, st, { ids: keyed.map(x => x[1]) });
   });
   // anything not placed yet goes into the last stage, so nothing is ever left out
-  const rest = [...F_ORDER, ...GRAM_ORDER, ...D_ORDER, ...PHRASE_ORDER, ...E_ORDER, ...W.map((_, i) => 'w' + i), ...M_ORDER].filter(id => !used.has(id));
+  const rest = [...F_ORDER, ...GRAM_ORDER, ...D_ORDER, ...PHRASE_ORDER, ...E_ORDER, ...W.map((_, i) => 'w' + i), ...M_ORDER, ...VARIANTS.map((_, i) => 'v' + i)].filter(id => !used.has(id));
   PATH[PATH.length - 1].ids.push(...rest);
 }
 buildPath();
@@ -661,6 +673,12 @@ function pickNew() {
   // one word a day that brings the nearest of Binko's stories closer to opening
   if (left > 0 && typeof STORIES !== 'undefined') { const near = STORIES.map(storyMissing).filter(m => m.length && m.length <= 3).sort((x, y) => x.length - y.length)[0];
     if (near) for (const w of near) { const id = cardForWord(w); if (id && !S.cards[id] && !out.includes(id) && ready(card(id))) { learn(id); break; } } }
+  /* Sentence rules first. The building blocks (who, whose, have, want, asking, when, describing) and the grammar cards
+     (little words, verb tenses) come before any other new words, from wherever they sit on the path, and then the words
+     the next grammar rules need for their practice sentences. Ordinary vocabulary only fills what's left. */
+  if (left > 0) take([...F_ORDER, ...GRAM_ORDER], left);
+  if (left > 0) { const need = RULES.filter(r => !ruleLearned(r.id)).flatMap(r => r.quiz.flatMap(q => q.w)).filter(w => !known.has(w));
+    take([...new Set(need)].map(cardForWord).filter(Boolean), left); }
   take(open, left);
   // still room: words from later on the path that already have an example
   if (left > 0) take(PATH.slice(cur + 1).flatMap(st => st.ids).filter(id => { const c = card(id); return c && needsExample(c); }), left);
@@ -689,10 +707,12 @@ function buildSession() {
     q.splice(pos, 0, { id, type: 'teach' });
     q.splice(Math.min(q.length, pos + 2 + Math.floor(Math.random() * 3)), 0, { id, type: exType(id, true) });
   }
-  // one new grammar rule a day, taught inside the session, then two quick questions on it
+  // new grammar rules, taught inside the session, then two quick questions on each
   // a new rule only when the earlier ones are holding: if a rule you've learned keeps tripping you up, it gets practiced instead
-  const nr = [...nwk].some(id => id[0] === 'r') ? null : nextRule();
-  if (nr && !S.cards[ruleCardId(nr)]) { const id = ruleCardId(nr), pos = Math.min(q.length, 3 + Math.floor(Math.random() * 3)); q.splice(pos, 0, { id, type: 'rteach' }); q.splice(Math.min(q.length, pos + 2), 0, { id, type: 'rq' }); q.splice(Math.min(q.length, pos + 6), 0, { id, type: 'rq' }); }
+  // up to two new rules (one early, one around the middle), each taught then asked twice
+  const nr = [...nwk].some(id => id[0] === 'r') ? null : nextRule(), nr2 = nr && nextRule(nr);
+  [nr, nr2].forEach((r, k) => { if (!r || S.cards[ruleCardId(r)]) return; const id = ruleCardId(r), pos = Math.min(q.length, (k ? Math.floor(q.length / 2) : 3) + Math.floor(Math.random() * 3));
+    q.splice(pos, 0, { id, type: 'rteach' }); q.splice(Math.min(q.length, pos + 2), 0, { id, type: 'rq' }); q.splice(Math.min(q.length, pos + 6), 0, { id, type: 'rq' }); });
   const sh = [...new Set(shuffle(Object.keys(S.cards).filter(id => id[0] === 'p' && card(id)).concat(nw.filter(id => id[0] === 'p'))))].slice(0, 2);
   sh.forEach((id, i) => { const taught = q.findIndex(x => x.id === id && x.type === 'teach'); q.splice(Math.max(Math.floor(q.length * (0.45 + i * 0.4)), taught + 2), 0, { id, type: 'shadow' }); });
   if (q.filter(x => x.type !== 'shadow').length < 4) shuffle(Object.keys(S.cards).filter(card)).slice(0, 10).forEach(id => q.push({ id, type: exType(id) }));
@@ -715,7 +735,7 @@ const stillWanted = (r, cx) => r === playReq && cx === audioCtx();
 /* ---------- computer voice: cards with no native recording ----------
    voice/ holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
-const VOICE_V = 14; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
+const VOICE_V = 15; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
 /* The computer voice comes in pieces: a small index, then one piece per stage. You only download the pieces for
    where you are on the path (plus the next one); the rest arrive when a sentence from them is first played. */
 async function loadVoice() {
@@ -1253,7 +1273,7 @@ const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
   { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
   { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
-  { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'One new rule a day, inside your session'], ['📈', 'Questions get harder each time'], ['🤔', 'Miss one? See exactly why']] },
+  { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
   { t: 'Ranks', tab: 'board', art: '📊', pts: [['📊', 'See how the family is doing'], ['🎯', 'Streaks, accuracy, words, games'], ['⌨️', 'Game scores say if they were typed or multiple choice'], ['🔑', 'Sign in on <b>Me</b> to join']] },
@@ -1573,7 +1593,7 @@ function wireIdk(c, item, inp) { const b = $('#idk'); if (b) b.onclick = () => {
 function typedCheck(c, item, inp, tolFrac, dictMode) {
   const g = norm(inp.value); inp.disabled = true;
   let best = 99, tgt = '';
-  for (const a of alts(c.ceb)) { const d = lev(g, a); if (d < best) { best = d; tgt = a; } }
+  for (const a of [c.ceb, ...(c.also || [])].flatMap(alts)) { const d = lev(g, a); if (d < best) { best = d; tgt = a; } }
   const tol = Math.max(1, Math.floor(tgt.length * tolFrac));
   const missed = tgt.split(' ').filter(w => !g.split(' ').includes(w));
   const said = esc(inp.value.trim());
@@ -1886,10 +1906,14 @@ VIEWS.rules = function () {
 const ruleLearned = id => !!(S.rules && S.rules[id] && S.rules[id].ok);
 function knownRoots() { const kw = knownWords(), r = new Set(kw); kw.forEach(t => { if (t.length > 4) r.add(t.replace(RE_AFFIX, '')); }); return r; }
 const ruleQuiz = (r, roots) => r.quiz.filter(q => q.w.every(w => roots.has(w)));
-function nextRule() {
-  if (S.ruleDay === today()) return null; // one new rule a day
+// grammar rules come as soon as you know the words to practice them: up to two new ones a day
+const RULES_PER_DAY = 2;
+const rulesToday = () => S.ruleDay === today() ? (S.ruleCnt || 1) : 0;
+function noteRuleLearned() { S.ruleCnt = rulesToday() + 1; S.ruleDay = today(); }
+function nextRule(skip) {
+  if (rulesToday() + (skip ? 1 : 0) >= RULES_PER_DAY) return null;
   const roots = knownRoots();
-  return RULES.find(r => !ruleLearned(r.id) && ruleQuiz(r, roots).length >= Math.min(3, r.quiz.length)) || null;
+  return RULES.find(r => !ruleLearned(r.id) && (!skip || r.id !== skip.id) && ruleQuiz(r, roots).length >= Math.min(3, r.quiz.length)) || null;
 }
 /* ---------- grammar rules inside the daily session ----------
    A new rule shows up in the daily session like a new word: Binko explains it, then it comes back on a schedule.
@@ -1960,7 +1984,7 @@ Object.assign(EX, {
   rteach(c, item) {
     const r = c.rule; sess.newIds.add(c.id);
     if (!S.cards[c.id]) S.cards[c.id] = { b: 0, d: today() + 1, r: 0, w: 0 };
-    S.rules = S.rules || {}; if (!ruleLearned(r.id)) S.rules[r.id] = { ok: 1, d: today() }; S.ruleDay = today(); save();
+    S.rules = S.rules || {}; if (!ruleLearned(r.id)) S.rules[r.id] = { ok: 1, d: today() }; noteRuleLearned(); save();
     $('#ex').innerHTML = `${rulePic(r, 'big')}<div class="label">New grammar rule · ${r.n} of ${RULES.length}</div><div class="ceb" style="font-size:1.7rem">${esc(r.title)}</div>
       <div class="prompt" style="font-weight:500;font-size:1.05rem">${esc(r.short)}</div>
       ${r.steps.map(st => `<div class="panel"><div>${esc(st[0])}</div>${ruleStepEx(r, st).map(x => `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b style="color:var(--sea)">${esc(x[0])}</b>${hasVoice(x[0]) ? `<button class="play sm" data-vs="${esc(x[0])}" aria-label="Play">${I.play}</button>` : ''}<span class="muted small">${esc(x[1])}${x[2] ? ' · ' + esc(x[2]) : ''}</span></div>`).join('')}</div>`).join('')}
@@ -2058,7 +2082,7 @@ function allPatternSentences(knownOnly) {
 function buildLock() {
   if (nextRule()) return null;
   if (buildPool().out.length >= 3) return null;
-  if (S.ruleDay === today()) return 'You learned a new rule today. Sentence practice with it opens once you know a few more words to build with. The next rule comes tomorrow.';
+  if (rulesToday() >= RULES_PER_DAY) return 'You learned two new rules today. Sentence practice with them opens once you know a few more words to build with. More rules come tomorrow.';
   return 'Opens soon. ' + ruleWaitHint();
 }
 function buildDesc() { const nr = nextRule(); return nr ? `New rule today: "${nr.title}". Binko explains it, you drill it, then you build sentences with it.` : 'Build your own sentences with the rules you know.'; }
@@ -2120,7 +2144,7 @@ VIEWS.build = function () {
 function drillDone(head) {
   const n = BD.quiz.length, pass = BD.qRight >= Math.ceil(n * 0.75);
   if (BD.nr) {
-    if (pass) { S.rules = S.rules || {}; S.rules[BD.nr.id] = { ok: 1, d: today() }; S.ruleDay = today(); ensureRuleCards(); save(); }
+    if (pass) { S.rules = S.rules || {}; S.rules[BD.nr.id] = { ok: 1, d: today() }; noteRuleLearned(); ensureRuleCards(); save(); }
     BD.qs = pickSentences(6, BD.nr.id);
   }
   const msg = !BD.nr ? `Review done: ${BD.qRight} of ${n}. Now let's build!`
