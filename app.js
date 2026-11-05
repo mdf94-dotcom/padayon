@@ -1373,7 +1373,11 @@ const enWords = en => en.toLowerCase().replace(/\([^)]*\)/g, '').replace(/[^a-z'
 const isQ = s => /\?\s*$/.test(s.split('/')[0].trim());
 function sameMeaning(a, b) {
   const x = new Set(enWords(a)), y = enWords(b); if (!x.size || !y.length) return false;
-  const inter = y.filter(w => x.has(w)).length; return inter / Math.max(x.size, y.length) >= 0.8;
+  const inter = y.filter(w => x.has(w)).length; if (inter / Math.max(x.size, y.length) >= 0.8) return true;
+  // one meaning inside the other ("older woman" vs "older woman or sister"), or any one sense the same: too close to tell apart
+  if (inter === Math.min(x.size, new Set(y).size) && inter >= 1) return true;
+  const parts = s => String(s).toLowerCase().replace(/\([^)]*\)/g, '').split(/[;\/]| or /).map(p => enWords(p).sort().join(' ')).filter(Boolean);
+  const pa = parts(a), pb = new Set(parts(b)); return pa.some(p => pb.has(p));
 }
 function simScore(c, d) {
   const a = tokSet(c.ceb), b = tokSet(d.ceb); let sc = 0;
@@ -1438,7 +1442,8 @@ function showOptMeanings(btns, opts, field) {
     let other = optText(o, field === 'en' ? 'ceb' : 'en');
     if (rTok && i !== ri) { const full = optText(o, 'ceb'), mine = (full.includes('/') ? null : full.split(/\s+/)) || firstAlt(full).split(/\s+/), m = wordDiff(mine, rTok), theirs = wordDiff(rTok, mine);
       const diff = mine.filter((_, k) => m[k]), was = rTok.filter((_, k) => theirs[k]);
-      if (diff.length && diff.length <= 3 && mine.length > 1) {
+      // only for real near-copies: most words shared with the answer, one to three swapped
+      if (diff.length && diff.length <= 3 && mine.length > 1 && mine.length - diff.length >= Math.max(1, Math.ceil(mine.length / 2))) {
         [...b.childNodes].forEach(n => { if (n.nodeType === 3) n.remove(); });
         b.insertAdjacentHTML('afterbegin', mine.map((t, k) => m[k] ? `<mark class="dif">${esc(t)}</mark>` : esc(t)).join(' ') + (full.includes('/') ? esc(full.slice(firstAlt(full).length)) : ''));
         if (!other) { const g = t => { const x = glossOf(t); return x ? `${esc(lowTok(t))} = ${esc(String(x).split(' · ')[0])}` : esc(lowTok(t)); };
@@ -1563,6 +1568,8 @@ function choiceEx(c, item, opts, field, cls) {
   btns.forEach(b => b.onclick = () => { btns.forEach(x => x.classList.remove('sel')); b.classList.add('sel'); sel = +b.dataset.i; $('#chk').disabled = false; });
   $('#chk').onclick = () => { const ok = opts[sel].id === c.id; btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === c.id) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); }); showOptMeanings(btns, opts, field); result(c, item, ok, ok ? '' : wrongWhy(c, opts[sel], field)); };
 }
+// "I don't know": show the answer, count it as a miss so the word comes back soon (no guessing needed)
+function wireIdk(c, item, inp) { const b = $('#idk'); if (b) b.onclick = () => { inp.disabled = true; inp.classList.add('wrong'); result(c, item, false, "That's okay. Here's the answer, and it'll come back again soon."); }; }
 function typedCheck(c, item, inp, tolFrac, dictMode) {
   const g = norm(inp.value); inp.disabled = true;
   let best = 99, tgt = '';
@@ -1637,17 +1644,17 @@ const EX = {
   },
   type(c, item) {
     $('#ex').innerHTML = `<div class="label">Write it in Bisaya</div><div class="prompt">${esc(c.en)}</div><input class="field" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type in Bisaya"><p class="muted small" style="margin:0">Small typos are fine. "ug" and "og" both count.</p>`;
-    foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
+    foot(`<button class="btn primary block" id="chk" disabled>Check</button><button class="btn ghost block" id="idk">I don't know</button>`);
     const inp = $('#ans'); inp.focus(); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
     inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) $('#chk').click(); };
-    $('#chk').onclick = () => typedCheck(c, item, inp, 0.12, false);
+    $('#chk').onclick = () => typedCheck(c, item, inp, 0.12, false); wireIdk(c, item, inp);
   },
   dict(c, item) {
     $('#ex').innerHTML = `<h2>Type what you hear</h2>${playBlock(S.speed)}<input class="field" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type the Bisaya you hear"><p class="muted small" style="margin:0">Replay as often as you need. Catch every little word: ko, na, pa, man, sa.</p>`;
-    wirePlay(c, S.speed); foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
+    wirePlay(c, S.speed); foot(`<button class="btn primary block" id="chk" disabled>Check</button><button class="btn ghost block" id="idk">I don't know</button>`);
     const inp = $('#ans'); inp.focus(); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
     inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) $('#chk').click(); };
-    $('#chk').onclick = () => typedCheck(c, item, inp, 0.15, true);
+    $('#chk').onclick = () => typedCheck(c, item, inp, 0.15, true); wireIdk(c, item, inp);
   },
   speak(c, item) {
     const secs = Math.round(Math.min(10, 3 + tokens(c.ceb).length * 0.8));

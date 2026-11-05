@@ -126,6 +126,8 @@ VIEWS.numround = function () {
     inp.oninput = () => $('#chk').disabled = !inp.value.trim();
     inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) $('#chk').click(); };
     $('#chk').onclick = () => { const ok = digitsOk(inp.value, q); inp.classList.remove('right', 'wrong'); inp.classList.add(ok ? 'right' : 'wrong'); inp.disabled = true; check(ok); };
+    $('#chk').insertAdjacentHTML('afterend', `<button class="btn ghost block" id="idk">I don't know</button>`);
+    $('#idk').onclick = () => { inp.disabled = true; inp.classList.add('wrong'); $('#idk').remove(); check(false); };
     if (mode === 'hear') { $('#pl').onclick = e => sayNum(ans, e.currentTarget); sayNum(ans, $('#pl')); }
   }
 };
