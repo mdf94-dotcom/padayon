@@ -23,3 +23,15 @@ Object.assign(GLOSS_MORE, { "pasensya": "sorry (for the trouble); patience", "ya
   "pakuyoga": "have (someone) come along", "kuyogi": "go along with (someone)", "manuroy": "go out strolling / sightseeing", "hain": "where (same as asa)",
   "nahibawo": "know (same as nahibalo)", "bukha": "open it (same as ablihi)", "lamuya": "how delicious (said of food)", "katulgon": "sleepy",
   "gitapulan": "feeling lazy", "tuyo-a": "mean it, intend it (from tuyo)", "ayaw'g": "don't (ayaw + ug)", "daw": "seems; they say" });
+// cleanup after the explanation review: duplicate cards and a non-standard word come out, unclear meanings fixed
+['w750',            // niani: not standard Bisaya (a mix of niini and ani, which have their own cards)
+ 'w562',            // na: same as w149 (and "linker (that)" is Tagalog; Bisaya uses nga)
+ 'w800', 'w803',    // sa: same as w134
+ 'm1239',           // semana: same as w696
+ 'm1973',           // mansanas: same as m447
+ 'm3097'            // uk uk: same as m407
+].forEach(id => HIDE.add(id));
+Object.assign(EN_FIX, { m1999: 'cockroach (same as uk-uk)', m2283: 'father-in-law', m2291: 'mother-in-law',
+  w107: 'fond of; likes to (sounds Tagalog; in Cebu people say ganahan)' });
+Object.assign(GNOTES, { m2283: 'Ugangan = parent-in-law. The -ng links it to lalaki (male): ugangang lalaki = father-in-law. Ugangang lalaki nako si Tatay Ben. — Tatay Ben is my father-in-law. · Ugangang babaye = mother-in-law.',
+  m2291: 'Ugangan = parent-in-law. The -ng links it to babaye (female): ugangang babaye = mother-in-law. Buotan kaayo akong ugangang babaye. — My mother-in-law is very kind. · Ugangang lalaki = father-in-law.' });
