@@ -1570,6 +1570,8 @@ function typedCheck(c, item, inp, tolFrac, dictMode) {
   const tol = Math.max(1, Math.floor(tgt.length * tolFrac));
   const missed = tgt.split(' ').filter(w => !g.split(' ').includes(w));
   const said = esc(inp.value.trim());
+  // the box itself shows the verdict: green when it counts as right (small typos included), red when it doesn't
+  inp.classList.remove('right', 'wrong'); inp.classList.add(best <= tol ? 'right' : 'wrong');
   if (best === 0) return result(c, item, true);
   if (dictMode) return result(c, item, best <= tol ? 1 : false, missed.length ? 'Missed or misheard: <b>' + esc(missed.join(', ')) + '</b>' : 'You wrote "' + said + '"');
   return result(c, item, best <= tol ? true : false, best <= tol ? 'Watch the spelling: you wrote "' + said + '"' : 'You wrote "' + said + '"');
@@ -2168,6 +2170,7 @@ function buildOwn(head) {
   const finish = finishBuild;
   const check = () => {
     const v = norm(inp.value), okShape = o.re.test(v), fill = o.words.some(w => v.split(' ').includes(w));
+    inp.classList.remove('right', 'wrong'); inp.classList.add(okShape ? 'right' : 'wrong');
     $('#res').innerHTML = okShape ? `<div class="panel good-note"><b>${fill ? 'Tama! That follows the pattern.' : 'The order is right.'}</b>${fill ? '' : '<div class="small">Check the action word is one you know: ' + esc(o.words.slice(0, 6).join(', ')) + '…</div>'}<div class="small muted">Say it out loud twice.</div></div>`
       : `<div class="panel"><b>Close. Check the order.</b><div class="small">The pattern is <b>${esc(o.pat)}</b>. ${esc(RULE.ko.short)}</div></div>`;
     foot(`<button class="btn primary block" id="fin">${okShape ? 'Done' : 'Finish anyway'}</button>${okShape ? '' : '<button class="btn ghost block" id="again">Try again</button>'}`);

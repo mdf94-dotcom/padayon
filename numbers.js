@@ -125,7 +125,7 @@ VIEWS.numround = function () {
     const inp = $('#nans'); inp.focus({ preventScroll: true });
     inp.oninput = () => $('#chk').disabled = !inp.value.trim();
     inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) $('#chk').click(); };
-    $('#chk').onclick = () => check(digitsOk(inp.value, q));
+    $('#chk').onclick = () => { const ok = digitsOk(inp.value, q); inp.classList.remove('right', 'wrong'); inp.classList.add(ok ? 'right' : 'wrong'); inp.disabled = true; check(ok); };
     if (mode === 'hear') { $('#pl').onclick = e => sayNum(ans, e.currentTarget); sayNum(ans, $('#pl')); }
   }
 };
