@@ -1643,6 +1643,17 @@ function choiceEx(c, item, opts, field, cls) {
 }
 // "I don't know": show the answer, count it as a miss so the word comes back soon (no guessing needed)
 function wireIdk(c, item, inp) { const b = $('#idk'); if (b) b.onclick = () => { inp.disabled = true; inp.classList.add('wrong'); result(c, item, false, "That's okay. Here's the answer, and it'll come back again soon."); }; }
+/* A small typo is forgiven, a different word isn't: ko/ka, na/ni, ako/ato, mo-/ni- change the meaning, and telling them apart is the whole point. */
+let VOCAB_WORDS = null;
+function typoOk(g, tgt, tol) {
+  if (g === tgt) return true; if (lev(g, tgt) > tol) return false;
+  if (!VOCAB_WORDS) { VOCAB_WORDS = new Set(); PATH.forEach(st => st.ids.forEach(id => { const c = card(id); if (c && c.kind !== 'r') tokens(c.ceb).forEach(t => { const w = norm(t); if (w && !w.includes(' ')) VOCAB_WORDS.add(w); }); })); }
+  const gw = g.split(' '), tw = tgt.split(' '); if (gw.length !== tw.length) return gw.join('') === tw.join('');   // only spacing differs
+  return gw.every((w, i) => { const t = tw[i]; if (w === t) return true;
+    if (Math.min(w.length, t.length) <= 3) return false;                                  // little words have to be exact
+    if ((swapOf[t] && swapOf[t].has(w)) || SWAP_PREFIX.some(s => s.some(p => t.startsWith(p) && s.some(o => o !== p && w === o + t.slice(p.length))))) return false;   // a look-alike the lessons warn about
+    return !VOCAB_WORDS.has(w); });                                                       // another real word isn't a typo
+}
 function typedCheck(c, item, inp, tolFrac, dictMode) {
   const g = norm(inp.value); inp.disabled = true;
   let best = 99, tgt = '';
@@ -1651,10 +1662,11 @@ function typedCheck(c, item, inp, tolFrac, dictMode) {
   const missed = tgt.split(' ').filter(w => !g.split(' ').includes(w));
   const said = esc(inp.value.trim());
   // the box itself shows the verdict: green when it counts as right (small typos included), red when it doesn't
-  inp.classList.remove('right', 'wrong'); inp.classList.add(best <= tol ? 'right' : 'wrong');
+  const pass = typoOk(g, tgt, tol);
+  inp.classList.remove('right', 'wrong'); inp.classList.add(pass ? 'right' : 'wrong');
   if (best === 0) return result(c, item, true);
-  if (dictMode) return result(c, item, best <= tol ? 1 : false, missed.length ? 'Missed or misheard: <b>' + esc(missed.join(', ')) + '</b>' : 'You wrote "' + said + '"');
-  return result(c, item, best <= tol ? true : false, best <= tol ? 'Watch the spelling: you wrote "' + said + '"' : 'You wrote "' + said + '"');
+  if (dictMode) return result(c, item, pass ? 1 : false, missed.length ? 'Missed or misheard: <b>' + esc(missed.join(', ')) + '</b>' : 'You wrote "' + said + '"');
+  return result(c, item, pass, pass ? 'Watch the spelling: you wrote "' + said + '"' : 'You wrote "' + said + '"');
 }
 const EX = {
   teach(c, item) {
@@ -1731,12 +1743,12 @@ const EX = {
     foot(`<button class="btn primary block" id="chk" disabled>Check</button><button class="btn ghost block" id="idk">I don't know</button>`);
     const inp = $('#ans'); inp.focus(); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
     inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) $('#chk').click(); };
-    $('#chk').onclick = () => { const g = norm(inp.value), t = [q.right, ...(q.also || [])].map(norm).sort((a, b) => lev(g, a) - lev(g, b))[0], d = lev(g, t), ok = d <= Math.max(1, Math.floor(t.length * 0.08)) && (!q.wrong || g !== norm(q.wrong));
+    $('#chk').onclick = () => { const g = norm(inp.value), t = [q.right, ...(q.also || [])].map(norm).sort((a, b) => lev(g, a) - lev(g, b))[0], d = lev(g, t), ok = typoOk(g, t, Math.max(1, Math.floor(t.length * 0.08))) && (!q.wrong || g !== norm(q.wrong));
       inp.disabled = true; inp.classList.add(ok ? 'right' : 'wrong'); result(cc, item, ok, (d && ok ? 'Watch the spelling. ' : '') + extra); };
     $('#idk').onclick = () => { inp.disabled = true; inp.classList.add('wrong'); result(cc, item, false, "That's okay. " + extra); };
   },
   type(c, item) {
-    $('#ex').innerHTML = `<div class="label">Write it in Bisaya</div><div class="prompt">${esc(c.en)}</div><input class="field" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type in Bisaya"><p class="muted small" style="margin:0">Small typos are fine. "ug" and "og" both count.</p>`;
+    $('#ex').innerHTML = `<div class="label">Write it in Bisaya</div><div class="prompt">${esc(c.en)}</div><input class="field" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type in Bisaya"><p class="muted small" style="margin:0">Small typos are fine, but little words like ko / ka have to be exact. "ug" and "og" both count.</p>`;
     foot(`<button class="btn primary block" id="chk" disabled>Check</button><button class="btn ghost block" id="idk">I don't know</button>`);
     const inp = $('#ans'); inp.focus(); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
     inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) $('#chk').click(); };
