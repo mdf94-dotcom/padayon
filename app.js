@@ -599,7 +599,7 @@ function buildPath() {
   PATH[PATH.length - 1].ids.push(...rest);
 }
 buildPath();
-const stageStats = st => { const ids = st.ids.filter(id => card(id)); const l = learned(ids), sn = seen(ids); return { total: ids.length, learned: l, seen: sn, frac: ids.length ? l / ids.length : 1 }; };
+const stageStats = st => { const ids = st.ids.filter(id => card(id) && (S.cards[id] || !twinTaken(id))); const l = learned(ids), sn = seen(ids); return { total: ids.length, learned: l, seen: sn, frac: ids.length ? l / ids.length : 1 }; };
 function pathState() {
   const stats = PATH.map(stageStats);
   let cur = stats.findIndex(x => x.frac < PATH_GATE); if (cur < 0) cur = PATH.length - 1;
@@ -691,13 +691,22 @@ function prereqPlan(c, known, budget, depth, taken) {
   }
   return null;
 }
+/* The same word with the same meaning can sit on two cards (a phrase and a word list, say). Once one is taught the other
+   is left out of new cards and of stage progress. Anyone who already has both keeps both. */
+let TWINS = null;
+const twinKey = c => norm(firstAlt(c.ceb)) + '|' + norm(firstAlt(c.en));
+function twinTaken(id, also) {
+  if (!/^[pwmev]/.test(id)) return false;
+  if (!TWINS) { TWINS = new Map(); PATH.forEach(st => st.ids.forEach(x => { const c = card(x); if (c) { const k = twinKey(c); if (!TWINS.has(k)) TWINS.set(k, []); TWINS.get(k).push(x); } })); }
+  const c = card(id); return !!c && (TWINS.get(twinKey(c)) || []).some(x => x !== id && (S.cards[x] || (also && also.includes(x))));
+}
 function pickNew() {
   let left = newAllowance(); const out = [];
   const known = new Set(knownWords());
   const learn = id => { out.push(id); left--; tokens(firstAlt(card(id).ceb)).forEach(t => known.add(lowTok(t))); };
   const ready = c => !needsExample(c) || !!exFor(c, known);
   const take = (order, max) => { let n = Math.min(max, left); const blocked = [];
-    for (const id of order) { if (n <= 0) break; if (S.cards[id] || out.includes(id)) continue; const c = card(id); if (!c) continue;
+    for (const id of order) { if (n <= 0) break; if (S.cards[id] || out.includes(id) || twinTaken(id, out)) continue; const c = card(id); if (!c) continue;
       if (ready(c)) { learn(id); n--; } else if (blocked.length < 40) blocked.push(id); }
     // unblock: teach the few missing words an example needs (and theirs, two levels down), then the word itself
     for (const id of blocked) {
@@ -902,10 +911,10 @@ let BINKO_N = (() => { try { const n = (+localStorage.getItem('padayon-binko') |
 function go(v) { if (v === 'home' && view !== 'home') { if (HOME_SPK) HOME_SPK = nextFactTeller(); BINKO_N++; try { localStorage.setItem('padayon-binko', BINKO_N); } catch (e) { } } view = v; render(); }
 function ringSvg(v, goal) { const r = 36, c = 2 * Math.PI * r, f = Math.min(1, v / goal); return `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - f)}" transform="rotate(-90 42 42)"/></svg>`; }
 function unitRow(u, key) {
-  const n = u.ids.length, l = learned(u.ids), s = seen(u.ids);
+  const live = u.ids.filter(id => card(id)), n = live.length, l = learned(live), s = seen(live);   // hidden cards don't count, so a unit can reach 100%
   return `<div class="unit ${S.focus === key ? 'focus' : ''}"><div class="nm"><b>${esc(u.ceb)}</b> <span class="muted small">${esc(u.name)}</span></div>
   <button class="btn sm ghost" data-focus="${key}">${S.focus === key ? 'Focused' : 'Focus'}</button>
-  <div class="bar" title="${l} learned, ${s} started of ${n}"><i style="width:${(l / n) * 100}%"></i></div></div>`;
+  <div class="bar" title="${l} learned, ${s} started of ${n}"><i style="width:${n ? (l / n) * 100 : 0}%"></i></div></div>`;
 }
 function sinceHtml() {
   if (!S.started) return `<div class="since">Your first day starts with today's session.</div>`;
@@ -1123,11 +1132,11 @@ function progressHtml() {
   <div class="panel"><div class="row spread"><h2>How Bisaya really works</h2><span class="muted small tnum">${learned(GRAM_ORDER)} of ${G.length} learned</span></div>
     <p class="muted small" style="margin:0">Shortcuts, little words, and verb endings that make fast speech hard to follow.</p>
     <div>${GRAM_UNITS.map((u, i) => unitRow(u, 'g' + i)).join('')}</div></div>
-  ${hasPack() ? `<div class="panel"><div class="row spread"><h2>Phrases</h2><span class="muted small tnum">${learned(PHRASE_ORDER)} of ${PHRASE_ORDER.length} learned</span></div>
+  ${hasPack() ? `<div class="panel"><div class="row spread"><h2>Phrases</h2><span class="muted small tnum">${learned(PHRASE_ORDER.filter(id => card(id)))} of ${PHRASE_ORDER.filter(id => card(id)).length} learned</span></div>
     <p class="muted small" style="margin:0">Tap Focus to pull a unit's phrases to the front.</p><div>${UNITS.map((u, i) => unitRow(u, 'u' + i)).join('')}</div></div>
-  <div class="panel"><details><summary>Common words <span class="muted small tnum">· ${learned(W.map((_, i) => 'w' + i))} of ${W.length} learned</span></summary>
+  <div class="panel"><details><summary>Common words <span class="muted small tnum">· ${(x => learned(x) + ' of ' + x.length)(W.map((_, i) => 'w' + i).filter(id => card(id)))} learned</span></summary>
     <div style="margin-top:8px">${WORD_UNITS.map((u, i) => unitRow(u, 'k' + i)).join('')}</div></details></div>
-  <div class="panel"><details><summary>Mega-deck topics <span class="muted small tnum">· ${learned(M_ORDER)} of ${M_ORDER.length} learned</span></summary>
+  <div class="panel"><details><summary>Mega-deck topics <span class="muted small tnum">· ${(x => learned(x) + ' of ' + x.length)(M_ORDER.filter(id => card(id)))} learned</span></summary>
     <p class="muted small" style="margin:8px 0 0">From the Cebuano Mega-Deck: Peace Corps phrases, everyday sayings, numbers, family, food, body, home and more. Tap Focus to study a topic first.</p>
     <div style="margin-top:8px">${M_UNITS.map((u, i) => unitRow(u, 'm' + i)).join('')}</div></details></div>` : ''}
   </div></details></section></div></div>`;
