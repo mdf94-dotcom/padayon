@@ -1268,7 +1268,7 @@ function plRound() {
   const lo = PLACE_CUTS[PL.k], hi = Math.min(PL.ids.length, PLACE_CUTS[PL.k + 1]);
   if (lo >= PL.ids.length) { PL.done = true; return; }
   const range = PL.ids.slice(lo, hi);
-  PL.qs = shuffle(range.filter(id => !S.cards[id] || S.cards[id].b < 2)).slice(0, 6); PL.qi = 0; PL.right = 0; PL.range = [lo, hi];
+  PL.qs = shuffle(range.filter(id => !S.cards[id] || S.cards[id].b < 2)).slice(0, 6); PL.qi = 0; PL.right = 0; PL.range = [lo, hi]; PL.need = Math.min(5, PL.qs.length);
   if (PL.qs.length < 3) { plPass(); }
 }
 function plPass() {
@@ -1278,7 +1278,7 @@ function plPass() {
 }
 VIEWS.place = function () {
   const head = `<div class="sbar">${S.placed ? `<button class="x" id="quit" aria-label="Stop">${I.x}</button>` : '<span style="width:44px"></span>'}<div class="prog"><i style="width:${Math.min(100, PL.k / (PLACE_CUTS.length - 1) * 100)}%"></i></div><span class="muted small tnum">Round ${PL.k + 1}</span></div>`;
-  if (PL.done || PL.qi >= PL.qs.length && PL.right < 5) {
+  if (PL.done || PL.qi >= PL.qs.length && PL.right < PL.need) {
     if (!S.placed) { S.placed = today(); save(); }
     const st = pathState().cur;
     $('#app').innerHTML = `${head}<div class="ex">${binkoSays(PL.marked ? `BINKO REPORTING! You already know <b>${PL.marked}</b> words and phrases, so Binko marked them as learned. You're starting in <b>Stage ${st + 1}: ${esc(PATH[st].name)}</b>. They'll still come back now and then as quick reviews.` : "Binko binks we'll start from the beginning. That's great, every word will be new and fun!", true)}</div><div class="foot"><button class="btn primary block" id="pldone">Done</button></div>`;
@@ -1293,12 +1293,13 @@ VIEWS.place = function () {
     <div class="opts">${o.map((x, i) => `<button class="opt" data-i="${i}">${esc(optText(x, 'en'))}</button>`).join('')}</div>
     <button class="btn ghost block" id="pldk">I don't know this one</button></div>`;
   if ($('#pl')) { $('#pl').onclick = e => play(c.id, 1, e.currentTarget); play(c.id, 1, $('#pl')); }
-  const answer = ok => { if (ok) PL.right++; PL.qi++;
+  let answered = false;   // a double tap counts once
+  const answer = ok => { if (answered) return; answered = true; document.querySelectorAll('.opt, #pldk').forEach(x => x.disabled = true); if (ok) PL.right++; PL.qi++;
     // stop early once the round can't be passed, or once it's already passed
-    if (PL.qi - PL.right > PL.qs.length - 5) { PL.qi = PL.qs.length; }
-    else if (PL.right >= 5) { PL.qi = PL.qs.length; }
+    if (PL.qi - PL.right > PL.qs.length - PL.need) { PL.qi = PL.qs.length; }
+    else if (PL.right >= PL.need) { PL.qi = PL.qs.length; }
     setTimeout(render, 250); };
-  document.querySelectorAll('.opt').forEach(b => b.onclick = () => { const ok = o[+b.dataset.i].id === c.id; b.classList.add(ok ? 'right' : 'wrong'); showOptMeanings([...document.querySelectorAll('.opt')], o, 'en'); answer(ok); });
+  document.querySelectorAll('.opt').forEach(b => b.onclick = () => { if (b.disabled) return; const ok = o[+b.dataset.i].id === c.id; b.classList.add(ok ? 'right' : 'wrong'); showOptMeanings([...document.querySelectorAll('.opt')], o, 'en'); answer(ok); });
   $('#pldk').onclick = () => answer(false);
   if ($('#quit')) $('#quit').onclick = () => { if (PL.marked) toast(PL.marked + ' words marked as known'); go('home'); };
 };
