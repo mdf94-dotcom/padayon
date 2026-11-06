@@ -1469,7 +1469,7 @@ function simScore(c, d) {
   return sc + Math.random() * 1.5;
 }
 function swapVariants(c) {
-  const toks = tokens(c.ceb), out = new Set(), real = new Set(alts(c.ceb));
+  const toks = tokens(c.ceb), out = new Set(), real = new Set([c.ceb, ...(c.also || [])].flatMap(alts));
   toks.forEach((t, i) => {
     const lw = lowTok(t), cand = [];
     if (swapOf[lw]) swapOf[lw].forEach(x => cand.push(x));
@@ -1487,14 +1487,18 @@ function distract(c, n, field) {
   // only cards this person has already been taught, so every option is something they've seen
   const pool = taughtIds();
   const ranked = pool.filter(id => id !== c.id).map(card).filter(Boolean).map(d => [simScore(c, d) + (d.kind === c.kind ? 3 : 0), d]).sort((x, y) => y[0] - x[0]);
-  const out = [], used = new Set([norm(c[field])]);
-  const ok = d => { const v = norm(d[field]); if (!v || used.has(v) || sameMeaning(c.en, d.en)) return false; used.add(v); return true; };
+  const out = [], used = new Set([norm(c[field])]), answers = new Set([c.ceb, ...(c.also || [])].flatMap(alts));
+  const ok = (d, loose) => { const v = norm(d[field]); if (!v || used.has(v) || sameMeaning(c.en, d.en)) return false;
+    if (field === 'ceb' && alts(d.ceb).some(a => answers.has(a))) return false;                    // another way to say the answer is also right
+    if (!loose && d.en && out.some(o => o.en && sameMeaning(o.en, d.en))) return false;            // two wrong choices shouldn't mean the same thing
+    used.add(v); return true; };
   // minimal-change fakes only make sense when the options are in Bisaya
   const kw = knownWords();
   if (field === 'ceb') for (const v of swapVariants(c).filter(v => tokens(v).every(t => kw.has(lowTok(t)))).slice(0, n >= 3 ? 2 : 1)) { const d = { id: 'x' + out.length, ceb: v, en: '' }; if (ok(d)) out.push(d); }
   const top = ranked.slice(0, Math.max(8, n * 3)); shuffle(top);
   for (const [, d] of top.sort((x, y) => y[0] - x[0] + (Math.random() - 0.5) * 3)) { if (out.length >= n) break; if (ok(d)) out.push(d); }
   for (const [, d] of ranked) { if (out.length >= n) break; if (ok(d)) out.push(d); }
+  for (const [, d] of ranked) { if (out.length >= n) break; if (ok(d, true)) out.push(d); }   // very early on there may be nothing better
   return out;
 }
 // show every option in the same style so punctuation and capitals don't give the answer away
@@ -2553,7 +2557,7 @@ function rushPick() {
 function rushOptions(c, pool) {
   const out = [c], used = new Set([norm(c.en)]);
   const near = shuffle(pool.slice()).slice(0, 60).map(card).filter(Boolean).map(d => [simScore(c, d) + (d.kind === c.kind ? 3 : 0) + Math.random() * 2, d]).sort((a, b) => b[0] - a[0]);
-  for (const [, d] of near) { if (out.length >= 4) break; const v = norm(d.en); if (!v || used.has(v) || sameMeaning(c.en, d.en)) continue; used.add(v); out.push(d); }
+  for (const [, d] of near) { if (out.length >= 4) break; const v = norm(d.en); if (!v || used.has(v) || out.some(o => sameMeaning(o.en, d.en))) continue; used.add(v); out.push(d); }
   return shuffle(out);
 }
 function startRush() { if (typeof Music !== 'undefined') Music.resetLevel(); if (!hasPack()) { toast('Load the content pack first.'); return goTab(); } RU = { pool: rushPool(), n: 0, seen: new Set(), how: rushTyped() ? 'type' : 'pick' }; sess = newSess('rush'); view = 'rush'; rushQ(); }
