@@ -410,6 +410,11 @@ async function discordHook() {
   try { const d = await firebase.firestore().collection('config').doc('discord').get(); hookCache = (d.exists && d.data().webhook) || ''; } catch (e) { return ''; }
   return hookCache;
 }
+// app update notes go to #padayon-app, never the streaks channel: its own webhook, field "updates" in the same doc
+async function updatesHook() {
+  if (!Sync.user || !window.firebase) return '';
+  try { const d = await firebase.firestore().collection('config').doc('discord').get(); return (d.exists && d.data().updates) || ''; } catch (e) { return ''; }
+}
 let announcing = false;
 async function announceLesson() {
   const t = calDay(); if (S.announced === t || announcing) return;
@@ -451,12 +456,26 @@ function card(id) {
   const c = card0(id); if (!c) return c;
   // one way to say it per card; the others are their own cards (VARIANTS) and are still accepted when typed
   const sp = SPLIT[id];
+  if (!MIX_MEMO.has(id)) MIX_MEMO.set(id, mixupsFor(c)); c.mix = MIX_MEMO.get(id);
   if (GNOTES[id]) c.note = GNOTES[id];   // little and confusing words: what it is, what it isn't, two examples
   if (sp) { c.ceb = sp.p; if (sp.en) c.en = sp.en; c.also = sp.also; if (id[0] === 'p') c.audio = false;
     const others = (VAR_OF[id] || []).map(v => VARIANTS[+v.slice(1)][1]);
     c.note = [GNOTES[id] ? '' : sp.n, c.note].filter(Boolean).join(' ');
     if (others.length) c.note += ' (' + others.map(o => '"' + o + '"').join(', ') + (others.length > 1 ? ' each have' : ' has') + ' its own card.)'; }
   return c;
+}
+const MIX_MEMO = new Map();
+// the "Don't mix up" boxes that fit a card: by the whole word, by a word inside a phrase, or by grammar unit
+function mixupsFor(c) {
+  if (typeof MIXUPS === 'undefined' || !c || c.kind === 'r') return null;
+  const whole = String(c.ceb).toLowerCase().replace(/[.!?,]/g, '').trim(), toks = tokens(String(c.ceb)).map(lowTok);
+  const gu = c.kind === 'g' && G[+c.id.slice(1)] ? G[+c.id.slice(1)][3] : null;
+  return MIXUPS.filter(m => (m.w || []).includes(whole) || (m.t || []).some(t => toks.includes(t)) || (m.g != null && m.g === gu)).slice(0, 2);
+}
+function mixHtml(c) {
+  if (!c || !c.mix || !c.mix.length) return '';
+  return c.mix.map(m => `<div class="panel mix"><div class="label">Don't mix up · ${esc(m.title)}</div><div>${esc(m.rule)}</div>
+    <ul class="mixl">${m.ok.map(([a, b]) => `<li>✅ <b>${esc(a)}</b> <span class="muted">${esc(b)}</span></li>`).join('')}${(m.no || []).map(([a, b]) => `<li>❌ <s>${esc(a)}</s> → ✅ <b>${esc(b)}</b></li>`).join('')}</ul></div>`).join('');
 }
 function card0(id) {
   const k = id[0], n = +id.slice(1);
@@ -1273,7 +1292,7 @@ const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
   { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
   { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
-  { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['🤔', 'Miss one? See exactly why']] },
+  { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['✅', '<b>Don\'t mix up</b> boxes: easy-to-confuse words side by side, with ✅ right and ❌ wrong examples'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
   { t: 'Ranks', tab: 'board', art: '📊', pts: [['📊', 'See how the family is doing'], ['🎯', 'Streaks, accuracy, words, games'], ['⌨️', 'Game scores say if they were typed or multiple choice'], ['🔑', 'Sign in on <b>Me</b> to join']] },
@@ -1526,7 +1545,7 @@ function wordSheet(tok) {
     ${derived ? `<div class="small muted">Built from <b>${esc(firstAlt(c.ceb))}</b> · ${esc(firstAlt(c.en))}</div>` : ''}
     <div class="row" style="gap:10px;align-items:center"><button class="play sm" id="wsplay" aria-label="Hear it">${I.play}</button><span class="muted small">${status}</span></div>
     ${ex ? `<div class="panel"><div class="label">Example</div><b>${esc(ex[0])}</b><div class="muted small">${esc(ex[1])}</div></div>` : ''}
-    ${c && c.note ? `<div class="panel note"><div class="label">Binko explains</div>${esc(c.note)}</div>` : ''}</section>`;
+    ${c && c.note ? `<div class="panel note"><div class="label">Binko explains</div>${esc(c.note)}</div>` : ''}${mixHtml(c)}</section>`;
   const box = document.createElement('div'); box.id = 'wsheet'; box.innerHTML = html; document.body.appendChild(box);
   const close = () => { box.remove(); document.removeEventListener('keydown', onKey, true); };
   const onKey = e => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); close(); } };
@@ -1610,7 +1629,7 @@ const EX = {
     $('#ex').innerHTML = `<div class="teachhead"><div class="th-text"><div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : c.kind === 'd' ? 'Line from a conversation: ' + esc(c.convo) : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
       <div class="ceb">${esc(c.ceb)}</div>${phonHtml(c.ceb)}</div>${picImg(picFile(c), 'big')}</div><div class="prompt" style="font-weight:500">${esc(c.en)}</div>
       ${breakdown(c.ceb)}
-      ${c.note ? `<div class="panel note">${castImg('binko', 'peek')}<div class="label">Binko explains · ${c.kind === 'p' || c.kind === 'w' ? 'when to use it' : 'how it fits together'}</div>${esc(c.note)}</div>` : ''}
+      ${c.note ? `<div class="panel note">${castImg('binko', 'peek')}<div class="label">Binko explains · ${c.kind === 'p' || c.kind === 'w' ? 'when to use it' : 'how it fits together'}</div>${esc(c.note)}</div>` : ''}${mixHtml(c)}
       ${ruleChip(c.ceb)}
       ${(c.combos || []).some(x => knownOk(x[0], new Set(tokens(c.ceb).map(lowTok)))) ? `<div><div class="label">Swap in other words</div>${c.combos.filter(x => knownOk(x[0], new Set(tokens(c.ceb).map(lowTok)))).map(x => `<div class="small"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span></div>`).join('')}</div>` : ''}
       ${usedIn(c)}
