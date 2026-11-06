@@ -58,7 +58,7 @@ const D_ORDER = DIALOGS.flatMap((d, i) => d.lines.map((_, j) => 'd' + i + '_' + 
 const SPR = { p: null, w: null };
 let PACK_HV = 0;
 function setPack(h, pbuf, wbuf) {
-  P = h.P; W = h.W; UNITS = h.UNITS; IDX = h.IDX; SPR.p = pbuf; SPR.w = wbuf; PACK_HV = h.v || 1; NATIVE_FOR = null;
+  P = h.P; W = h.W; UNITS = h.UNITS; IDX = h.IDX; SPR.p = pbuf; SPR.w = wbuf; PACK_HV = h.v || 1; NATIVE_FOR = null; CARD_MEMO.clear(); GLOSS_MEMO.clear(); TOK_MEMO.clear(); TWINS = null; VOCAB_WORDS = null;
   if (typeof urls !== 'undefined') Object.keys(urls).forEach(k => { try { URL.revokeObjectURL(urls[k]); } catch (e) { } delete urls[k]; });
   PHRASE_ORDER = UNITS.flatMap(u => u.ids);
   try { buildPath(); } catch (e) { }
@@ -453,7 +453,13 @@ function sectionDone(label, line) {
 /* ---------- cards & SRS ---------- */
 // little words get Binko's explanation and an example sentence (WORD_NOTE in fixes.js)
 function wn(c) { const x = WORD_NOTE[String(c.ceb).toLowerCase().replace(/[.!?]/g, '').trim()]; if (x && !c.note) { c.note = x.note; c.ex = c.ex || x.ex; c.exEn = c.exEn || x.exEn; } return c; }
+// cards don't change while the app runs (only your own gap words can), so each is worked out once
+const CARD_MEMO = new Map();
 function card(id) {
+  if (CARD_MEMO.has(id)) return CARD_MEMO.get(id);
+  const c = cardBuild(id); if (id[0] !== 'c') CARD_MEMO.set(id, c); return c;
+}
+function cardBuild(id) {
   const c = card0(id); if (!c) return c;
   // one way to say it per card; the others are their own cards (VARIANTS) and are still accepted when typed
   const sp = SPLIT[id];
@@ -1554,8 +1560,10 @@ function knownExample(c) {
   const e = exFor(c, knownWords()); return e ? [e.ceb, e.en] : null;
 }
 /* ---------- word by word, memory tricks, where a word shows up ---------- */
-function glossOf(tok) {
-  const t = lowTok(tok); if (!t) return null;
+const GLOSS_MEMO = new Map(), TOK_MEMO = new Map();
+function glossOf(tok) { const t = lowTok(tok); if (!GLOSS_MEMO.has(t)) GLOSS_MEMO.set(t, glossFind(t)); return GLOSS_MEMO.get(t); }
+function glossFind(t) {
+  if (!t) return null;
   if (GLOSS[t]) return GLOSS[t];
   const w = W.findIndex((x, i) => !HIDE.has('w' + i) && norm(cebOf('w' + i)) === t); if (w >= 0) return EN_FIX['w' + w] || W[w][1];
   const p = P.findIndex((x, i) => { const c = cebOf('p' + i); return c && tokens(c).length === 1 && alts(c).includes(t); }); if (p >= 0) return EN_FIX['p' + p] || P[p][1];
@@ -1572,8 +1580,9 @@ function breakdown(ceb) {
 }
 /* Tapping a word in "Word by word" opens its vocabulary card in a sheet over the lesson, so you keep your place. */
 const cebOf = id => { const c = card(id); return c ? c.ceb : ''; };
-function cardForTok(tok) {
-  const t = lowTok(tok); if (!t) return null;
+function cardForTok(tok) { const t = lowTok(tok); if (!TOK_MEMO.has(t)) TOK_MEMO.set(t, cardTokFind(t)); return TOK_MEMO.get(t); }
+function cardTokFind(t) {
+  if (!t) return null;
   // match on each card's corrected wording (some source rows had English and Bisaya swapped, fixed in fixes.js)
   const w = W.findIndex((x, i) => !HIDE.has('w' + i) && norm(cebOf('w' + i)) === t); if (w >= 0) return 'w' + w;
   const one = id => { const c = cebOf(id); return c && tokens(c).length === 1 ? alts(c).map(norm) : []; };
