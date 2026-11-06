@@ -812,12 +812,13 @@ const RECORDING_OFF = new Set(['w225', 'w879']);   // makililimos → mangililim
 let NATIVE_FOR = null;
 function nativeUrl(s) {
   if (!NATIVE_FOR) { if (!P.length) return null; NATIVE_FOR = {};
-    [...P.map((_, i) => 'p' + i), ...W.map((_, i) => 'w' + i)].forEach(id => { const c = card(id); if (!c || !IDX[id] || RECORDING_OFF.has(id) || HIDE.has(id) || /[\/·(]/.test(c.ceb) || CEB_FIX[id]) return; const k = vkey(c.ceb); if (k && !NATIVE_FOR[k]) NATIVE_FOR[k] = id; }); }
+    [...P.map((_, i) => 'p' + i), ...W.map((_, i) => 'w' + i)].forEach(id => { const c = card(id); if (!c || !c.audio || !IDX[id] || RECORDING_OFF.has(id) || HIDE.has(id) || /[\/·(]/.test(c.ceb) || CEB_FIX[id]) return; const k = vkey(c.ceb); if (k && !NATIVE_FOR[k]) NATIVE_FOR[k] = id; }); }
   const id = NATIVE_FOR[vkey(s)]; return id ? clipUrl(id) : null;
 }
 function clipUrl(id) {
   if (urls[id]) return urls[id];
-  const buf = SPR[id[0]]; const ix = !RECORDING_OFF.has(id) && IDX[id]; if (!buf || !ix) { const c = card(id); return c ? voiceUrl(c.ceb) : null; }
+  // a card split into one way of saying it can't use a recording that says both ways (audio is off for those)
+  const c = card(id), buf = SPR[id[0]], ix = !RECORDING_OFF.has(id) && c && c.audio && IDX[id]; if (!buf || !ix) return c ? voiceUrl(c.ceb) : null;
   return (urls[id] = URL.createObjectURL(new Blob([buf.slice(ix[0], ix[0] + ix[1])], { type: 'audio/mpeg' })));
 }
 async function playUrl(u, rate, btn) {
@@ -830,7 +831,7 @@ async function playUrl(u, rate, btn) {
   if (btn && tok === playToken) btn.classList.remove('playing');
 }
 const play = async (id, rate, btn) => { const r = ++playReq, cx = audioCtx(); let u = clipUrl(id); const c = card(id); if (!u && c && hasVoice(c.ceb)) { u = await voiceUrlA(c.ceb); if (!stillWanted(r, cx)) return; } if (u) return playUrl(u, rate, btn); if (c) sayFallback(firstAlt(c.ceb)); };
-function stopAudio() { playToken++; playReq++; player.pause(); }
+function stopAudio() { playToken++; playReq++; player.pause(); try { speechSynthesis.cancel(); } catch (e) { } }
 
 function weakList(n = 6) { return Object.entries(S.mistakes || {}).sort((a, b) => b[1].n - a[1].n).slice(0, n); }
 /* ---------- keyboard: 1-9 picks an answer, Enter presses the main button ---------- */
@@ -1820,7 +1821,7 @@ VIEWS.speed = function () {
   $('#quit').onclick = () => goTab(); $('#go').onclick = startSpeed; $('#rush').onclick = startRush;
 };
 let SP = null;
-const heardIds = () => Object.keys(S.cards).filter(id => IDX[id] && card(id));
+const heardIds = () => Object.keys(S.cards).filter(id => { if (!IDX[id]) return false; const c = card(id); return c && c.audio; });
 const DRILL_MIN = { speed: 8, dict: 6, shadow: 3 };
 function drillLock(k) {
   const have = k === 'shadow' ? heardIds().filter(id => id[0] === 'p').length : heardIds().length, need = DRILL_MIN[k];
@@ -2602,7 +2603,7 @@ let SH = null;
 VIEWS.shadow = function () {
   if (!hasPack()) { toast('Load the content pack first. Shadowing uses its recordings.'); return goTab(); }
   if (drillLock('shadow')) return lockedScreen('Shadowing', 'shadow');
-  const mine = UNITS.map(u => Object.assign({}, u, { ids: u.ids.filter(id => S.cards[id]) })).filter(u => u.ids.length);
+  const mine = UNITS.map(u => Object.assign({}, u, { ids: u.ids.filter(id => S.cards[id] && card(id)) })).filter(u => u.ids.length);
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Shadowing</h2></div>
   <section class="panel"><p style="margin:0">Each phrase plays three times: once to listen, then twice to speak along, the last at ${Math.max(1.1, S.speed).toFixed(1)}×. Hands-free, so it works with headphones on a walk.</p></section>
   <section class="panel"><p class="muted small" style="margin:0">Only phrases you've already learned.</p>${mine.map((u, i) => `<div class="unit"><div class="nm"><b>${esc(u.ceb)}</b> <span class="muted small">${esc(u.name)} · ${u.ids.length}</span></div><button class="btn sm primary" data-u="${i}">Start</button></div>`).join('')}</section>`;
