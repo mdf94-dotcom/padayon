@@ -96,7 +96,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => el.hidden = true, 3000); }
 function lev(a, b) { const m = a.length, n = b.length; if (!m) return n; if (!n) return m; let p = Array.from({ length: n + 1 }, (_, i) => i); for (let i = 1; i <= m; i++) { const c = [i]; for (let j = 1; j <= n; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; } return p[n]; }
 const norm = s => s.toLowerCase().replace(/\([^)]*\)/g, '').replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…]/g, ' ').replace(/\bug\b/g, 'og').replace(/\s+/g, ' ').trim();
-const alts = ceb => ceb.split(/\s*\/\s*/).map(norm).filter(Boolean);
+const alts = ceb => String(ceb).replace(/\s*\([^)]*\)/g, '').split(/\s*\/\s*/).map(norm).filter(Boolean);   // notes in brackets come off first: a slash inside them isn't a second answer
 // the first way of saying it: notes in brackets come off first (a slash inside them isn't a second option), then the first of any options split by / or ·
 const firstAlt = ceb => String(ceb).replace(/\s*\([^)]*\)/g, '').split(/\s*[\/·]\s*/)[0].trim();
 /* ---------- "sounds like": an English-friendly respelling, split into syllables ----------
