@@ -546,7 +546,7 @@ function grade(id, q, type) {
   const g = q === 0 ? 1 : q === 1 ? 2 : RECOG.has(type) ? 2 : 3;   // again / hard / good; picking from choices is 'hard' credit
   const first = c.s == null && !c.r && !c.w;
   if (q > 0) c.r++; else { c.w++; c.wd = t; }
-  fsrsStep(c, g, t, first);
+  fsrsStep(c, g, t, first); delete c.fresh;
   c.b = levelOf(c.s); c.d = t + (q === 0 ? 1 : fInterval(c.s));
 }
 const learned = ids => ids.filter(id => S.cards[id] && S.cards[id].b >= 2).length;
@@ -736,9 +736,10 @@ function exType(id, isNew) {
 }
 function buildSession() {
   ensureRuleCards();
+  const extraRound = !!planDay().session;   // "Review what you know" after the day's session: nothing new
   const nwk = new Set(needsWork()), due = [...nwk, ...dueIds().filter(id => !nwk.has(id))], q = due.filter(id => id[0] !== 'r').slice(0, (newAllowance(), reviewRoom())).concat(due.filter(id => id[0] === 'r').slice(0, 3)).map(id => ({ id, type: exType(id) }));
   shuffle(q); q.sort((x, y) => (nwk.has(y.id) ? 1 : 0) - (nwk.has(x.id) ? 1 : 0));
-  const nw = pickNew(); let lastPos = 0;
+  const nw = extraRound ? [] : pickNew(); let lastPos = 0;
   for (const id of nw) {
     // new cards stay in the order they were picked, so the words an example needs are always taught first
     const pos = Math.max(lastPos, Math.min(q.length, lastPos + Math.floor(Math.random() * 3))); lastPos = pos + 1;
@@ -748,7 +749,7 @@ function buildSession() {
   // new grammar rules, taught inside the session, then two quick questions on each
   // a new rule only when the earlier ones are holding: if a rule you've learned keeps tripping you up, it gets practiced instead
   // up to two new rules (one early, one around the middle), each taught then asked twice
-  const nr = [...nwk].some(id => id[0] === 'r') ? null : nextRule(), nr2 = nr && nextRule(nr);
+  const nr = extraRound || [...nwk].some(id => id[0] === 'r') ? null : nextRule(), nr2 = nr && nextRule(nr);
   [nr, nr2].forEach((r, k) => { if (!r || S.cards[ruleCardId(r)]) return; const id = ruleCardId(r), pos = Math.min(q.length, (k ? Math.floor(q.length / 2) : 3) + Math.floor(Math.random() * 3));
     q.splice(pos, 0, { id, type: 'rteach' }); q.splice(Math.min(q.length, pos + 2), 0, { id, type: 'rq' }); q.splice(Math.min(q.length, pos + 6), 0, { id, type: 'rq' }); });
   const sh = [...new Set(shuffle(Object.keys(S.cards).filter(id => id[0] === 'p' && card(id)).concat(nw.filter(id => id[0] === 'p'))))].slice(0, 2);
@@ -1016,7 +1017,7 @@ VIEWS.home = function () {
   <section class="hero h-${HOME_SPK.who}">
     <div class="hero-guide">${HOME_SPK.who === 'binko' ? (p => cloverSays('binko', p[0], true, p[1]))(binkoPlan()) : cloverSays(HOME_SPK.who, HOME_SPK.html, true, HOME_SPK.kick)}</div>
     <div class="hero-text"><div class="label">Karon nga adlaw · Today</div><h2>${nextUp ? esc(nextUp.name) : 'All done today. Padayon!'}</h2>
-      <p>${resumeAt ? `Picking up where you left off · question ${resumeAt.qi + 1} of ${resumeAt.Q.length}` : nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${Math.min(due, 16)} review${Math.min(due, 16) === 1 ? '' : 's'}, ${nw} new` : nextUp.d) : 'Come back tomorrow, or do another session.'}</p></div>
+      <p>${resumeAt ? `Picking up where you left off · question ${resumeAt.qi + 1} of ${resumeAt.Q.length}` : nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${Math.min(due, reviewRoom())} review${Math.min(due, reviewRoom()) === 1 ? '' : 's'}, ${nw} new` : nextUp.d) : 'Come back tomorrow, or do another session.'}</p></div>
     <div class="hero-actions"><button class="btn" id="start">${resumeAt ? 'Continue' : nextUp ? (nextUp.manual ? 'I did it' : 'Start') : 'Do another session'}<kbd>Enter</kbd></button></div>
     <div class="hero-foot"><span>${sinceShort()}</span><span>${freezePending() ? `🧊 Freeze ready: finish today to keep your ${S.streak.count}-day streak` : freezeOk(calDay() + 1) ? '🧊 Streak freeze ready' : `Best streak ${S.streak.best || 0}`}</span></div>
   </section>
@@ -1388,7 +1389,7 @@ VIEWS.session = function () {
   if (!c || ((item.type === 'pron' || item.type === 'dict' || item.type === 'listen' || item.type === 'tiles' || item.type === 'shadow') && !c.audio)) { qi++; return VIEWS.session(); }
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End session">${I.x}</button><div class="prog"><i style="width:${(qi / Q.length) * 100}%"></i></div><span class="muted small tnum qcount">${qi + 1} of ${Q.length}</span><span class="speedchip">${S.speed.toFixed(1)}×</span></div>
   <div class="ex" id="ex"></div><div class="foot" id="foot"></div>`;
-  $('#quit').onclick = () => { if (sess.mode === 'daily') { stopAudio(); saveResume(); go('home'); if (qi > 0) toast('Saved your place. Tap Continue on Today to pick up where you left off.'); return; } if (qi > 0 && sess.total > 0) finishSession(); else goTab(); };
+  $('#quit').onclick = () => { if (sess.mode === 'daily') { stopAudio(); saveResume(); go('home'); if (qi > 0 && loadResume()) toast('Saved your place. Tap Continue on Today to pick up where you left off.'); return; } if (qi > 0 && sess.total > 0) finishSession(); else goTab(); };
   if (typeof Music !== 'undefined') Music.set(musicFor());
   EX[item.type](c, item);
   // a picture on questions that already show the English (never on ones that ask for the meaning)
@@ -1599,7 +1600,7 @@ function usedIn(c) {
   if (c.kind !== 'w' && !(c.kind === 'p' && tokens(c.ceb).length === 1)) return '';
   const t = norm(firstAlt(c.ceb)); if (!t) return '';
   const hits = P.map((x, i) => [x, i]).filter(([x, i]) => 'p' + i !== c.id && S.cards['p' + i] && tokens(cebOf('p' + i)).length > 1 && tokens(cebOf('p' + i)).map(lowTok).includes(t)).slice(0, 2);
-  return hits.length ? `<div><div class="label">You'll hear it in</div>${hits.map(([x]) => `<div class="small"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span></div>`).join('')}</div>` : '';
+  return hits.length ? `<div><div class="label">You'll hear it in</div>${hits.map(([x, i]) => { const pc = card('p' + i); return `<div class="small"><b>${esc(pc.ceb)}</b> <span class="muted">· ${esc(pc.en)}</span></div>`; }).join('')}</div>` : '';
 }
 const tipFor = c => c.trick ? { trick: c.trick } : (S.tips || {})[c.id] || null;
 function tipHtml(t, c) {
@@ -1839,7 +1840,7 @@ function startSpeed() {
   let pool = shuffle(heardIds()).slice(0, 20);
   SP = { list: pool, i: 0, rate: S.speed, run: 0 }; sess = newSess('speed'); speedQ();
 }
-function endSpeed() { S.speed = Math.max(1, Math.round(SP.rate * 10) / 10); S.bestSpeed = Math.max(S.bestSpeed, sess.peak); if (SP.i >= SP.list.length - 1) tick('speed'); save(); view = 'summary'; VIEWS.summary(); }
+function endSpeed() { S.speed = Math.max(1, Math.round(SP.rate * 10) / 10); S.bestSpeed = Math.max(S.bestSpeed, sess.peak); if (sess.total >= SP.list.length) tick('speed'); save(); view = 'summary'; VIEWS.summary(); }
 async function speedQ() {
   if (SP.i >= SP.list.length) return endSpeed();
   view = 'speedrun';
@@ -2075,7 +2076,7 @@ Object.assign(EX, {
   rteach(c, item) {
     const r = c.rule; sess.newIds.add(c.id);
     if (!S.cards[c.id]) S.cards[c.id] = { b: 0, d: today() + 1, r: 0, w: 0 };
-    S.rules = S.rules || {}; if (!ruleLearned(r.id)) S.rules[r.id] = { ok: 1, d: today() }; noteRuleLearned(); save();
+    S.rules = S.rules || {}; if (!ruleLearned(r.id)) { S.rules[r.id] = { ok: 1, d: today() }; noteRuleLearned(); } save();   // coming back to this screen doesn't count as another new rule
     $('#ex').innerHTML = `${rulePic(r, 'big')}<div class="label">New grammar rule · ${r.n} of ${RULES.length}</div><div class="ceb" style="font-size:1.7rem">${esc(r.title)}</div>
       <div class="prompt" style="font-weight:500;font-size:1.05rem">${esc(r.short)}</div>
       ${r.steps.map(st => `<div class="panel"><div>${esc(st[0])}</div>${ruleStepEx(r, st).map(x => `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b style="color:var(--sea)">${esc(x[0])}</b>${hasVoice(x[0]) ? `<button class="play sm" data-vs="${esc(x[0])}" aria-label="Play">${I.play}</button>` : ''}<span class="muted small">${esc(x[1])}${x[2] ? ' · ' + esc(x[2]) : ''}</span></div>`).join('')}</div>`).join('')}
