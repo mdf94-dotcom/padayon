@@ -108,3 +108,7 @@ const MIXUPS = [
     no: [['Kaon na mi (inviting a guest).', 'Kaon na ta.']] }
 ];
 EN_FIX.w521 = 'love (how you feel now: gi- here is not past)';
+// a missing space after a comma glued two words into one
+CEB_FIX.m1746 = 'Ay, sus!'; CEB_FIX.m1785 = 'Guapa ang imong anak, himsog kaayo.';
+// names and English words used as they are, so "Word by word" has something to show
+Object.assign(GLOSS_MORE, { hello: 'hello (from English)', birthday: 'birthday (from English)', beach: 'beach (from English)', injection: 'injection (from English)', joy: 'Joy (a name)', ben: 'Ben (a name)', virginia: 'Virginia (a place)', 'taga-maryland': 'from Maryland', 'taga-cebu': 'from Cebu', hmph: 'hmph (an annoyed sound)' });
