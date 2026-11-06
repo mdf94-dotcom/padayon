@@ -1312,7 +1312,7 @@ const GUIDE_V = 4;
 const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
   { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
-  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
+  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🔁', 'Miss one? It comes back a few questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['✅', '<b>Don\'t mix up</b> boxes: easy-to-confuse words side by side, with ✅ right and ❌ wrong examples. They come back as questions in your session: pick or type the right one'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
@@ -1408,7 +1408,20 @@ function result(c, item, ok, extra) {
   const gap = sess.total - (sess.lastCameo || -9) >= 4;
   const cameoKind = !gap ? null : q > 0 && sess.run > 0 && sess.run % 3 === 0 ? 'streak' : q > 0 && prevWrong >= 1 && Math.random() < 0.4 ? 'comeback' : q === 0 && sess.wrongRun === 2 ? 'rough' : null;
   if (cameoKind) sess.lastCameo = sess.total;
-  if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push(item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
+  /* A miss comes back later in the same session, a few questions on, until you get it right (up to 3 more tries;
+     after that it's left for tomorrow so one stubborn word doesn't take over the session). The retry is the easier
+     kind (picking instead of typing), and a word you only met today is shown to you again first.
+     Only the first answer moves the word's schedule. */
+  let retryNote = '';
+  if (q === 0 && sess.mode === 'daily') {
+    sess.miss = sess.miss || {}; const n = sess.miss[c.id] = (sess.miss[c.id] || 0) + 1; sess.requeued.add(c.id);
+    if (n <= 3) {
+      const easy = item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx, easy: 1 } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' };
+      const add = [n >= 2 && item.type !== 'mixq' && c.kind !== 'r' && sess.newIds.has(c.id) ? { id: c.id, type: 'teach', again: 1 } : null, Object.assign(easy, { retry: n })].filter(Boolean);
+      Q.splice(Math.min(Q.length, qi + 1 + 3), 0, ...add);
+      retryNote = '<div class="small muted" style="margin-top:4px">🔁 This one comes back in a few questions.</div>';
+    } else retryNote = '<div class="small muted" style="margin-top:4px">We\'ll come back to this one tomorrow.</div>';
+  } else if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push(item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
   save();
   // a swapped-in version of the card (build exercises) or a rule sentence plays its own sentence, not the card's recording
   const base = c.kind === 'r' ? null : card(c.id), sentenceOnly = c.kind === 'r' || (base && norm(firstAlt(base.ceb)) !== norm(firstAlt(c.ceb)));
@@ -1416,7 +1429,7 @@ function result(c, item, ok, extra) {
   const f = $('#foot'); f.className = 'foot ' + (q > 0 ? 'good' : 'bad');
   const bxKind = q > 0 && sess.run >= 3 ? 'streak' : q > 0 ? 'right' : 'wrong';
   f.innerHTML = `<div class="row spread" style="gap:12px;align-items:flex-start"><div class="bx ${bxKind}"><img src="icon-192.png?v=full" alt="Binko">${bxKind === 'streak' ? `<span class="run">${sess.run}🔥</span>` : ''}</div><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
-  <div class="ans">${c.kind !== 'r' ? picImg(picFile(c), 'in') : ''}<span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${phonHtml(c.ceb)}${extra ? `<div class="small">${extra}</div>` : ''}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && c.kind !== 'r' && ruleFor(c.ceb) && ruleLearned(ruleFor(c.ceb).id) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
+  <div class="ans">${c.kind !== 'r' ? picImg(picFile(c), 'in') : ''}<span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${phonHtml(c.ceb)}${extra ? `<div class="small">${extra}</div>` : ''}${retryNote}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && c.kind !== 'r' && ruleFor(c.ceb) && ruleLearned(ruleFor(c.ceb).id) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
   ${canHear(c) ? `<button class="play sm" id="fplay" aria-label="Play">${I.play}</button>` : ''}</div>
   ${cameoKind ? cameoHtml(cameoKind) : ''}<button class="btn primary block" id="cont">Continue</button>${c.kind !== 'r' && !sentenceOnly ? `<div style="text-align:center">${flagBtn(c.id)}</div>` : ''}`;
   if (canHear(c)) { const hear = btn => sentenceOnly ? playSentence(c.ceb, btn) : play(c.id, 1, btn); $('#fplay').onclick = e => hear(e.currentTarget); if (!['listen', 'tiles', 'dict', 'pron', 'say', 'rid'].includes(item.type)) hear(); }
@@ -1704,7 +1717,7 @@ const EX = {
   },
   mixq(c, item) { // a "Don't mix up" question: pick the right one, or type it
     const m = MIXUPS[item.mx]; if (!m) { qi++; return VIEWS.session(); }
-    const q = item.q || (item.q = mixQuestion(m, (S.cards[c.id] || {}).b || 0));
+    const q = item.q || (item.q = Object.assign(mixQuestion(m, (S.cards[c.id] || {}).b || 0), item.easy ? { mode: 'pick' } : {}));
     const cc = { id: c.id, kind: 'x', ceb: q.right, en: q.en || q.ctx || 'the right way to say it', note: '', audio: false };
     const extra = `<b>Don't mix up · ${esc(m.title)}.</b> ${esc(m.rule)}${q.wrong ? `<br>❌ <s>${esc(q.wrong)}</s> → ✅ <b>${esc(q.right)}</b>` : ''}`;
     const head = `<div class="label">Don't mix up · ${esc(m.title)}</div>`;
