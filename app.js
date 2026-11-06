@@ -477,6 +477,25 @@ function mixHtml(c) {
   return c.mix.map(m => `<div class="panel mix"><div class="label">Don't mix up · ${esc(m.title)}</div><div>${esc(m.rule)}</div>
     <ul class="mixl">${m.ok.map(([a, b]) => `<li>✅ <b>${esc(a)}</b> <span class="muted">${esc(b)}</span></li>`).join('')}${(m.no || []).map(([a, b]) => `<li>❌ <s>${esc(a)}</s> → ✅ <b>${esc(b)}</b></li>`).join('')}</ul></div>`).join('');
 }
+// one question from a "Don't mix up" box: fix a common mistake, or tell apart the words in the box
+const mixClean = x => String(x).replace(/\s*\([^)]*\)/g, '').trim();
+function mixQuestion(m, level) {
+  const fixes = (m.no || []).filter(([a, b]) => !/=/.test(a + b)).map(([a, b]) => ({ kind: 'fix', wrong: mixClean(a), right: mixClean(b), ctx: ((a.match(/\(for "([^"]*)"\)/) || [])[1]) || '' }));
+  const says = m.ok.filter(([a]) => !/[_=]/.test(a)).map(([a, b]) => ({ kind: 'say', right: a, en: b }));
+  const sayOk = says.filter(x => says.some(y => norm(y.en) !== norm(x.en)));
+  const q = Object.assign({}, pick(fixes.length && (!sayOk.length || Math.random() < 0.5) ? fixes : sayOk.length ? sayOk : fixes));
+  q.mode = level >= 2 && Math.random() < 0.6 ? 'type' : 'pick';
+  if (q.kind === 'fix') { q.opts = [q.right, q.wrong]; if (!q.en) { const o = m.ok.find(([a]) => norm(a) === norm(q.right)); if (o) q.en = o[1]; } }
+  else { q.also = says.filter(y => norm(y.en) === norm(q.en)).map(y => y.right); q.opts = [q.right, ...shuffle(says.filter(y => norm(y.en) !== norm(q.en)).map(y => y.right)).slice(0, 3)]; const bad = (m.no || []).find(([, b]) => norm(mixClean(b)) === norm(q.right)); if (bad && !/=/.test(bad[0])) { q.wrong = mixClean(bad[0]); if (!q.opts.some(o => norm(o) === norm(q.wrong))) q.opts.splice(1, 0, q.wrong); q.opts = q.opts.slice(0, 4); } }
+  return q;
+}
+// up to two of these in a daily session, from words you already practice: ones you've missed first
+function mixItems(skip) {
+  const seenT = new Map();
+  Object.keys(S.cards).filter(id => !skip.has(id) && !S.cards[id].fresh && card(id)).forEach(id => { const c = card(id), k = S.cards[id];
+    (c.mix || []).forEach(m => { const i = MIXUPS.indexOf(m), sc = (k.w || 0) * 2 - (k.b || 0) + Math.random() * 2; if (!seenT.has(i) || seenT.get(i).sc < sc) seenT.set(i, { id, sc }); }); });
+  return [...seenT.entries()].sort((a, b) => b[1].sc - a[1].sc).slice(0, 2).map(([i, x]) => ({ id: x.id, type: 'mixq', mx: i }));
+}
 function card0(id) {
   const k = id[0], n = +id.slice(1);
   if (HIDE.has(id)) return null;
@@ -736,6 +755,8 @@ function buildSession() {
   sh.forEach((id, i) => { const taught = q.findIndex(x => x.id === id && x.type === 'teach'); q.splice(Math.max(Math.floor(q.length * (0.45 + i * 0.4)), taught + 2), 0, { id, type: 'shadow' }); });
   if (q.filter(x => x.type !== 'shadow').length < 4) shuffle(Object.keys(S.cards).filter(card)).slice(0, 10).forEach(id => q.push({ id, type: exType(id) }));
   if (!q.length) GRAM_ORDER.slice(0, 4).forEach(id => q.push({ id, type: 'teach' }, { id, type: 'mc' }));
+  // "Don't mix up" questions on words you already know, in the second half
+  if (typeof MIXUPS !== 'undefined') mixItems(new Set(nw)).forEach(x => q.splice(Math.floor(q.length * (0.5 + Math.random() * 0.4)), 0, x));
   // one more try at today's new words near the end, after other questions in between: recalling a word again
   // after a gap fixes it much better than seeing it twice in a row (successive relearning)
   if (nw.length && nw.length <= 10) shuffle(nw.slice()).forEach(id => q.push({ id, type: exType(id, true), recap: 1 }));
@@ -1292,7 +1313,7 @@ const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
   { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
   { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
-  { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['✅', '<b>Don\'t mix up</b> boxes: easy-to-confuse words side by side, with ✅ right and ❌ wrong examples'], ['🤔', 'Miss one? See exactly why']] },
+  { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['✅', '<b>Don\'t mix up</b> boxes: easy-to-confuse words side by side, with ✅ right and ❌ wrong examples. They come back as questions in your session: pick or type the right one'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
   { t: 'Ranks', tab: 'board', art: '📊', pts: [['📊', 'See how the family is doing'], ['🎯', 'Streaks, accuracy, words, games'], ['⌨️', 'Game scores say if they were typed or multiple choice'], ['🔑', 'Sign in on <b>Me</b> to join']] },
@@ -1387,7 +1408,7 @@ function result(c, item, ok, extra) {
   const gap = sess.total - (sess.lastCameo || -9) >= 4;
   const cameoKind = !gap ? null : q > 0 && sess.run > 0 && sess.run % 3 === 0 ? 'streak' : q > 0 && prevWrong >= 1 && Math.random() < 0.4 ? 'comeback' : q === 0 && sess.wrongRun === 2 ? 'rough' : null;
   if (cameoKind) sess.lastCameo = sess.total;
-  if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push({ id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
+  if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push(item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
   save();
   // a swapped-in version of the card (build exercises) or a rule sentence plays its own sentence, not the card's recording
   const base = c.kind === 'r' ? null : card(c.id), sentenceOnly = c.kind === 'r' || (base && norm(firstAlt(base.ceb)) !== norm(firstAlt(c.ceb)));
@@ -1680,6 +1701,26 @@ const EX = {
     };
     document.querySelectorAll('#bank .tile').forEach(b => b.onclick = () => { if (!chosen.includes(b.dataset.k)) { chosen.push(b.dataset.k); draw(); } });
     $('#chk').onclick = () => result(c, item, norm(chosen.map(k => bank.find(b => b.k === k).t).join(' ')) === norm(ans.join(' ')));
+  },
+  mixq(c, item) { // a "Don't mix up" question: pick the right one, or type it
+    const m = MIXUPS[item.mx]; if (!m) { qi++; return VIEWS.session(); }
+    const q = item.q || (item.q = mixQuestion(m, (S.cards[c.id] || {}).b || 0));
+    const cc = { id: c.id, kind: 'x', ceb: q.right, en: q.en || q.ctx || 'the right way to say it', note: '', audio: false };
+    const extra = `<b>Don't mix up · ${esc(m.title)}.</b> ${esc(m.rule)}${q.wrong ? `<br>❌ <s>${esc(q.wrong)}</s> → ✅ <b>${esc(q.right)}</b>` : ''}`;
+    const head = `<div class="label">Don't mix up · ${esc(m.title)}</div>`;
+    const ask = q.kind === 'fix' ? (q.ctx || q.en ? `<div class="prompt">Meaning: ${esc(q.ctx || q.en)}</div>` : '') : `<div class="prompt">${esc(q.en)}</div>`;
+    if (q.mode === 'pick') {
+      $('#ex').innerHTML = `${head}<div class="prompt" style="font-size:1rem">${q.kind === 'fix' ? 'Which one is right?' : 'How do you say'}</div>${ask}<div class="opts"></div>`;
+      const opts = shuffle(q.opts.map((t, i) => ({ id: i ? 'x' + i : 'ok', t, ceb: 1 })));
+      return ruleChoice(cc, item, opts, 'ok', { ceb: q.right, en: cc.en }, extra);
+    }
+    $('#ex').innerHTML = `${head}${q.kind === 'fix' ? `<div class="prompt" style="font-size:1rem">This is wrong. Write it the right way:</div><div class="ceb" style="text-decoration:line-through;text-decoration-color:var(--bad);text-decoration-thickness:2px">${esc(q.wrong)}</div>${ask}` : `<div class="prompt" style="font-size:1rem">Write it in Bisaya</div>${ask}`}<input class="field" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type in Bisaya">`;
+    foot(`<button class="btn primary block" id="chk" disabled>Check</button><button class="btn ghost block" id="idk">I don't know</button>`);
+    const inp = $('#ans'); inp.focus(); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
+    inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) $('#chk').click(); };
+    $('#chk').onclick = () => { const g = norm(inp.value), t = [q.right, ...(q.also || [])].map(norm).sort((a, b) => lev(g, a) - lev(g, b))[0], d = lev(g, t), ok = d <= Math.max(1, Math.floor(t.length * 0.08)) && (!q.wrong || g !== norm(q.wrong));
+      inp.disabled = true; inp.classList.add(ok ? 'right' : 'wrong'); result(cc, item, ok, (d && ok ? 'Watch the spelling. ' : '') + extra); };
+    $('#idk').onclick = () => { inp.disabled = true; inp.classList.add('wrong'); result(cc, item, false, "That's okay. " + extra); };
   },
   type(c, item) {
     $('#ex').innerHTML = `<div class="label">Write it in Bisaya</div><div class="prompt">${esc(c.en)}</div><input class="field" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type in Bisaya"><p class="muted small" style="margin:0">Small typos are fine. "ug" and "og" both count.</p>`;
