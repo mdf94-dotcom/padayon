@@ -179,7 +179,7 @@ function migrate(s) { const f = fresh(); s = Object.assign(f, s || {}); s.settin
   if (s.settings.learner !== 'all') { s.settings.learner = 'all'; s.settings.newF = Math.max(3, s.settings.newF || 0); } return s; }
 let S = (() => { try { const r = JSON.parse(localStorage.getItem(LS)); if (r && r.v === 1) return migrate(r); } catch (e) { } return fresh(); })();
 DAY_SHIFT = S.dayShift || 0;
-function fixFuture(st) { const rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5); if (st.streak.last > rt) { st.streak.count = Math.max(1, st.streak.count - (st.streak.last - rt)); st.streak.last = rt; st.streak.best = Math.max(st.streak.count, (st.streak.best || 0) - (st.streak.last - rt)); } if ((st.announced || 0) > rt) st.announced = rt; }
+function fixFuture(st) { const rt = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 864e5); if (st.streak.last > rt) { const over = st.streak.last - rt; st.streak.count = Math.max(1, st.streak.count - over); st.streak.last = rt; st.streak.best = Math.max(st.streak.count, (st.streak.best || 0) - over); } if ((st.announced || 0) > rt) st.announced = rt; }
 fixFuture(S);
 /* Streak reset: bump STREAK_RESET to start everyone's streak over at 1 (current and best). Carried through sync so an
    older device can't bring the old streak back, and the leaderboard shows 1 for anyone who hasn't opened the app since. */
@@ -261,7 +261,8 @@ function mergeState(a, b) {
   out.bestSpeed = Math.max(a.bestSpeed, b.bestSpeed);
   out.plan = {}; [a.plan, b.plan].forEach(p => Object.keys(p).forEach(d => { out.plan[d] = Object.assign(out.plan[d] || {}, p[d]); Object.keys(p[d]).forEach(k => { if (p[d][k]) out.plan[d][k] = p[d][k]; }); }));
   const t = today(), ds = Math.max(a.dayShift || 0, b.dayShift || 0), keepDays = new Set([t, calDay() + ds]); Object.keys(out.plan).forEach(d => { if (!keepDays.has(+d)) delete out.plan[d]; });
-  out.newDay = a.newDay.d === b.newDay.d ? { d: a.newDay.d, n: Math.max(a.newDay.n, b.newDay.n) } : (a.newDay.d > b.newDay.d ? a.newDay : b.newDay);
+  // same day: keep the higher count and the day's new-word limit, so a sync doesn't re-decide it halfway through the day
+  out.newDay = a.newDay.d === b.newDay.d ? Object.assign({}, b.newDay, a.newDay, { n: Math.max(a.newDay.n, b.newDay.n) }) : (a.newDay.d > b.newDay.d ? a.newDay : b.newDay);
   out.mistakes = {}; new Set(Object.keys(a.mistakes).concat(Object.keys(b.mistakes))).forEach(k => { const x = a.mistakes[k], y = b.mistakes[k]; out.mistakes[k] = !x ? y : !y ? x : { n: Math.max(x.n, y.n), fix: (newer === b ? y.fix : x.fix) || x.fix || y.fix, last: Math.max(x.last || 0, y.last || 0) }; });
   out.tips = Object.assign({}, a.tips, b.tips);
   out.announced = Math.max(a.announced || 0, b.announced || 0);

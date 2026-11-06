@@ -11,11 +11,11 @@ const PROFILES = [profile('steady', { miss: 0.15, npd: 8, skip: 0 }), profile('s
     const out = await page.evaluate(async ({ DAYS, cfg }) => {
       const issues = [], daily = []; S.settings.newPerDay = cfg.npd; S.settings.music = false; let seedD = 0;
       const rnd = (() => { let s = 12345; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
-      window.__ended = 0; const known0 = () => new Set(Object.keys(S.cards));
+      window.__ended = 0; const twinTaught = (id, have) => { const c = card(id), k = norm(firstAlt(c.ceb)) + '|' + norm(firstAlt(c.en)); return [...have].some(o => { const d = card(o); return o < id && d && d.kind !== 'r' && norm(firstAlt(d.ceb)) + '|' + norm(firstAlt(d.en)) === k && cardsAtStart.has(o); }); }; let cardsAtStart = new Set();
       for (let day = 0; day < DAYS; day++) {
         window.__jump(1);
         if (rnd() < cfg.skip) continue;
-        const t = today(), rulesBefore = Object.keys(S.rules || {}).filter(id => S.rules[id].d === t).length, cardsBefore = new Set(Object.keys(S.cards));
+        cardsAtStart = new Set(Object.keys(S.cards)); const t = today(), rulesBefore = Object.keys(S.rules || {}).filter(id => S.rules[id].d === t).length, cardsBefore = new Set(Object.keys(S.cards));
         startSession(); const len0 = Q.length; const taught = new Set(cardsBefore); const newOrder = []; let answered = 0, guard = 0, rulesTaught = 0;
         const firstReviewTypes = {};
         while (view === 'session' && qi < Q.length && guard++ < 600) {
@@ -38,6 +38,7 @@ const PROFILES = [profile('steady', { miss: 0.15, npd: 8, skip: 0 }), profile('s
         if (ruleN > 2) issues.push(['more than two rules', day, ruleN]);
         const realNew = [...new Set(newOrder)].filter(id => id[0] !== 'r');
         if (realNew.length > cfg.npd) issues.push(['too many new', day, realNew.length]);
+        realNew.forEach(id => { if (/^[pwmev]/.test(id) && twinTaught(id, new Set(realNew.filter(x => x !== id).concat([...cardsBefore])))) issues.push(['same word taught twice', id, card(id).ceb]); });
         // grammar first: while building blocks and grammar remain, ordinary words don't come ahead of them unless they unlock an example
         const gfLeft = [...F_ORDER, ...GRAM_ORDER].filter(id => card(id) && !cardsBefore.has(id)).length;
         const gf = realNew.filter(id => /^[fg]/.test(id)).length, other = realNew.length - gf;
