@@ -100,7 +100,7 @@ const alts = ceb => String(ceb).replace(/\s*\([^)]*\)/g, '').split(/\s*\/\s*/).m
 // the first way of saying it: notes in brackets come off first (a slash inside them isn't a second option), then the first of any options split by / or ·
 const firstAlt = ceb => String(ceb).replace(/\s*\([^)]*\)/g, '').split(/\s*[\/·]\s*/)[0].trim();
 /* ---------- "sounds like": an English-friendly respelling, split into syllables ----------
-   Bisaya is spelled the way it sounds, so this is built from the spelling. Stress isn't marked: it changes from word to word. */
+   Bisaya is spelled the way it sounds, so this is built from the spelling. The stressed syllable is in capitals where known. */
 const PH_V = { a: 'ah', e: 'eh', i: 'ee', o: 'oh', u: 'oo' };
 const PH_DI = { ay: 'ai', aw: 'ow', oy: 'oy', uy: 'ooy', iw: 'ew', ey: 'ay', ew: 'ew' };
 function phonWord(w) {
@@ -128,8 +128,16 @@ function phonWord(w) {
   const conv = t => t.replace(/[aeiou]/g, v => PH_V[v]);
   return syl.map(s => { const m = s.match(/^(.*?)(ay|aw|oy|uy|iw|ey|ew)([^aeiou]*)$/); return m ? conv(m[1]) + PH_DI[m[2]] + m[3] : conv(s); }).join('·');
 }
-const phon = s => firstAlt(String(s)).split(/\s+/).map(phonWord).filter(Boolean).join('  ');
-const phonHtml = (s, label = true) => `<div class="phon">${label ? '<span>sounds like</span> ' : ''}${esc(phon(s))}</div>`;
+// the stressed syllable in capitals, when we know it and the syllables line up
+let STRESS = null;
+function stressWord(w, ph) {
+  if (!STRESS) { STRESS = new Map(); if (typeof STRESS_RAW === 'string') STRESS_RAW.split('|').forEach(e => { const [k, i, n] = e.split(':'); STRESS.set(k, [+i, +n]); }); }
+  const st = STRESS.get(w.toLowerCase().replace(/[^a-zñ'-]/g, '')); if (!st || !ph) return ph;
+  const sy = ph.split('·'); if (sy.length !== st[1] || sy.length < 2) return ph;
+  sy[st[0]] = sy[st[0]].toUpperCase(); return sy.join('·');
+}
+const phon = s => firstAlt(String(s)).split(/\s+/).map(w => stressWord(w, phonWord(w))).filter(Boolean).join('  ');
+const phonHtml = (s, label = true) => `<div class="phon" title="CAPITALS = say that part stronger">${label ? '<span>sounds like</span> ' : ''}${esc(phon(s))}</div>`;
 
 const tokens = ceb => firstAlt(ceb).split(/\s+/).map(t => t.replace(/[.,!?…]/g, '')).filter(Boolean);
 function b64(buf) { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
