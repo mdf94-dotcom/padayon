@@ -1516,10 +1516,13 @@ const looksBisaya = txt => { const ws = String(txt).split(/\s+/).map(w => w.repl
 const MISS_GAP = 6;
 function tappableWords() {
   const app = $('#app'), f = $('#foot'); if (!app) return;
+  // only once the question on screen has been answered: before that, a tap on a choice must pick it
+  const answered = (f && /\b(good|bad)\b/.test(f.className)) || app.querySelector('.opt.right, .opt.wrong, [data-o].right, [data-o].wrong, [data-w].right, .field.right, .field.wrong');
+  if (!answered) return;
   app.querySelectorAll('.tile').forEach(t => { if (t.classList.contains('look')) return; t.onclick = e => { e.stopPropagation(); wordSheet(t.textContent.trim().replace(/[.,!?…"“”]/g, '')); }; t.classList.add('look'); });
   app.querySelectorAll('.blank[data-ans]').forEach(b => { b.textContent = b.dataset.ans; b.classList.add('tw'); b.dataset.tok = b.dataset.ans; });
   // answer choices: Bisaya ones (marked, or that read as Bisaya) stay tappable once the question is answered
-  app.querySelectorAll('.opt, [data-o], [data-w]').forEach(b => { if (!b.disabled && !b.classList.contains('right') && !b.classList.contains('cebopt')) return;
+  app.querySelectorAll('.opt, [data-o], [data-w]').forEach(b => { if (!b.disabled && !b.classList.contains('right') && !b.classList.contains('wrong')) return;
     if (b.classList.contains('done') || (b.classList.contains('opt') && !b.classList.contains('cebopt') && !b.dataset.o && !b.dataset.w) || !looksBisaya([...b.childNodes].filter(n => !(n.classList && n.classList.contains('otr'))).map(n => n.textContent).join(' '))) return;
     b.disabled = false; b.onclick = null; b.classList.add('done'); twWrap(b); });
   app.querySelectorAll('.opt .otr').forEach(el => { const b = el.closest('.opt'); if (!el.querySelector('.tw') && looksBisaya(el.textContent)) { if (b) { b.disabled = false; b.onclick = null; b.classList.add('done'); } twWrap(el); } });
