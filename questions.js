@@ -204,6 +204,6 @@ VIEWS.retell = function () {
   foot(`<button class="btn primary block" id="go">Start the ${secs}-second round</button>`);
   $('#go').onclick = () => { const det = document.querySelector('.ex details'); if (det) det.open = false; const t0 = Date.now();
     foot(`<div class="small muted" style="text-align:center">Tell it out loud now, in Bisaya. No English!</div><button class="btn ghost block" id="early">I finished early</button>`);
-    const end = () => { clearInterval(timerH); RT.round++; if (RT.round === 3) { addXP(10); save(); } render(); };   // XP once, when the third round ends $('#early').onclick = end;
+    const end = () => { clearInterval(timerH); RT.round++; if (RT.round === 3) { addXP(10); save(); } render(); }; $('#early').onclick = end;   // XP once, when the third round ends
     timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / (secs * 1000); const tb = $('#tb'), lf = $('#left'); if (!tb) return clearInterval(timerH); tb.style.width = Math.max(0, f * 100) + '%'; lf.textContent = Math.max(0, Math.ceil(f * secs)); if (f <= 0) end(); }, 200); };
 };
