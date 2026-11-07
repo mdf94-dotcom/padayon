@@ -61,6 +61,8 @@ async function walk(page, label, log, R) {
   await tab('convos'); await page.waitForTimeout(80); await check('convo', true); for (let i = 0; i < 40 && await page.locator('#nx').count(); i++) await click('#nx'); await check('convo-part', true); await tab('home');
   // stories
   await tab('stories'); await check('stories', true); if (await page.locator('[data-story]').count()) { await page.locator('[data-story]').first().click(); await page.waitForTimeout(40); await check('story', true); for (let i = 0; i < 40 && await page.locator('#nx').count(); i++) { await click('#nx'); if (await page.evaluate(() => ST && ST.phase === 'quiz')) break; } await check('story-quiz', true); }
+  await tab('aboutme'); await page.waitForTimeout(40); await check('aboutme', true); await page.fill('#ans', 'Ako si Ana.'); await click('#chk'); await check('aboutme-a', true); await page.evaluate(() => { AB = null; });
+  await tab('retell'); await check('retell', true); if (await page.locator('[data-rt]').count()) { await page.locator('[data-rt]').first().click(); await check('retell-run', true); await click('#go'); await click('#early'); await check('retell-2', true); } await page.evaluate(() => { clearInterval(timerH); RT = null; });
   await tab('rules'); await check('rules'); await tab('real'); await check('real', true); await tab('gaps'); await check('gaps', true);
   // numbers
   await tab('numbers'); await page.waitForTimeout(80); await check('numbers', true); const nb = page.locator('#app button:not(.x)'); if (await nb.count()) { await nb.first().click(); await page.waitForTimeout(100); await check('numbers-q', true); }
