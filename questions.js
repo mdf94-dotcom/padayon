@@ -166,7 +166,7 @@ VIEWS.aboutme = function () {
     const bis = ws.length > 0 && !ws.some(x => EN_WORDS.has(x.w.toLowerCase())) && ws.filter(x => glossOf(x.w.toLowerCase()) || cardForTok(x.w.toLowerCase())).length / ws.length >= 0.5;
     $('#rev').innerHTML = `<div class="panel note" style="margin-top:10px"><div class="label">One way to answer</div><div class="ceb" style="font-size:1.2rem">${esc(q[2])}</div><div class="small muted">${esc(q[3])}</div>
       ${mine ? `<div class="small" style="margin-top:6px">${bis ? '✅ That reads as Bisaya.' : '🤔 Most of that doesn\'t look like Bisaya words yet. Try using the example as a pattern.'} Change the details to fit your own life.</div>` : ''}</div>`;
-    inp.disabled = true; logAnswer(!!bis); if (bis) addXP(4);
+    inp.disabled = true; if (mine) { logAnswer(!!bis); if (bis) addXP(4); }   // just looking at an example isn't a wrong answer
     foot(`<div class="small muted" style="text-align:center">Tap any Bisaya word to see what it means.</div><button class="btn primary block" id="cont">Next</button>`); $('#cont').onclick = () => { AB.i++; render(); };
     if (typeof tappableWords === 'function') { document.querySelectorAll('#rev .ceb').forEach(twWrap); }
   };
