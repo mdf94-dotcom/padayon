@@ -488,7 +488,17 @@ button.wb{font:inherit;color:inherit;text-align:left;cursor:pointer}button.wb:ho
 @media (prefers-reduced-motion:reduce){.wsheet,.wsheet-bg{animation:none}}
 .opt mark.dif{background:none;color:inherit;text-decoration:underline wavy;text-decoration-color:var(--copper);text-underline-offset:4px;text-decoration-thickness:2px}
 .opt .otr{display:block;font-family:inherit;font-weight:500;font-size:.82rem;color:var(--muted);margin-top:4px;line-height:1.25}.opt.right .otr,.opt.wrong .otr{color:inherit;opacity:.85}
-.panel.mix{border-left:4px solid var(--mango)}.mixl{list-style:none;padding:0;margin:.5em 0 0}.mixl li{margin:.25em 0}.mixl s{opacity:.7}.tw{cursor:pointer;border-bottom:1.5px dotted currentColor;text-decoration:none}.tw:hover,.tw:focus-visible{color:var(--sea)}.tile.look{border-style:dashed}.opt.done{cursor:default}.twhint{margin:6px 0 2px;text-align:center}.fillq .blank{display:inline-block;min-width:2.6em;border-bottom:3px solid var(--sea);text-align:center;color:var(--sea);margin:0 .15em}</style>
+.panel.mix{border-left:4px solid var(--mango)}.mixl{list-style:none;padding:0;margin:.5em 0 0}.mixl li{margin:.25em 0}.mixl s{opacity:.7}.tw{cursor:pointer;border-bottom:1.5px dotted currentColor;text-decoration:none}.tw:hover,.tw:focus-visible{color:var(--sea)}.tile.look{border-style:dashed}.opt.done{cursor:default}.twhint{margin:6px 0 2px;text-align:center}.fillq .blank{display:inline-block;min-width:2.6em;border-bottom:3px solid var(--sea);text-align:center;color:var(--sea);margin:0 .15em}.jtabs{margin:8px 0 12px}.jtabs button{flex:1}
+.jmapwrap{max-height:70vh;overflow:auto;border-radius:14px;background:color-mix(in srgb,var(--chip) 60%,transparent);margin-top:8px}
+.jmap{width:100%;max-width:440px;margin:0 auto;display:block}.jroad{fill:none;stroke:var(--line);stroke-width:14;stroke-linecap:round}.jroad-done{fill:none;stroke:var(--sea);stroke-width:14;stroke-linecap:round;stroke-dasharray:0 99999}
+.jisle{fill:var(--card,var(--chip));stroke:var(--line);stroke-width:3}.jring{fill:none;stroke:var(--sea);stroke-width:5;transform:rotate(-90deg)}.jstop.done .jisle{fill:color-mix(in srgb,var(--sea) 30%,var(--chip))}.jstop.later{opacity:.55}
+.jart{font-size:30px}.jlabel{font-size:12px;line-height:1.25;display:flex;flex-direction:column;gap:1px}.jlabel.left{text-align:right}.jlabel b{font-family:var(--f-display);font-size:14px}.jlabel span{color:var(--muted)}.jlabel.now b{color:var(--sea)}
+.jmark{font-size:16px;opacity:.3}.jmark.on{opacity:1}.jbinko circle{fill:var(--mango);stroke:#fff;stroke-width:2}.jlegend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px}
+.jwebwrap{border-radius:14px;background:color-mix(in srgb,var(--chip) 60%,transparent);overflow:hidden;touch-action:none}.jweb{width:100%;height:min(70vh,520px);display:block;cursor:grab}
+.jl{stroke:var(--line);stroke-width:1.5}.jl.mix{stroke:var(--mango);stroke-dasharray:4 3;stroke-width:2}.jn{cursor:pointer}.jn circle{stroke:var(--sea);stroke-width:1.5}.jn.ghost circle{stroke:var(--muted);stroke-dasharray:2 2;fill:transparent}.jn text{font-size:13px;font-weight:600;fill:var(--ink,currentColor);paint-order:stroke;stroke:var(--bg);stroke-width:3px}.jn.ghost text{fill:var(--muted)}.jn:focus-visible circle{stroke-width:3}
+.jthen{display:grid;gap:6px;margin:8px 0}.jtn{display:grid;grid-template-columns:28px 1fr 34px 18px 54px;align-items:center;gap:6px}.jtn.head span{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em}.jti{font-size:20px}.jt0{color:var(--muted);text-align:right}.jtar{color:var(--muted)}.jt1{font-family:var(--f-display);font-size:1.3rem;color:var(--sea);text-align:right}
+.jchart{width:100%;display:block;margin:6px 0}.jchart rect{fill:var(--sea)}.jline{fill:none;stroke:var(--sea);stroke-width:2.5}.jchart circle{fill:var(--sea)}.jaxis{stroke:var(--line)}.jlab{font-size:10px;fill:var(--muted)}
+</style>
 <style>
 /* ---------- tabs layout (Today / Practice / Progress / Me) ---------- */
 kbd{font:700 .7rem var(--f-body);border:1px solid currentColor;border-radius:6px;padding:0 6px;margin-left:8px;opacity:.75;display:none}
@@ -667,5 +677,6 @@ html.embed .toast{bottom:20px}
 <script src="geo_lang.js"></script>
 <script src="geo.js"></script>
 <script src="numbers.js"></script>
+<script src="journey.js"></script>
 </body>
 </html>

@@ -274,6 +274,7 @@ function mergeState(a, b) {
   out.newDay = a.newDay.d === b.newDay.d ? Object.assign({}, b.newDay, a.newDay, { n: Math.max(a.newDay.n, b.newDay.n) }) : (a.newDay.d > b.newDay.d ? a.newDay : b.newDay);
   out.mistakes = {}; new Set(Object.keys(a.mistakes).concat(Object.keys(b.mistakes))).forEach(k => { const x = a.mistakes[k], y = b.mistakes[k]; out.mistakes[k] = !x ? y : !y ? x : { n: Math.max(x.n, y.n), fix: (newer === b ? y.fix : x.fix) || x.fix || y.fix, last: Math.max(x.last || 0, y.last || 0) }; });
   out.tips = Object.assign({}, a.tips, b.tips);
+  out.hist = {}; [a.hist || {}, b.hist || {}].forEach(h => Object.keys(h).forEach(d => { const o = out.hist[d], v = h[d]; if (!o || v.w > o.w) out.hist[d] = v; }));
   out.announced = Math.max(a.announced || 0, b.announced || 0);
   out.credit = Object.assign({}, a.credit || {}, b.credit || {}); out.sessAt = Math.max(a.sessAt || 0, b.sessAt || 0);
   out.redoAt = Math.max(a.redoAt || 0, b.redoAt || 0); out.redoDone = Object.assign({}, a.redoDone || {}, b.redoDone || {});
@@ -985,7 +986,7 @@ function statTrio() {
 }
 function stageMini() {
   const { stats, cur } = pathState(), x = stats[cur], tl = pathTimeline();
-  return `<section class="panel"><div class="row spread"><h2>Stage ${cur + 1} · ${esc(PATH[cur].name)}</h2><button class="linkbtn" data-tab="me">Full path</button></div>
+  return `<section class="panel"><div class="row spread"><h2>Stage ${cur + 1} · ${esc(PATH[cur].name)}</h2><button class="linkbtn" id="jmapgo" onclick="JTAB='map';go('journey')">Path map</button></div>
     <div class="bar"><i style="width:${x.frac * 100}%"></i></div><div class="muted small">${x.learned} of ${x.total} learned${tl[cur] ? ' · done around ' + dateIn(tl[cur]) : ''}</div></section>`;
 }
 function sinceShort() {
@@ -1155,7 +1156,7 @@ VIEWS.rushhome = function () {
 function progressHtml() {
   const weak = weakList(5);
   return `<div class="ptitle"><h1>Me</h1><p class="muted">${S.started ? 'Padayon since ' + new Date(S.started * 864e5 + new Date().getTimezoneOffset() * 60000 + 12 * 36e5).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + (today() - S.started + 1) + ' days in' : 'Your first day starts with today\'s session.'}</p></div>
-  <div class="prog-grid"><div class="prog-main">${statTrio()}${pathPanel()}</div><div class="prog-side">
+  <div class="prog-grid"><div class="prog-main">${statTrio()}<section class="panel jentry"><div class="row spread"><h2>My journey</h2><button class="btn primary sm" data-jgo="map">Open</button></div><p class="small muted" style="margin:0">See how far you've come.</p><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px"><button class="btn ghost sm" data-jgo="map">🗺️ Path map</button><button class="btn ghost sm" data-jgo="web">🕸️ Word web</button><button class="btn ghost sm" data-jgo="then">🌱 Then and now</button></div></section>${pathPanel()}</div><div class="prog-side">
   ${weak.length ? `<section class="panel"><h2>Your weak spots</h2><div>${weak.map(([k, v]) => `<div class="weak"><span class="n tnum">${v.n}×</span><div style="min-width:0"><b>${esc(k)}</b><div class="small muted">${esc(v.fix)}</div></div></div>`).join('')}</div></section>` : ''}
   <section class="panel"><details><summary><b>Browse every unit</b> <span class="muted small">· jump ahead with Focus</span></summary><div style="display:grid;gap:12px;margin-top:10px">
   <div class="panel"><div class="row spread"><h2>Foundations</h2><span class="muted small tnum">${learned(F_ORDER)} of ${F.length} learned</span></div>
@@ -1173,7 +1174,7 @@ function progressHtml() {
     <div style="margin-top:8px">${M_UNITS.map((u, i) => unitRow(u, 'm' + i)).join('')}</div></details></div>` : ''}
   </div></details></section></div></div>`;
 }
-function wireProgress() { document.querySelectorAll('[data-focus]').forEach(b => b.onclick = () => { S.focus = S.focus === b.dataset.focus ? null : b.dataset.focus; save(); render(); toast(S.focus ? 'New cards will come from this unit first' : 'Back to the normal order'); }); }
+function wireProgress() { document.querySelectorAll('[data-jgo]').forEach(b => b.onclick = () => { JTAB = b.dataset.jgo; go('journey'); }); document.querySelectorAll('[data-focus]').forEach(b => b.onclick = () => { S.focus = S.focus === b.dataset.focus ? null : b.dataset.focus; save(); render(); toast(S.focus ? 'New cards will come from this unit first' : 'Back to the normal order'); }); }
 VIEWS.progress = function () { go('me'); };
 VIEWS.board = function () {
   shell('board', `<div class="ptitle"><h1>Leaderboard</h1><p class="muted">How the family is doing. Scroll for every ranking.</p></div><div class="board-wrap">${boardBoxes()}</div>`);
@@ -1367,7 +1368,7 @@ const GUIDE = [
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
   { t: 'Ranks', tab: 'board', art: '📊', pts: [['📊', 'See how the family is doing'], ['🎯', 'Streaks, accuracy, words, games'], ['⌨️', 'Game scores say if they were typed or multiple choice'], ['🔑', 'Sign in on <b>Me</b> to join']] },
-  { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day (the most you\'ll get: fewer when reviews pile up)'], ['🎵', 'Background music on or off, or tap the speaker in the top corner of any screen'], ['💾', 'Save a backup, or <b>Start over</b> to reset all your progress on every device']], set: true },
+  { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day (the most you\'ll get: fewer when reviews pile up)'], ['🎵', 'Background music on or off, or tap the speaker in the top corner of any screen'], ['🗺️', '<b>My journey</b>: your path map, a web of the words you know, and day 1 next to today'], ['💾', 'Save a backup, or <b>Start over</b> to reset all your progress on every device']], set: true },
   { t: 'One last thing', art: '🎯', pts: [['✏️', 'A quick check of what you already know'], ['⏭️', 'Words you know get skipped'], ['🤷', 'Not sure? Tap "I don\'t know". That\'s fine!']] }
 ];
 let guideAt = 0, guideBack = 'home';
@@ -1892,6 +1893,7 @@ const EX = {
 };
 function finishSession() { stopAudio(); const full = qi >= Q.length; if (full && sess.mode === 'daily') clearResume(); if (full && sess.mode === 'daily') { tick('session'); try{ if (window.parent !== window) window.parent.postMessage({practice:'done', app:'bisaya'}, location.origin); }catch(e){} } if (full && sess.mode === 'dict') tick('dict'); save(); go('summary'); }
 VIEWS.summary = function () {
+  if (typeof journeySnap === 'function') journeySnap();
   const acc = sess.total ? Math.round(sess.right / sess.total * 100) : 0;
   $('#app').innerHTML = `<section class="panel summary"><div class="label">${sess.mode === 'speed' ? 'Speed round done' : sess.mode === 'dict' ? 'Dictation done' : 'Session done'}</div>
     <h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1>
