@@ -19,7 +19,7 @@ const RIGHT_RUNS = 25;
       if (how === "pick" && info.has !== 1) bad.push(`right answer shown ${info.has} times for ${info.ceb}: ${JSON.stringify(info.opts)}`);
       await page.evaluate(({ how, wantRight }) => { const id = [...RU.seen].pop(), c = card(id);
         if (how === 'pick') { const opts = [...document.querySelectorAll('.opt:not([disabled])')]; const right = opts.findIndex(o => o.textContent === optText(c, 'en')); if (right < 0) { window.__gbad = (window.__gbad || []).concat([[c.ceb, optText(c, 'en'), opts.map(o => o.textContent)]]); (opts[0] || {}).click?.(); return; } opts[wantRight ? right : (right + 1) % opts.length].click(); }
-        else { const i = document.querySelector('#tans'); i.value = wantRight ? firstAlt(c.en).replace(/\s*\(.*?\)\s*/g, ' ').split(/[;,]/)[0].trim() : 'zzzz qqq'; document.querySelector('#tform').requestSubmit(); } }, { how, wantRight });
+        else { const i = document.querySelector('#tans'); i.value = wantRight ? (firstAlt(c.en).replace(/\s*\(.*?\)\s*/g, ' ').split(/[;,]/)[0].trim() || firstAlt(c.en).replace(/[()]/g, '').split(/[:;,]/)[0].trim()) : 'zzzz qqq'; document.querySelector('#tform').requestSubmit(); } }, { how, wantRight });
       await page.waitForTimeout(wantRight ? 30 : 900);
       const gb = await page.evaluate(() => { const g = window.__gbad; window.__gbad = null; return g; }); if (gb) { bad.push('right answer not among choices: ' + JSON.stringify(gb)); break; }
       if (wantRight) { const n = await page.evaluate(() => RU.n); if (n !== info.n + 1) bad.push(`right answer for "${info.ceb}" (${info.en}) not counted (typed: ${how === 'type'})`); else streak++; }
@@ -29,7 +29,10 @@ const RIGHT_RUNS = 25;
     R.ok(!bad.length, `Rush (${how}): ` + JSON.stringify(bad.slice(0, 4))); R.ok(sum.best === streak && sum.how === how, `Rush (${how}) best saved ${JSON.stringify(sum)} after ${streak}`);
     await page.click('#again'); await page.waitForTimeout(200); R.ok(await page.evaluate(() => view === 'rush'), 'Rush: Go again starts a run');
     await page.click('#quit'); await page.waitForTimeout(100); R.ok(await page.evaluate(() => view === 'summary'), 'Rush: quitting shows the summary');
-    // the map games
+    { // typed meanings: the whole meaning as shown, one part of it, or a bracket-only meaning all count; a wrong word doesn't
+    const m = await page.evaluate(() => [meaningOk('rock or stone', 'rock or stone'), meaningOk('stone', 'rock or stone'), meaningOk('plural', '(plural: more than one)'), !meaningOk('dog', '(plural: more than one)'), !meaningOk('cat', 'rock or stone')]);
+    R.ok(m.every(Boolean), 'typed meaning matching ' + m); }
+  // the map games
     for (const mode of ['prov', 'lang']) {
       await page.evaluate(() => { view = 'rushhome'; render(); }); await page.click('#geo' + mode); await page.waitForFunction(() => view === 'geogame', null, { timeout: 15000 });
       let n = 0, gbad = [];

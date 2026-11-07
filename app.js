@@ -2658,7 +2658,9 @@ const wordNear = (a, b) => { if (a === b) return true;
 // typed English meaning: any one of the meanings counts, small typos and missing "to"/"the" are fine
 function meaningOk(typed, en) {
   const t = fwords(typed); if (!t.length) return false;
-  return [en, ...enAlts(en)].some(alt => {   // the whole meaning as shown ("rock or stone") counts too, not just each part
+  // a meaning that's only a note in brackets ("(plural: more than one)"): each part of the note counts
+  const inner = String(en).replace(/\([^)]*\)/g, '').trim() ? [] : String(en).replace(/[()]/g, '').split(/[:;,]/).map(x => x.trim()).filter(Boolean);
+  return [en, ...enAlts(en), ...inner].some(alt => {   // the whole meaning as shown ("rock or stone") counts too, not just each part
     const a = fwords(alt); if (!a.length) return false;
     const whole = a.join(' '); if (t.join(' ') === whole || (t.some(w => !enVocab().has(w)) && lev(t.join(' '), whole) <= Math.floor(whole.length * 0.15))) return true;
     const ac = a.filter(w => !EN_STOP.has(w)), tc = t.filter(w => !EN_STOP.has(w));
