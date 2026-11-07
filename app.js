@@ -1468,15 +1468,27 @@ function twWrap(el) {
     n.replaceWith(span);
   });
 }
+// a choice counts as Bisaya when most of its words are Bisaya cards and none is a common English word
+const EN_WORDS = new Set("i i'm i've it's you you're your he she we they it is are was were am be been the a an to of in on at for with and or not don't didn't will would can do did does have has had my me this that what where who when why how there here words word".split(' '));
+const looksBisaya = txt => { const ws = String(txt).split(/\s+/).map(w => w.replace(/^[^\p{L}']+|[^\p{L}'-]+$/gu, '').toLowerCase()).filter(w => /\p{L}/u.test(w));
+  return ws.length > 0 && !ws.some(w => EN_WORDS.has(w)) && ws.filter(w => cardForTok(w)).length / ws.length >= 0.5; };
 function tappableWords() {
-  const ex = $('#ex'), f = $('#foot'); if (!ex || !f) return;
-  ex.querySelectorAll('.tile').forEach(t => { t.onclick = e => { e.stopPropagation(); wordSheet(t.textContent.trim().replace(/[.,!?…"“”]/g, '')); }; t.classList.add('look'); });
-  ex.querySelectorAll('.opt.cebopt').forEach(b => { b.disabled = false; b.onclick = null; b.classList.add('done'); twWrap(b); });
-  ex.querySelectorAll('.blank[data-ans]').forEach(b => { b.textContent = b.dataset.ans; b.classList.add('tw'); b.dataset.tok = b.dataset.ans; });
-  ex.querySelectorAll('.ceb').forEach(twWrap);
-  const a = f.querySelector('.ans > span:not(.muted)'); if (a) twWrap(a);
-  if (ex.querySelector('.tile, .tw') && !f.querySelector('.twhint')) { const h = document.createElement('div'); h.className = 'twhint small muted'; h.textContent = 'Tap any Bisaya word to see what it means.'; const c = f.querySelector('#cont'); if (c) c.before(h); }
+  const app = $('#app'), f = $('#foot'); if (!app) return;
+  app.querySelectorAll('.tile').forEach(t => { if (t.classList.contains('look')) return; t.onclick = e => { e.stopPropagation(); wordSheet(t.textContent.trim().replace(/[.,!?…"“”]/g, '')); }; t.classList.add('look'); });
+  app.querySelectorAll('.blank[data-ans]').forEach(b => { b.textContent = b.dataset.ans; b.classList.add('tw'); b.dataset.tok = b.dataset.ans; });
+  // answer choices: Bisaya ones (marked, or that read as Bisaya) stay tappable once the question is answered
+  app.querySelectorAll('.opt, [data-o], [data-w]').forEach(b => { if (!b.disabled && !b.classList.contains('right') && !b.classList.contains('cebopt')) return;
+    if (b.classList.contains('done') || (b.classList.contains('opt') && !b.classList.contains('cebopt') && !b.dataset.o && !b.dataset.w) || !looksBisaya([...b.childNodes].filter(n => !(n.classList && n.classList.contains('otr'))).map(n => n.textContent).join(' '))) return;
+    b.disabled = false; b.onclick = null; b.classList.add('done'); twWrap(b); });
+  app.querySelectorAll('.opt .otr').forEach(el => { const b = el.closest('.opt'); if (!el.querySelector('.tw') && looksBisaya(el.textContent)) { if (b) { b.disabled = false; b.onclick = null; b.classList.add('done'); } twWrap(el); } });
+  app.querySelectorAll('.ceb, .chat .msg > div[style*="font-weight:700"]').forEach(el => { if (!el.closest('#wsheet') && !el.querySelector('.tw')) twWrap(el); });
+  if (f) f.querySelectorAll('.ans > span:not(.muted), .ans > b').forEach(el => { if (!el.querySelector('.tw') && looksBisaya(el.textContent)) twWrap(el); });
+  if (f && app.querySelector('.tw, .tile.look') && !f.querySelector('.twhint')) { const h = document.createElement('div'); h.className = 'twhint small muted'; h.textContent = 'Tap any Bisaya word to see what it means.'; const c = f.querySelector('#cont, #nx, button.btn.primary'); if (c) c.before(h); else f.appendChild(h); }
 }
+// every kind of question (lessons, practice, stories, songs, rush, numbers, rules): once it's answered, its Bisaya words open their word page
+let twTimer = 0;
+new MutationObserver(ms => { if (ms.some(m => m.target.classList && (m.target.classList.contains('right') || m.target.classList.contains('wrong') || (m.target.id === 'foot' && /good|bad/.test(m.target.className))))) { clearTimeout(twTimer); twTimer = setTimeout(tappableWords, 30); } })
+  .observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
 document.addEventListener('keydown', e => { const t = e.target.closest && e.target.closest('.tw[data-tok]'); if (t && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); wordSheet(t.dataset.tok); } }, true);
 /* ---------- answer choices that can't be guessed by elimination ----------
    Wrong answers come from the same topic, share words or shape with the answer, and include
