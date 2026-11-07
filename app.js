@@ -562,7 +562,7 @@ function card0(id) {
   const k = id[0], n = +id.slice(1);
   if (HIDE.has(id)) return null;
   if (k === 's') { const sp = typeof SENSE_LIST !== 'undefined' && SENSE_LIST[n], src = sp && card(sp[0]); if (!src || !SENSES[sp[0]] || !SENSES[sp[0]][sp[1]]) return null;
-    const me = SENSES[sp[0]][sp[1]]; return { id, kind: src.kind === 'p' ? 'p' : 'w', ceb: src.ceb, en: me.en, note: senseNote(sp[0], sp[1]), baseNote: '', also: src.also, audio: false, sense: [sp[0], sp[1]] }; }
+    const me = SENSES[sp[0]][sp[1]]; return { id, kind: src.kind === 'p' ? 'p' : 'w', ceb: src.ceb, en: me.en, note: senseNote(sp[0], sp[1]), baseNote: '', also: src.also, audio: !!src.audio, rec: sp[0], sense: [sp[0], sp[1]] }; }   // same word as its source card, so its recording fits
   if (k === 'v') { const v = VARIANTS[n], src = v && card0(v[0]); return v && src && { id, kind: 'p', ceb: v[1], en: v[2] || (SPLIT[v[0]] && SPLIT[v[0]].en) || src.en, note: v[3], also: v[4], audio: false, alt: v[0] }; }
   if (k === 'r') { const r = RULES[n]; return r && { id, kind: 'r', ceb: r.title, en: r.short, audio: false, rule: r }; }
   if (k === 'p') return P[n] && { id, kind: 'p', ceb: CEB_FIX[id] || P[n][0], en: EN_FIX[id] || P[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
@@ -759,7 +759,7 @@ function prereqPlan(c, known, budget, depth, taken) {
 let TWINS = null;
 const twinKey = c => norm(firstAlt(c.ceb)) + '|' + norm(firstAlt(c.en));
 function twinTaken(id, also) {
-  if (!/^[pwmev]/.test(id)) return false;
+  if (!/^[pwmevs]/.test(id)) return false;
   if (!TWINS) { TWINS = new Map(); PATH.forEach(st => st.ids.forEach(x => { const c = card(x); if (c) { const k = twinKey(c); if (!TWINS.has(k)) TWINS.set(k, []); TWINS.get(k).push(x); } })); }
   const c = card(id); return !!c && (TWINS.get(twinKey(c)) || []).some(x => x !== id && (S.cards[x] || (also && also.includes(x))));
 }
@@ -901,7 +901,7 @@ function nativeUrl(s) {
 function clipUrl(id) {
   if (urls[id]) return urls[id];
   // a card split into one way of saying it can't use a recording that says both ways (audio is off for those)
-  const c = card(id), buf = SPR[id[0]], ix = !RECORDING_OFF.has(id) && c && c.audio && IDX[id]; if (!buf || !ix) return c ? voiceUrl(c.ceb) : null;
+  const c = card(id), rid = (c && c.rec) || id, buf = SPR[rid[0]], ix = !RECORDING_OFF.has(rid) && c && c.audio && IDX[rid]; if (!buf || !ix) return c ? voiceUrl(c.ceb) : null;
   return (urls[id] = URL.createObjectURL(new Blob([buf.slice(ix[0], ix[0] + ix[1])], { type: 'audio/mpeg' })));
 }
 async function playUrl(u, rate, btn) {

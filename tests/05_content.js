@@ -4,7 +4,7 @@ const { open, ready, Report } = require('./lib');
 (async () => {
   const R = new Report('content'); const { page, log, close } = await open(); await ready(page);
   const x = await page.evaluate(() => {
-    const allIds = [...P.map((_, i) => 'p' + i), ...W.map((_, i) => 'w' + i), ...MEGA.map((_, i) => 'm' + i), ...EXTRA.map((_, i) => 'e' + i), ...G.map((_, i) => 'g' + i), ...F.map((_, i) => 'f' + i), ...D_ORDER, ...RULES.map((_, i) => 'r' + i), ...VARIANTS.map((_, i) => 'v' + i)];
+    const allIds = [...P.map((_, i) => 'p' + i), ...W.map((_, i) => 'w' + i), ...MEGA.map((_, i) => 'm' + i), ...EXTRA.map((_, i) => 'e' + i), ...G.map((_, i) => 'g' + i), ...F.map((_, i) => 'f' + i), ...D_ORDER, ...RULES.map((_, i) => 'r' + i), ...VARIANTS.map((_, i) => 'v' + i), ...(typeof SENSE_LIST !== 'undefined' ? SENSE_LIST.map((_, i) => 's' + i) : [])];
     const cards = allIds.map(id => [id, card(id)]).filter(x => x[1]), out = { total: allIds.length, live: cards.length };
     const bad = s => s == null || !String(s).trim() || /undefined|null|NaN|\[object/.test(String(s));
     out.blank = cards.filter(([, c]) => bad(c.ceb) || bad(c.en)).map(([id, c]) => [id, c.ceb, c.en]);
