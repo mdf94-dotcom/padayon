@@ -1770,7 +1770,7 @@ function wirePlay(c, rate) { $('#pl').onclick = e => play(c.id, rate, e.currentT
 function diffNote(right, picked) {
   const a = tokens(firstAlt(right)).map(t => t.replace(/[.,!?…]/g, '')), b = tokens(firstAlt(picked)).map(t => t.replace(/[.,!?…]/g, ''));
   const la = a.map(lowTok), lb = b.map(lowTok);
-  if (la.length === lb.length && la.join(' ') !== lb.join(' ') && [...la].sort().join(' ') === [...lb].sort().join(' ')) return 'Same words, different order. Little words like ko, ka and ta ride right behind the first word.';
+  if (la.length === lb.length && la.join(' ') !== lb.join(' ') && [...la].sort().join(' ') === [...lb].sort().join(' ')) return 'Same words, different order. Little words like ko, ka and ta ride right after the first word.';
   const shared = la.filter(t => lb.includes(t)).length; if (shared < Math.max(1, Math.ceil(Math.max(la.length, lb.length) / 2))) return '';
   if (la.length !== lb.length) { const extra = lb.filter(t => !la.includes(t)), miss = la.filter(t => !lb.includes(t)); const g = t => glossOf(t) ? ` (${esc(glossOf(t))})` : '';
     return [miss.length ? 'Missing: ' + miss.map(t => `<b>${esc(t)}</b>${g(t)}`).join(', ') : '', extra.length ? 'Extra: ' + extra.map(t => `<b>${esc(t)}</b>${g(t)}`).join(', ') : ''].filter(Boolean).join('. '); }

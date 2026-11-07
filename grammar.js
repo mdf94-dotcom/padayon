@@ -29,13 +29,13 @@ const RULES = [
       { q: '"I\'m eating right now"', a: ['Nagkaon ko', 'Nikaon ko', 'Mokaon ko'], why: 'nag- = in the middle of it.', w: ['kaon', 'ko'] },
       { q: '"Niadto ko" means…', a: ['I went', 'I will go', "I'm going"], why: 'ni- + adto (go) = went.', w: ['adto', 'ko'] },
       { q: '"Moinom ko" means…', a: ['I will drink', 'I drank', "I'm drinking"], why: 'mo- + inom (drink) = will drink.', w: ['inom', 'ko'] }] },
-  { id: 'ko', title: 'Ko, ka, ta never go first', short: 'Ko, ka, ta, mi and mo always ride right behind the first word.',
+  { id: 'ko', title: 'Ko, ka, ta never go first', short: 'Ko, ka, ta, mi and mo always ride right after the first word.',
     steps: [
       ['Ko (I), ka (you) and ta (we) are short, light words. They can\'t start a sentence, so they always sit right after the first word.', [['Gutom ko', "I'm hungry", 'ko is second'], ['Asa ka?', 'Where are you?', 'asa (where) first, ka second']]],
       ['Even when the sentence is longer, ko still jumps in right after the first word. The rest comes after it.', [['Ganahan ko mokaon', 'I like to eat', 'ganahan first, then ko, then the action'], ['Asa ka moadto?', 'Where are you going?', 'asa, then ka, then the action']]],
       ['To put "I" first, or to answer with just "me", use the long word ako. Ikaw is the long "you".', [['Ako', 'Me', 'can stand alone'], ['Ikaw?', 'You?', 'can stand alone']]]],
     quiz: [
-      { q: '"Where are you?"', a: ['Asa ka?', 'Ka asa?', 'Asa ikaw ka?'], why: 'Asa goes first, ka right behind it.', w: ['asa', 'ka'] },
+      { q: '"Where are you?"', a: ['Asa ka?', 'Ka asa?', 'Asa ikaw ka?'], why: 'Asa goes first, ka right after it.', w: ['asa', 'ka'] },
       { q: '"I like to eat"', a: ['Ganahan ko mokaon', 'Ganahan mokaon ko', 'Ko ganahan mokaon'], why: 'Ko sits right after the first word (ganahan), before the action.', w: ['ganahan', 'ko', 'kaon'] },
       { q: '"Where are you going?"', a: ['Asa ka moadto?', 'Asa moadto ka?', 'Ka asa moadto?'], why: 'Ka comes right after asa, then the action.', w: ['asa', 'ka', 'adto'] },
       { q: 'Someone asks "Kinsa?" (Who?). Answer "Me!"', a: ['Ako!', 'Ko!', 'Ka!'], why: 'Ko can\'t stand alone. The long form ako can.', w: ['ako', 'ko', 'kinsa'] },
