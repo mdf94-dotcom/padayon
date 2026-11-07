@@ -31,7 +31,7 @@ const RULES = [
       { q: '"Moinom ko" means…', a: ['I will drink', 'I drank', "I'm drinking"], why: 'mo- + inom (drink) = will drink.', w: ['inom', 'ko'] }] },
   { id: 'ko', title: 'Ko, ka, ta never go first', short: 'Ko, ka, ta, mi and mo always ride right behind the first word.',
     steps: [
-      ['Ko (I), ka (you) and ta (we) are short, light words. They can\'t start a sentence, so they always sit right behind the first word.', [['Gutom ko', "I'm hungry", 'ko is second'], ['Asa ka?', 'Where are you?', 'asa (where) first, ka second']]],
+      ['Ko (I), ka (you) and ta (we) are short, light words. They can\'t start a sentence, so they always sit right after the first word.', [['Gutom ko', "I'm hungry", 'ko is second'], ['Asa ka?', 'Where are you?', 'asa (where) first, ka second']]],
       ['Even when the sentence is longer, ko still jumps in right after the first word. The rest comes after it.', [['Ganahan ko mokaon', 'I like to eat', 'ganahan first, then ko, then the action'], ['Asa ka moadto?', 'Where are you going?', 'asa, then ka, then the action']]],
       ['To put "I" first, or to answer with just "me", use the long word ako. Ikaw is the long "you".', [['Ako', 'Me', 'can stand alone'], ['Ikaw?', 'You?', 'can stand alone']]]],
     quiz: [
@@ -42,11 +42,11 @@ const RULES = [
       { q: '"Are you hungry?"', a: ['Gutom ka?', 'Ka gutom?', 'Gutom ikaw ka?'], why: 'Gutom first, ka second.', w: ['gutom', 'ka'] }] },
   { id: 'neg', title: 'Dili, wala, ayaw: three ways to say no', short: "Dili = won't / not. Wala = didn't / don't have. Ayaw = don't! Ko comes right after them.",
     steps: [
-      ['Dili (people often say just di) means not or won\'t. Put it first, and ko slides right behind it.', [['Dili ko mokaon', "I won't eat", 'dili, then ko, then the action'], ['Di ko gutom', "I'm not hungry", 'di = dili']]],
+      ['Dili (people often say just di) means not or won\'t. Put it first, and ko slides in right after it.', [['Dili ko mokaon', "I won't eat", 'dili, then ko, then the action'], ['Di ko gutom', "I'm not hungry", 'di = dili']]],
       ['Wala (or wa) means didn\'t, or there isn\'t any. After wala, the action keeps its mo- front.', [['Wala ko mokaon', "I didn't eat", 'wala + mo- action'], ['Wala', "There isn't any / No", 'on its own']]],
       ['Ayaw means "Don\'t!" when you tell someone not to do something.', [['Ayaw!', "Don't!", 'telling someone']]]],
     quiz: [
-      { q: '"I won\'t eat"', a: ['Dili ko mokaon', 'Dili mokaon ko', 'Ko dili mokaon'], why: 'Dili first, ko right behind it, then the action.', w: ['dili', 'ko', 'kaon'] },
+      { q: '"I won\'t eat"', a: ['Dili ko mokaon', 'Dili mokaon ko', 'Ko dili mokaon'], why: 'Dili first, ko right after it, then the action.', w: ['dili', 'ko', 'kaon'] },
       { q: '"I didn\'t eat"', a: ['Wala ko mokaon', 'Dili ko mokaon', 'Wala mokaon ko'], why: 'Didn\'t = wala, and ko goes right after it.', w: ['wala', 'ko', 'kaon'] },
       { q: '"I\'m not hungry"', a: ['Dili ko gutom', 'Wala ko gutom', 'Gutom dili ko'], why: 'Not (how you are) = dili.', w: ['dili', 'ko', 'gutom'] },
       { q: 'Tell a kid "Don\'t!"', a: ['Ayaw!', 'Dili!', 'Wala!'], why: 'Ayaw is for telling someone not to.', w: ['ayaw'] },
@@ -62,14 +62,14 @@ const RULES = [
       { q: '"Gutom pa ko" means…', a: ["I'm still hungry", "I'm hungry now", "I'm not hungry anymore"], why: 'Pa = still.', w: ['gutom', 'pa', 'ko'] }] },
   { id: 'want', title: 'Want, like, need + an action', short: 'Gusto / ganahan / kinahanglan, then ko, then the mo- action.',
     steps: [
-      ['Gusto = want, ganahan = like, kinahanglan = need. Put one first, then ko right behind it (the "never first" rule), then the action with mo-.', [['Gusto ko mokaon', 'I want to eat', 'gusto, ko, mo-action'], ['Ganahan ka moinom?', 'Do you like to drink?', 'ganahan, ka, mo-action']]]],
+      ['Gusto = want, ganahan = like, kinahanglan = need. Put one first, then ko right after it (the "never first" rule), then the action with mo-.', [['Gusto ko mokaon', 'I want to eat', 'gusto, ko, mo-action'], ['Ganahan ka moinom?', 'Do you like to drink?', 'ganahan, ka, mo-action']]]],
     quiz: [
       { q: '"I want to eat"', a: ['Gusto ko mokaon', 'Gusto mokaon ko', 'Ko gusto mokaon'], why: 'Gusto, then ko, then the action.', w: ['gusto', 'ko', 'kaon'] },
       { q: '"Ganahan ka mokaon?" means…', a: ['Do you like to eat?', 'Did you eat?', "You're eating"], why: 'Ganahan = like, mo- = (to) eat.', w: ['ganahan', 'ka', 'kaon'] },
       { q: '"I need to go home"', a: ['Kinahanglan ko mopauli', 'Kinahanglan ko nipauli', 'Kinahanglan mopauli ko'], why: 'After kinahanglan, ko comes next and the action keeps mo-.', w: ['kinahanglan', 'ko', 'pauli'] }] },
   { id: 'ask', title: 'Asking questions', short: 'The question word goes first, then ka. For yes / no, add ba.',
     steps: [
-      ['Put the question word at the front: asa = where, unsa = what, kinsa = who. Then ka right behind it.', [['Asa ka?', 'Where are you?', 'asa first'], ['Unsa ni?', 'What is this?', 'unsa first']]],
+      ['Put the question word at the front: asa = where, unsa = what, kinsa = who. Then ka right after it.', [['Asa ka?', 'Where are you?', 'asa first'], ['Unsa ni?', 'What is this?', 'unsa first']]],
       ['For a yes / no question, just raise your voice at the end, or add ba after ka.', [['Gutom ka ba?', 'Are you hungry?', 'ba makes it a yes / no question']]]],
     quiz: [
       { q: '"What is this?"', a: ['Unsa ni?', 'Ni unsa?', 'Unsa ka?'], why: 'Unsa (what) first, ni (this) after.', w: ['unsa', 'ni'] },
