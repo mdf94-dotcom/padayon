@@ -132,7 +132,7 @@ function wireRecorder(text, c) {
 
 /* 4. tell me about you: questions about your life, a model answer to compare with after */
 const ABOUT = [
-  ['Unsa imong ngalan?', "What's your name?", 'Ako si Mykha.', "I'm Mykha."],
+  ['Unsa imong ngalan?', "What's your name?", 'Ako si Ana.', "I'm Ana."],
   ['Asa ka nagpuyo?', 'Where do you live?', 'Nagpuyo ko sa Virginia.', 'I live in Virginia.'],
   ['Taga-asa ka?', 'Where are you from?', 'Taga-Maryland ko.', "I'm from Maryland."],
   ['Pila na imong edad?', 'How old are you now?', 'Baynte singko na ko.', "I'm 25 now."],
