@@ -10,3 +10,5 @@ They need Playwright with Chromium. Everything runs against a local copy with a 
 - 06_sync: streaks, time zones, two devices, leaderboard, announcements, old saved data
 - 07_pwa: offline and service worker updates
 - 08_perf: start time, session build, hot helpers
+- 11_newq: the newer kinds of questions (reply, hear the difference, fill the gap, picture, Tell me about you, Retell it faster, Record and compare)
+- 12_games: plays Padayon Rush, Province Rush and Language Rush all the way through (picking and typing), map practice, Numbers, Conversations, every Story and Real Bisaya
