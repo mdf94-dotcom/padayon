@@ -12,15 +12,12 @@ function journeySnap() {
     if (!S.hist[t] || S.hist[t].w !== h.w || S.hist[t].r !== h.r) S.hist[t] = h; } catch (e) { }
 }
 
+let JMAP_JUMP = 0;
+// Me → Then and now (the word web lives on Today, the path map on Practice)
 VIEWS.journey = function () {
   journeySnap();
-  const tabs = [['map', '🗺️ Path map'], ['web', '🕸️ Word web'], ['then', '🌱 Then and now']];
-  shell('me', `<div class="ptitle"><button class="linkbtn" id="jback">‹ Me</button><h1>My journey</h1><p class="muted">How far your Bisaya has come.</p></div>
-    <div class="seg jtabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" aria-selected="${k === JTAB}" class="${k === JTAB ? 'on' : ''}" data-j="${k}">${l}</button>`).join('')}</div>
-    <div id="jbody">${JTAB === 'web' ? webHtml() : JTAB === 'then' ? thenHtml() : mapHtml()}</div>`);
+  shell('me', `<div class="ptitle"><button class="linkbtn" id="jback">‹ Me</button><h1>Then and now</h1><p class="muted">How far your Bisaya has come.</p></div><div id="jbody">${thenHtml()}</div>`);
   $('#jback').onclick = () => go('me');
-  document.querySelectorAll('[data-j]').forEach(b => b.onclick = () => { JTAB = b.dataset.j; try { localStorage.setItem('padayon-jtab', JTAB); } catch (e) { } render(); });
-  if (JTAB === 'map') wireMap(); else if (JTAB === 'web') wireWeb(); else wireThen();
 };
 
 /* ---------- 1. path map ---------- */
@@ -32,35 +29,37 @@ function mapHtml() {
   let d = `M ${pts[0][0]} 20 L ${pts[0][0]} ${pts[0][1]}`;
   for (let i = 1; i < n; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]; d += ` C ${x0} ${y0 + 95}, ${x1} ${y1 - 95}, ${x1} ${y1}`; }
   d += ` L ${pts[n - 1][0]} ${H - 20}`;
+  // what each stop holds: its Binko stories (tier = stage) and, on the first two stops, the grammar rules
+  const sto = (typeof STORIES !== 'undefined' ? STORIES : []).map(x => ({ x, open: !storyMissing(x).length }));
+  const stg = x => Math.min(n - 1, Math.max(0, (x.tier || 1) - 1)), half = Math.ceil(RULES.length / 2);
   const stops = PATH.map((st, i) => { const y = stats[i], [x, yy] = pts[i], state = i < cur ? 'done' : i === cur ? 'now' : 'later', side = i % 2 ? 'left' : 'right';
-    const pct = Math.round(y.frac * 100);
-    return `<g class="jstop ${state}" transform="translate(${x} ${yy})"><circle r="34" class="jisle"></circle><circle r="34" class="jring" style="stroke-dasharray:${(2 * Math.PI * 34 * y.frac).toFixed(1)} 999"></circle>
-      <text class="jart" text-anchor="middle" dy="10">${STAGE_ART[i] || '⭐'}</text></g>
-      <foreignObject x="${side === 'right' ? x + 44 : x - 214}" y="${yy - 40}" width="170" height="90"><div xmlns="http://www.w3.org/1999/xhtml" class="jlabel ${side} ${state}">
-        <b>${i + 1}. ${esc(st.ceb || st.name)}</b><span>${esc(st.name)} · ${esc(st.level || '')}</span>
-        <span class="tnum">${i < cur ? '✓ done' : `${pct}% learned`}${i >= cur && tl[i] ? ' · ' + dateIn(tl[i]) : ''}</span></div></foreignObject>`; }).join('');
-  // landmarks: stories (🔓 open / 🔒 not yet) beside the stage they belong to, grammar rules along the first two stages
-  const sto = (typeof STORIES !== 'undefined' ? STORIES : []).map((s, i) => ({ s, i, open: !storyMissing(s).length }));
-  const stg = s => Math.min(n - 1, Math.max(0, (s.tier || 1) - 1));
-  const marks = [];
-  sto.forEach((x, k) => { const i = stg(x.s), [px, py] = pts[i], same = sto.filter(y => stg(y.s) === i), j = same.indexOf(x);
-    marks.push(`<text class="jmark ${x.open ? 'on' : ''}" x="${px - (same.length - 1) * 11 + j * 22}" y="${py + 64}" text-anchor="middle"><title>${esc(x.s.title)}${x.open ? ' (open)' : ' (not yet)'}</title>${x.open ? x.s.emoji : '🔒'}</text>`); });
-  RULES.forEach((r, k) => { const i = Math.min(1, Math.floor(k / Math.ceil(RULES.length / 2))), [px, py] = pts[i], on = ruleLearned(r.id), j = k % Math.ceil(RULES.length / 2);
-    marks.push(`<text class="jmark rule ${on ? 'on' : ''}" x="${px + (i % 2 ? 1 : -1) * (48 + (j % 3) * 18)}" y="${py - 40 + Math.floor(j / 3) * 22}" text-anchor="middle"><title>Rule ${r.n}: ${esc(r.title)}${on ? ' (learned)' : ''}</title>📘</text>`); });
-  const openN = sto.filter(x => x.open).length, rulesN = RULES.filter(r => ruleLearned(r.id)).length;
-  return `<section class="panel"><div class="row spread"><h2>Your road</h2><span class="muted small">Stage ${cur + 1} of ${n}</span></div>
+    const pct = Math.round(y.frac * 100), ss = sto.filter(z => stg(z.x) === i), so = ss.filter(z => z.open).length;
+    const rs = i < 2 ? RULES.slice(i * half, (i + 1) * half) : [], ro = rs.filter(r => ruleLearned(r.id)).length;
+    // you are here: Binko himself stands on the stop you're working on, inside its ring
+    const art = state === 'now' ? `<circle r="29" class="jhere"></circle><image href="icon-192.png?v=full" x="-29" y="-29" width="58" height="58" clip-path="url(#jclip)" preserveAspectRatio="xMidYMid slice"></image>`
+      : `<text class="jart" text-anchor="middle" dy="10">${state === 'done' ? '✅' : STAGE_ART[i] || '⭐'}</text>`;
+    return `<g class="jstop ${state}" transform="translate(${x} ${yy})">${state === 'now' ? '<circle r="44" class="jpulse"></circle>' : ''}<circle r="34" class="jisle"></circle><circle r="34" class="jring" style="stroke-dasharray:${(2 * Math.PI * 34 * y.frac).toFixed(1)} 999"></circle>${art}</g>
+      <foreignObject x="${side === 'right' ? x + 46 : x - 216}" y="${yy - 46}" width="170" height="104"><div xmlns="http://www.w3.org/1999/xhtml" class="jlabel ${side} ${state}">
+        ${state === 'now' ? '<em>You are here</em>' : ''}<b>${i + 1}. ${esc(st.ceb || st.name)}</b><span>${esc(st.name)} · ${esc(st.level || '')}</span>
+        <span class="tnum">${i < cur ? 'Done' : `${pct}% learned`}${i >= cur && tl[i] ? ' · ' + dateIn(tl[i]) : ''}</span>
+        <span class="tnum">${ss.length ? `📖 ${so} of ${ss.length} stories` : ''}${rs.length ? `${ss.length ? ' · ' : ''}📘 ${ro} of ${rs.length} rules` : ''}</span></div></foreignObject>`; }).join('');
+  const openN = sto.filter(z => z.open).length, rulesN = RULES.filter(r => ruleLearned(r.id)).length;
+  return `<section class="panel" id="jmapsec"><div class="row spread"><h2>Your road</h2><span class="muted small">Stage ${cur + 1} of ${n}</span></div>
     ${binkoSays(`You're on stop ${cur + 1}, <b>${esc(PATH[cur].name)}</b>. ${esc(PATH[cur].can || '')}`)}
     <div class="jmapwrap"><svg class="jmap" viewBox="0 0 360 ${H}" role="img" aria-label="Your learning path: stage ${cur + 1} of ${n}">
-      <path d="${d}" class="jroad"></path><path d="${d}" class="jroad-done" id="jdone"></path>${marks.join('')}${stops}
-      <g id="jbinko" class="jbinko"><circle r="17"></circle><image href="icon-192.png?v=full" x="-15" y="-15" width="30" height="30"></image></g></svg></div>
-    <div class="jlegend small muted"><span>📘 grammar rule learned (${rulesN} of ${RULES.length})</span><span>🔒 story not open yet, picture = open (${openN} of ${sto.length})</span><span>Faded 📘 = rule still to come</span><span>The ring fills as you learn each stage</span></div></section>`;
+      <defs><clipPath id="jclip"><circle r="27"></circle></clipPath></defs>
+      <path d="${d}" class="jroad"></path><path d="${d}" class="jroad-done" id="jdone"></path>${stops}</svg></div>
+    <div class="jlegend small muted"><span>The ring around each stop fills as you learn it</span><span>📖 ${openN} of ${sto.length} Binko stories open</span><span>📘 ${rulesN} of ${RULES.length} grammar rules learned</span></div></section>`;
 }
 function wireMap() {
-  const { stats, cur } = pathState(), road = $('#jdone'), b = $('#jbinko'); if (!road || !b) return;
-  // Binko stands as far along the road as you are: past the finished stops, part way to the next one
+  const { stats, cur } = pathState(), road = $('#jdone'); if (!road) return;
+  // the road is filled up to your stop, plus part of the way to the next one as you learn this stage
   const L = road.getTotalLength(), n = PATH.length, seg = L / (n + 0.4), at = Math.min(L, seg * (0.2 + cur + Math.min(1, stats[cur].frac / PATH_GATE) * 0.98));
-  road.style.strokeDasharray = `${at} ${L}`; const p = road.getPointAtLength(at); b.setAttribute('transform', `translate(${p.x} ${p.y})`);
-  setTimeout(() => { const s = document.querySelector('.jstop.now'); if (s && s.scrollIntoView) s.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 60);
+  road.style.strokeDasharray = `${at} ${L}`;
+  const w = $('.jmapwrap'), now = document.querySelector('.jstop.now');
+  // inside the map box, start with your stop in view (the page itself doesn't move)
+  if (w && now) { const r = now.getBoundingClientRect(), wr = w.getBoundingClientRect(); w.scrollTop += r.top - wr.top - wr.height / 2 + r.height / 2; }
+  if (JMAP_JUMP) { JMAP_JUMP = 0; setTimeout(() => { const m = $('#jmapsec'); if (m) m.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60); }
 }
 
 /* ---------- 2. word web ---------- */
@@ -115,6 +114,7 @@ function wireWeb() {
   document.querySelectorAll('[data-wf]').forEach(b => b.onclick = () => { WEB_FILTER = b.dataset.wf; render(); });
   const wrap = $('#jwebwrap'); if (!wrap) return;
   setTimeout(() => {
+    if (!wrap.isConnected) return;   // the page was redrawn meanwhile; the new copy draws its own web
     const all = webData(); let keep = null;
     if (WEB_FILTER !== 'all') { const linked = new Set(); all.links.filter(l => l.k === WEB_FILTER).forEach(l => { linked.add(l.a); linked.add(l.b); }); keep = linked; }
     const idx = all.nodes.map((_, i) => i).filter(i => !keep || keep.has(i)), remap = new Map(idx.map((i, k) => [i, k]));
@@ -129,10 +129,10 @@ function wireWeb() {
       ${data.links.map(l => `<line x1="${P[l.a].x.toFixed(1)}" y1="${P[l.a].y.toFixed(1)}" x2="${P[l.b].x.toFixed(1)}" y2="${P[l.b].y.toFixed(1)}" class="jl ${l.k}"></line>`).join('')}
       ${data.nodes.map((x, i) => `<g class="jn ${x.known ? '' : 'ghost'}" data-tok="${esc(x.w)}" transform="translate(${P[i].x.toFixed(1)} ${P[i].y.toFixed(1)})" role="button" tabindex="0"><title>${esc(x.label)} · ${esc(x.en)}${x.known ? '' : ' (not learned yet)'}</title><circle r="${x.known ? 8 : 6}" style="fill:${shade(x.b)}"></circle><text y="-12" text-anchor="middle">${esc(x.label)}</text></g>`).join('')}</svg>`;
     wrap.querySelectorAll('.jn').forEach(g => { g.onclick = () => wordSheet(g.dataset.tok); g.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); wordSheet(g.dataset.tok); } }; });
-    const zoom = f => { const s = $('#jweb'); if (!s) return; const [x, y, w, h] = WEB.box, nw = w / f, nh = h / f; WEB.box = [x + (w - nw) / 2, y + (h - nh) / 2, nw, nh]; s.setAttribute('viewBox', WEB.box.join(' ')); };
+    const zoom = f => { const s = wrap.querySelector('#jweb'); if (!s) return; const [x, y, w, h] = WEB.box, nw = w / f, nh = h / f; WEB.box = [x + (w - nw) / 2, y + (h - nh) / 2, nw, nh]; s.setAttribute('viewBox', WEB.box.join(' ')); };
     $('#jzin').onclick = () => zoom(1.4); $('#jzout').onclick = () => zoom(1 / 1.4);
     // drag to move around when zoomed in
-    const s = $('#jweb'); let drag = null;
+    const s = wrap.querySelector('#jweb'); if (!s) return; let drag = null;
     s.addEventListener('pointerdown', e => { if (e.target.closest('.jn')) return; drag = { x: e.clientX, y: e.clientY, box: WEB.box.slice() }; s.setPointerCapture(e.pointerId); });
     s.addEventListener('pointermove', e => { if (!drag) return; const k = WEB.box[2] / s.clientWidth; WEB.box = [drag.box[0] - (e.clientX - drag.x) * k, drag.box[1] - (e.clientY - drag.y) * k, drag.box[2], drag.box[3]]; s.setAttribute('viewBox', WEB.box.join(' ')); });
     s.addEventListener('pointerup', () => drag = null); s.addEventListener('pointercancel', () => drag = null);
