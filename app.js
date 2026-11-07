@@ -2204,7 +2204,8 @@ function ruleChoice(c, item, opts, rightId, shown, extra) {
     let why = '';
     if (!ok) { const p = opts[sel], pr = RULE[p.id];
       why = pr ? `You picked <b>${esc(pr.title)}</b>. That rule is about: ${esc(pr.short)}<br>` : `You picked <b>${esc(p.t)}</b>.${diffNote(shown.ceb, p.t) ? ' ' + diffNote(shown.ceb, p.t) + '.' : ''}<br>`; }
-    result({ id: c.id, kind: 'r', ceb: shown.ceb, en: shown.en, audio: false }, item, ok, why + extra);
+    // keep the card's own kind: a missed word comes back as a word question, not as a grammar-rule question (which would crash)
+    result({ id: c.id, kind: c.kind || 'r', ceb: shown.ceb, en: shown.en, audio: false }, item, ok, why + extra);
   };
 }
 // a rule step's examples, keeping only sentences made of words you've met (plus the rule's own little words)
