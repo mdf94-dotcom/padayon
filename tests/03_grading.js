@@ -65,6 +65,12 @@ const { open, ready, serve, chromium, Report } = require('./lib');
     Q = [{ id, type: 'mixq', mx: m, q: Object.assign(mixQuestion(MIXUPS[m], 0), { kind: 'fill', sent: MIXUPS[m].fill[0][0], ans: MIXUPS[m].fill[0][1], right: MIXUPS[m].fill[0][0].replace('___', MIXUPS[m].fill[0][1]), en: MIXUPS[m].fill[0][3], wopts: MIXUPS[m].fill[0][2], opts: MIXUPS[m].fill[0][2], mode: 'pick' }) }, { id: 'g0', type: 'teach' }]; qi = 0; sess = newSess('daily'); view = 'session'; VIEWS.session();
     out.before = document.querySelectorAll('.tw').length; document.querySelector('#ex .opt').click(); document.querySelector('#chk').click();
     out.after = document.querySelectorAll('.tw').length; out.blank = (document.querySelector('.fillq .blank') || {}).textContent; document.querySelector('#foot .tw').click(); out.sheet = !!document.querySelector('#wsheet'); const w = document.querySelector('#wsheet'); if (w) w.remove(); return out; });
+  // a word with several meanings: one card per meaning, each in the path, and another meaning of the same word is never a wrong choice
+  const sense = await page.evaluate(() => { const ids = SENSE_LIST.map((_, i) => 's' + i), pathIds = new Set(PATH.flatMap(s => s.ids)); let clash = 0;
+    ids.slice(0, 40).forEach(id => { const c = card(id); S.cards[id] = S.cards[id] || { b: 2, d: today() + 3, r: 2, w: 0 }; S.cards[c.sense[0]] = S.cards[c.sense[0]] || { b: 2, d: today() + 3, r: 2, w: 0 }; });
+    ids.slice(0, 40).forEach(id => { const c = card(id), w = norm(firstAlt(c.ceb)); [...distract(c, 3, 'en'), ...distract(c, 3, 'ceb')].forEach(d => { if (d.ceb && norm(firstAlt(d.ceb)) === w) clash++; }); });
+    return { n: ids.length, bad: ids.filter(id => { const c = card(id); return !c || !c.en || !c.note || !pathIds.has(id); }).length, clash, oneMeaning: ids.every(id => !/;/.test(card(id).en)) }; });
+  R.ok(sense.n > 50 && !sense.bad && !sense.clash, 'meaning cards ' + JSON.stringify(sense));
   // before answering, a tap on a Bisaya choice picks it (never opens a word page), even right after the last question
   const pickable = await page.evaluate(async () => { const ids = Object.keys(S.cards).filter(i => i[0] === 'w' && card(i)).slice(0, 3); Q = ids.map(id => ({ id, type: 'mc' })); qi = 0; sess = newSess('daily'); view = 'session'; VIEWS.session();
     document.querySelector('#ex .opt').click(); document.querySelector('#chk').click(); document.querySelector('#cont').click(); await new Promise(r => setTimeout(r, 120));

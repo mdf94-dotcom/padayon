@@ -483,6 +483,8 @@ function cardBuild(id) {
   const sp = SPLIT[id];
   if (!MIX_MEMO.has(id)) MIX_MEMO.set(id, mixupsFor(c)); c.mix = MIX_MEMO.get(id);
   if (GNOTES[id]) c.note = GNOTES[id];   // little and confusing words: what it is, what it isn't, two examples
+  // a word with several meanings: this card teaches the first one; the others are their own cards (s0, s1, ...)
+  if (typeof SENSES !== 'undefined') { const sid = SENSES[id] ? id : SENSE_SAME[id]; if (sid && SENSES[sid]) { c.en = SENSES[sid][0].en; c.baseNote = c.note || ''; c.sense = [sid, 0]; c.note = senseNote(sid, 0) + (c.note ? ' ' + c.note : ''); } }
   if (sp) { c.ceb = sp.p; if (sp.en) c.en = sp.en; c.also = sp.also; if (id[0] === 'p') c.audio = false;
     const others = (VAR_OF[id] || []).map(v => VARIANTS[+v.slice(1)][1]);
     c.note = [GNOTES[id] ? '' : sp.n, c.note].filter(Boolean).join(' ');
@@ -503,6 +505,10 @@ function mixupsFor(c) {
    once you know at least one other word from the group. */
 const mixWordIds = m => [...new Set((m.w || []).map(cardForTok).filter(Boolean))];
 const mixKnown = (m, but) => mixWordIds(m).filter(id => id !== but && S.cards[id] && !S.cards[id].fresh && (S.cards[id].b || 0) >= 1).length;
+// two meanings of the same word are never both new on the same day: the second waits until the first has been practiced
+function senseClash(id, also) { if (typeof SENSE_LIST === 'undefined') return false; const c = card(id); if (!c || !c.sense) return false; const src = c.sense[0];
+  if (id !== src && !S.cards[src]) return true;   // the main meaning comes first
+  return [src, ...(SENSE_OF[src] || [])].some(x => x !== id && (also.includes(x) || (S.cards[x] && S.cards[x].fresh))); }
 function mixClash(id, also) { const c = card(id); if (!c || !c.mix) return false;
   return c.mix.some(m => (m.w || []).length && mixWordIds(m).some(x => x !== id && (also.includes(x) || (S.cards[x] && S.cards[x].fresh)))); }
 function mixHtml(c, teaching) {
@@ -534,9 +540,29 @@ function mixItems(skip) {
     (c.mix || []).filter(m => !(m.w || []).length ? (k.b || 0) >= 1 : mixKnown(m) >= 2).forEach(m => { const i = MIXUPS.indexOf(m), sc = (k.w || 0) * 2 - (k.b || 0) + Math.random() * 2; if (!seenT.has(i) || seenT.get(i).sc < sc) seenT.set(i, { id, sc }); }); });
   return [...seenT.entries()].sort((a, b) => b[1].sc - a[1].sc).slice(0, 3).map(([i, x]) => ({ id: x.id, type: 'mixq', mx: i }));
 }
+// examples for each meaning (examples.js loads after fixes.js)
+if (typeof SENSES !== 'undefined' && typeof EXAMPLES !== 'undefined') { Object.keys(SENSES).forEach(id => { EXAMPLES[id] = SENSES[id][0].ex[0]; }); SENSE_LIST.forEach(([src, k], i) => { EXAMPLES['s' + i] = SENSES[src][k].ex[0]; }); }
+// the note on every meaning card: how to spot this meaning, the other meanings of the same word, and two examples
+function senseNote(src, k) {
+  const ss = SENSES[src], me = ss[k], w = firstAlt((SPLIT[src] && SPLIT[src].p) || (card0(src) || {}).ceb || '');
+  const others = ss.filter((_, j) => j !== k).map(x => x.en).join(' · ');
+  return `${me.tip ? me.tip + '. ' : ''}One word, ${ss.length} meanings: "${w}" also means ${others} (each has its own card). ${me.ex.map(e => e[0] + ' — ' + e[1]).join(' · ')}`.replace(/\.\. /g, '. ');
+}
+// the "one word, several meanings" panel: every meaning as a chip (this one highlighted), how to spot it, two examples
+function senseHtml(c) {
+  if (!c || !c.sense || typeof SENSES === 'undefined') return '';
+  const [src, k] = c.sense, ss = SENSES[src], me = ss[k], w = firstAlt(c.ceb);
+  return `<div class="panel sensep"><div class="label">One word, ${ss.length} meanings</div>
+    <div class="senses">${ss.map((x, j) => `<span class="${j === k ? 'on' : ''}">${j === k ? '👉 ' : ''}${esc(x.en)}</span>`).join('')}</div>
+    <div class="small muted" style="margin:6px 0 2px">This card is <b>${esc(w)} = ${esc(me.en)}</b>. The other meanings each have their own card.</div>
+    ${me.tip ? `<div><b>How to spot it:</b> ${esc(me.tip)}</div>` : ''}
+    <div class="sx">${me.ex.map(e => `<div class="sxr"><div><b>${esc(e[0])}</b><div class="small muted">${esc(e[1])}</div></div>${hasVoice(e[0]) ? `<button class="play sm" data-vs="${esc(e[0])}" aria-label="Play example">${I.play}</button>` : ''}</div>`).join('')}</div></div>`;
+}
 function card0(id) {
   const k = id[0], n = +id.slice(1);
   if (HIDE.has(id)) return null;
+  if (k === 's') { const sp = typeof SENSE_LIST !== 'undefined' && SENSE_LIST[n], src = sp && card(sp[0]); if (!src || !SENSES[sp[0]] || !SENSES[sp[0]][sp[1]]) return null;
+    const me = SENSES[sp[0]][sp[1]]; return { id, kind: src.kind === 'p' ? 'p' : 'w', ceb: src.ceb, en: me.en, note: senseNote(sp[0], sp[1]), baseNote: '', also: src.also, audio: false, sense: [sp[0], sp[1]] }; }
   if (k === 'v') { const v = VARIANTS[n], src = v && card0(v[0]); return v && src && { id, kind: 'p', ceb: v[1], en: v[2] || (SPLIT[v[0]] && SPLIT[v[0]].en) || src.en, note: v[3], also: v[4], audio: false, alt: v[0] }; }
   if (k === 'r') { const r = RULES[n]; return r && { id, kind: 'r', ceb: r.title, en: r.short, audio: false, rule: r }; }
   if (k === 'p') return P[n] && { id, kind: 'p', ceb: CEB_FIX[id] || P[n][0], en: EN_FIX[id] || P[n][1], note: NOTES[id], trick: TRICKS[id], audio: true };
@@ -616,7 +642,7 @@ function buildPath() {
   };
   PATH = STAGES.map(st => {
     const lists = [];
-    const add = (ids, front) => { ids = ids.flatMap(id => [id, ...(VAR_OF[id] || [])]).filter(id => !used.has(id)); ids.forEach(id => used.add(id)); if (ids.length) lists.push({ ids, front }); };
+    const add = (ids, front) => { ids = ids.flatMap(id => [id, ...(typeof SENSE_OF !== 'undefined' && SENSE_OF[id] || []), ...(VAR_OF[id] || [])]).filter(id => !used.has(id)); ids.forEach(id => used.add(id)); if (ids.length) lists.push({ ids, front }); };
     // [start, span] within the stage: building blocks and set phrases open it, frequency words start a little later,
     // conversation lines come once some of their words are in
     add(st.f.flatMap(i => (F_UNITS[i] || { ids: [] }).ids), [0, 0.6]);
@@ -632,7 +658,7 @@ function buildPath() {
     return Object.assign({}, st, { ids: keyed.map(x => x[1]) });
   });
   // anything not placed yet goes into the last stage, so nothing is ever left out
-  const rest = [...F_ORDER, ...GRAM_ORDER, ...D_ORDER, ...PHRASE_ORDER, ...E_ORDER, ...W.map((_, i) => 'w' + i), ...M_ORDER, ...VARIANTS.map((_, i) => 'v' + i)].filter(id => !used.has(id));
+  const rest = [...F_ORDER, ...GRAM_ORDER, ...D_ORDER, ...PHRASE_ORDER, ...E_ORDER, ...W.map((_, i) => 'w' + i), ...M_ORDER, ...VARIANTS.map((_, i) => 'v' + i), ...(typeof SENSE_LIST !== 'undefined' ? SENSE_LIST.map((_, i) => 's' + i) : [])].filter(id => !used.has(id));
   PATH[PATH.length - 1].ids.push(...rest);
 }
 buildPath();
@@ -743,7 +769,7 @@ function pickNew() {
   const learn = id => { out.push(id); left--; tokens(firstAlt(card(id).ceb)).forEach(t => known.add(lowTok(t))); };
   const ready = c => !needsExample(c) || !!exFor(c, known);
   const take = (order, max) => { let n = Math.min(max, left); const blocked = [];
-    for (const id of order) { if (n <= 0) break; if (S.cards[id] || out.includes(id) || twinTaken(id, out) || mixClash(id, out)) continue; const c = card(id); if (!c) continue;
+    for (const id of order) { if (n <= 0) break; if (S.cards[id] || out.includes(id) || twinTaken(id, out) || mixClash(id, out) || senseClash(id, out)) continue; const c = card(id); if (!c) continue;
       if (ready(c)) { learn(id); n--; } else if (blocked.length < 40) blocked.push(id); }
     // unblock: teach the few missing words an example needs (and theirs, two levels down), then the word itself
     for (const id of blocked) {
@@ -827,7 +853,7 @@ const stillWanted = (r, cx) => r === playReq && cx === audioCtx();
 /* ---------- computer voice: cards with no native recording ----------
    voice/ holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
-const VOICE_V = 15; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
+const VOICE_V = 16; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
 /* The computer voice comes in pieces: a small index, then one piece per stage. You only download the pieces for
    where you are on the path (plus the next one); the rest arrive when a sentence from them is first played. */
 async function loadVoice() {
@@ -1374,7 +1400,7 @@ const GUIDE_V = 4;
 const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
   { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
-  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🔁', 'Miss one? It comes back six questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
+  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🔀', 'A word with several meanings (like <b>naa</b>) gets one card per meaning, learned on different days'], ['🔁', 'Miss one? It comes back six questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['✅', '<b>Don\'t mix up</b> boxes: easy-to-confuse words side by side, with ✅ right and ❌ wrong examples. Look-alike words are learned on different days, then once you know two of them they come back as questions: fill in the blank, or pick or type the right one'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
@@ -1588,7 +1614,9 @@ function distract(c, n, field) {
   const pool = taughtIds();
   const ranked = pool.filter(id => id !== c.id).map(card).filter(Boolean).map(d => [simScore(c, d) + (d.kind === c.kind ? 3 : 0), d]).sort((x, y) => y[0] - x[0]);
   const out = [], used = new Set([norm(c[field])]), answers = new Set([c.ceb, ...(c.also || [])].flatMap(alts));
+  const sameWord = norm(firstAlt(c.ceb));
   const ok = (d, loose) => { const v = norm(d[field]); if (!v || used.has(v) || sameMeaning(c.en, d.en)) return false;
+    if (d.ceb && norm(firstAlt(d.ceb)) === sameWord) return false;                                   // another meaning of the same word
     if (field === 'ceb' && alts(d.ceb).some(a => answers.has(a))) return false;                    // another way to say the answer is also right
     if (!loose && d.en && out.some(o => o.en && sameMeaning(o.en, d.en))) return false;            // two wrong choices shouldn't mean the same thing
     used.add(v); return true; };
@@ -1686,8 +1714,8 @@ function wordSheet(tok) {
     ${derived ? `<div class="small muted">Built from <b>${esc(firstAlt(c.ceb))}</b> · ${esc(firstAlt(c.en))}</div>` : ''}
     <div class="row" style="gap:10px;align-items:center"><button class="play sm" id="wsplay" aria-label="Hear it">${I.play}</button><span class="muted small">${status}</span></div>
     ${ex ? `<div class="panel"><div class="label">Example</div><b>${esc(ex[0])}</b><div class="muted small">${esc(ex[1])}</div></div>` : ''}
-    ${c && c.note ? `<div class="panel note"><div class="label">Binko explains</div>${esc(c.note)}</div>` : ''}${mixHtml(c)}</section>`;
-  const box = document.createElement('div'); box.id = 'wsheet'; box.innerHTML = html; document.body.appendChild(box);
+    ${c && c.sense ? senseHtml(c) : ''}${c && (c.sense ? c.baseNote : c.note) ? `<div class="panel note"><div class="label">Binko explains</div>${esc(c.sense ? c.baseNote : c.note)}</div>` : ''}${mixHtml(c)}</section>`;
+  const box = document.createElement('div'); box.id = 'wsheet'; box.innerHTML = html; document.body.appendChild(box); box.querySelectorAll('[data-vs]').forEach(b => b.onclick = () => playSentence(b.dataset.vs, b));
   const close = () => { box.remove(); document.removeEventListener('keydown', onKey, true); };
   const onKey = e => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
@@ -1782,12 +1810,12 @@ const EX = {
     $('#ex').innerHTML = `<div class="teachhead"><div class="th-text"><div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : c.kind === 'd' ? 'Line from a conversation: ' + esc(c.convo) : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
       <div class="ceb">${esc(c.ceb)}</div>${phonHtml(c.ceb)}</div>${picImg(picFile(c), 'big')}</div><div class="prompt" style="font-weight:500">${esc(c.en)}</div>
       ${breakdown(c.ceb)}
-      ${c.note ? `<div class="panel note">${castImg('binko', 'peek')}<div class="label">Binko explains · ${c.kind === 'p' || c.kind === 'w' ? 'when to use it' : 'how it fits together'}</div>${esc(c.note)}</div>` : ''}${mixHtml(c, item && item.type === 'teach')}
+      ${c.sense ? senseHtml(c) : ''}${(c.sense ? c.baseNote : c.note) ? `<div class="panel note">${castImg('binko', 'peek')}<div class="label">Binko explains · ${c.kind === 'p' || c.kind === 'w' ? 'when to use it' : 'how it fits together'}</div>${esc(c.sense ? c.baseNote : c.note)}</div>` : ''}${mixHtml(c, item && item.type === 'teach')}
       ${ruleChip(c.ceb)}
       ${(c.combos || []).some(x => knownOk(x[0], new Set(tokens(c.ceb).map(lowTok)))) ? `<div><div class="label">Swap in other words</div>${c.combos.filter(x => knownOk(x[0], new Set(tokens(c.ceb).map(lowTok)))).map(x => `<div class="small"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span></div>`).join('')}</div>` : ''}
       ${usedIn(c)}
       <div id="tipslot"></div>
-      ${(x => x ? `<div class="panel"><div class="label">Example</div><div class="row" style="gap:8px;align-items:center"><b>${esc(x[0])}</b>${hasVoice(x[0]) ? `<button class="play sm" data-vs="${esc(x[0])}" aria-label="Play example">${I.play}</button>` : ''}</div><span class="muted small">${esc(x[1])}</span></div>` : '')(knownExample(c))}
+      ${(x => x ? `<div class="panel"><div class="label">Example</div><div class="row" style="gap:8px;align-items:center"><b>${esc(x[0])}</b>${hasVoice(x[0]) ? `<button class="play sm" data-vs="${esc(x[0])}" aria-label="Play example">${I.play}</button>` : ''}</div><span class="muted small">${esc(x[1])}</span></div>` : '')(c.sense ? null : knownExample(c))}
       ${canHear(c) ? `<div class="playrow"><button class="play" id="pl" aria-label="Play">${I.play}</button><button class="play sm slow" id="pls" aria-label="Play slower">${I.slow}</button><span class="muted small">${voiceNote(c)}</span></div>` : `<p class="muted small">Say it out loud twice.</p>`}${flagBtn(c.id)}`;
     if (canHear(c)) wirePlay(c, 1);
     document.querySelectorAll('#ex [data-vs]').forEach(b => b.onclick = () => playSentence(b.dataset.vs, b));
@@ -2522,7 +2550,7 @@ function logAnswer(ok) { const t = today(); S.acc = S.acc || {}; const a = S.acc
 function acc7() { const t = today(); let r = 0, n = 0; Object.entries(S.acc || {}).forEach(([k, v]) => { if (+k > t - 7) { r += v.r; n += v.t; } }); return { r, n, pct: n ? Math.round(r / n * 100) : 0 }; }
 const weekStart = () => { const t = today(), dow = (t + 4) % 7; return t - ((dow + 6) % 7); }; // Monday
 const xpWeek = () => { const w = weekStart(); return Object.entries(S.xp).reduce((s, [k, v]) => s + (+k >= w ? v : 0), 0); };
-const learnedCount = () => Object.keys(S.cards).filter(id => id[0] !== 'r' && S.cards[id].b >= 2 && card(id)).length;
+const learnedCount = () => Object.keys(S.cards).filter(id => id[0] !== 'r' && id[0] !== 's' && S.cards[id].b >= 2 && card(id)).length;
 // each signed-in person's public scoreboard row: board/{uid}. Nothing else of their progress is shared.
 function boardRow() { const a = acc7(); return { name: displayName(), streakReset: STREAK_RESET, streak: streakNow(), best: S.streak.best || 0, sLast: S.streak.last || 0, sCount: S.streak.count || 0, fWk: S.freezeWk || 0, tzo: new Date().getTimezoneOffset(), accR: a.r, accN: a.n, learned: learnedCount(), xpWeek: xpWeek(), week: weekStart(), speed: S.bestSpeed || 1, rush: S.rushBest || 0, rushHow: S.rushHow || 'pick', newMax: S.newMax || 0, geoP: (S.geoBest || {}).prov || 0, geoL: (S.geoBest || {}).lang || 0, geoPHow: (S.geoHow || {}).prov || 'pick', geoLHow: (S.geoHow || {}).lang || 'pick', updated: Date.now() }; }
 let boardTimer = null;
