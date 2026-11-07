@@ -193,7 +193,7 @@ VIEWS.retell = function () {
   }
   const secs = [60, 45, 30][RT.round], x = RT.src;
   if (RT.round >= 3) { $('#app').innerHTML = `${head}<section class="panel">${binkoSays('Three times, faster each time. Nindot! Notice how the third one came out smoother.')}<button class="btn primary block" id="again">Pick another</button></section>`;
-    $('#quit').onclick = () => { RT = null; go('practice'); }; $('#again').onclick = () => { RT = null; render(); }; addXP(10); return; }
+    $('#quit').onclick = () => { RT = null; go('practice'); }; $('#again').onclick = () => { RT = null; render(); }; return; }
   $('#app').innerHTML = `${head}<div class="ex"><div class="label">Round ${RT.round + 1} of 3 · ${secs} seconds</div><b>${esc(x.title)}</b>
     <details ${RT.round ? '' : 'open'}><summary class="small">The story (read it once, then tell it without looking)</summary><div class="small" style="margin-top:6px">${x.lines.map(l => `<div><b>${esc(l[0])}</b> <span class="muted">${esc(l[1])}</span></div>`).join('')}</div></details>
     <div class="timer"><i id="tb"></i></div><div class="ceb tnum" id="left" style="text-align:center">${secs}</div>${recorderHtml()}</div><div class="foot" id="foot"></div>`;
@@ -202,6 +202,6 @@ VIEWS.retell = function () {
   foot(`<button class="btn primary block" id="go">Start the ${secs}-second round</button>`);
   $('#go').onclick = () => { const det = document.querySelector('.ex details'); if (det) det.open = false; const t0 = Date.now();
     foot(`<div class="small muted" style="text-align:center">Tell it out loud now, in Bisaya. No English!</div><button class="btn ghost block" id="early">I finished early</button>`);
-    const end = () => { clearInterval(timerH); RT.round++; render(); }; $('#early').onclick = end;
+    const end = () => { clearInterval(timerH); RT.round++; if (RT.round === 3) { addXP(10); save(); } render(); };   // XP once, when the third round ends $('#early').onclick = end;
     timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / (secs * 1000); const tb = $('#tb'), lf = $('#left'); if (!tb) return clearInterval(timerH); tb.style.width = Math.max(0, f * 100) + '%'; lf.textContent = Math.max(0, Math.ceil(f * secs)); if (f <= 0) end(); }, 200); };
 };
