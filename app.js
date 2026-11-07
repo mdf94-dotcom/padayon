@@ -479,9 +479,18 @@ function mixupsFor(c) {
   const gu = c.kind === 'g' && G[+c.id.slice(1)] ? G[+c.id.slice(1)][3] : null;
   return MIXUPS.filter(m => (m.w || []).includes(whole) || (m.t || []).some(t => toks.includes(t)) || (m.g != null && m.g === gu)).slice(0, 2);
 }
-function mixHtml(c) {
+/* Easily confused words are learned apart and contrasted later. Learning look-alikes together causes more mix-ups
+   (Tinkham 1993; Erten & Tekin 2008; Nakata & Suzuki 2019: more within-set errors, and spacing reduces them), so:
+   no two words from the same "Don't mix up" group are new on the same day, and the box and its questions only show
+   once you know at least one other word from the group. */
+const mixWordIds = m => [...new Set((m.w || []).map(cardForTok).filter(Boolean))];
+const mixKnown = (m, but) => mixWordIds(m).filter(id => id !== but && S.cards[id] && !S.cards[id].fresh && (S.cards[id].b || 0) >= 1).length;
+function mixClash(id, also) { const c = card(id); if (!c || !c.mix) return false;
+  return c.mix.some(m => (m.w || []).length && mixWordIds(m).some(x => x !== id && (also.includes(x) || (S.cards[x] && S.cards[x].fresh)))); }
+function mixHtml(c, teaching) {
   if (!c || !c.mix || !c.mix.length) return '';
-  return c.mix.map(m => `<div class="panel mix"><div class="label">Don't mix up · ${esc(m.title)}</div><div>${esc(m.rule)}</div>
+  const ms = teaching ? c.mix.filter(m => !(m.w || []).length || mixKnown(m, c.id) >= 1) : c.mix; if (!ms.length) return '';
+  return ms.map(m => `<div class="panel mix"><div class="label">Don't mix up · ${esc(m.title)}</div><div>${esc(m.rule)}</div>
     <ul class="mixl">${m.ok.map(([a, b]) => `<li>✅ <b>${esc(a)}</b> <span class="muted">${esc(b)}</span></li>`).join('')}${(m.no || []).map(([a, b]) => `<li>❌ <s>${esc(a)}</s> → ✅ <b>${esc(b)}</b></li>`).join('')}</ul></div>`).join('');
 }
 // one question from a "Don't mix up" box: fix a common mistake, or tell apart the words in the box
@@ -504,7 +513,7 @@ function mixQuestion(m, level) {
 function mixItems(skip) {
   const seenT = new Map();
   Object.keys(S.cards).filter(id => !skip.has(id) && !S.cards[id].fresh && card(id)).forEach(id => { const c = card(id), k = S.cards[id];
-    (c.mix || []).forEach(m => { const i = MIXUPS.indexOf(m), sc = (k.w || 0) * 2 - (k.b || 0) + Math.random() * 2; if (!seenT.has(i) || seenT.get(i).sc < sc) seenT.set(i, { id, sc }); }); });
+    (c.mix || []).filter(m => !(m.w || []).length ? (k.b || 0) >= 1 : mixKnown(m) >= 2).forEach(m => { const i = MIXUPS.indexOf(m), sc = (k.w || 0) * 2 - (k.b || 0) + Math.random() * 2; if (!seenT.has(i) || seenT.get(i).sc < sc) seenT.set(i, { id, sc }); }); });
   return [...seenT.entries()].sort((a, b) => b[1].sc - a[1].sc).slice(0, 3).map(([i, x]) => ({ id: x.id, type: 'mixq', mx: i }));
 }
 function card0(id) {
@@ -716,7 +725,7 @@ function pickNew() {
   const learn = id => { out.push(id); left--; tokens(firstAlt(card(id).ceb)).forEach(t => known.add(lowTok(t))); };
   const ready = c => !needsExample(c) || !!exFor(c, known);
   const take = (order, max) => { let n = Math.min(max, left); const blocked = [];
-    for (const id of order) { if (n <= 0) break; if (S.cards[id] || out.includes(id) || twinTaken(id, out)) continue; const c = card(id); if (!c) continue;
+    for (const id of order) { if (n <= 0) break; if (S.cards[id] || out.includes(id) || twinTaken(id, out) || mixClash(id, out)) continue; const c = card(id); if (!c) continue;
       if (ready(c)) { learn(id); n--; } else if (blocked.length < 40) blocked.push(id); }
     // unblock: teach the few missing words an example needs (and theirs, two levels down), then the word itself
     for (const id of blocked) {
@@ -764,7 +773,9 @@ function buildSession() {
     // new cards stay in the order they were picked, so the words an example needs are always taught first
     const pos = Math.max(lastPos, Math.min(q.length, lastPos + Math.floor(Math.random() * 3))); lastPos = pos + 1;
     q.splice(pos, 0, { id, type: 'teach' });
-    q.splice(Math.min(q.length, pos + 2 + Math.floor(Math.random() * 3)), 0, { id, type: exType(id, true) });
+    // first recall 4 to 6 questions after it's taught: soon enough to succeed, late enough to take some effort
+    // (Pyc & Rawson 2009; Karpicke & Bauernschmidt 2011: spacing between recalls, not their pattern, drives retention)
+    q.splice(Math.min(q.length, pos + 4 + Math.floor(Math.random() * 3)), 0, { id, type: exType(id, true) });
   }
   // new grammar rules, taught inside the session, then two quick questions on each
   // a new rule only when the earlier ones are holding: if a rule you've learned keeps tripping you up, it gets practiced instead
@@ -780,7 +791,9 @@ function buildSession() {
   if (typeof MIXUPS !== 'undefined') mixItems(new Set(nw)).forEach(x => q.splice(Math.floor(q.length * (0.5 + Math.random() * 0.4)), 0, x));
   // one more try at today's new words near the end, after other questions in between: recalling a word again
   // after a gap fixes it much better than seeing it twice in a row (successive relearning)
-  if (nw.length && nw.length <= 10) shuffle(nw.slice()).forEach(id => q.push({ id, type: exType(id, true), recap: 1 }));
+  // every new word, not just the first ten (Karpicke & Roediger 2008: words recalled once and dropped are forgotten
+  // far faster than words recalled again later in the session)
+  if (nw.length) shuffle(nw.filter(id => id[0] !== 'r').slice(0, 15)).forEach(id => q.push({ id, type: exType(id, true), recap: 1 }));
   q.forEach(x => { if (x.type === 'say' || x.type === 'pron') x.type = 'speak'; });
   return q;
 }
@@ -1335,8 +1348,8 @@ const GUIDE_V = 4;
 const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
   { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
-  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🔁', 'Miss one? It comes back a few questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
-  { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['✅', '<b>Don\'t mix up</b> boxes: easy-to-confuse words side by side, with ✅ right and ❌ wrong examples. They come back as questions in your session: fill in the blank, or pick or type the right one'], ['🤔', 'Miss one? See exactly why']] },
+  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🔁', 'Miss one? It comes back six questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
+  { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['✅', '<b>Don\'t mix up</b> boxes: easy-to-confuse words side by side, with ✅ right and ❌ wrong examples. Look-alike words are learned on different days, then once you know two of them they come back as questions: fill in the blank, or pick or type the right one'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
   { t: 'Ranks', tab: 'board', art: '📊', pts: [['📊', 'See how the family is doing'], ['🎯', 'Streaks, accuracy, words, games'], ['⌨️', 'Game scores say if they were typed or multiple choice'], ['🔑', 'Sign in on <b>Me</b> to join']] },
@@ -1431,7 +1444,7 @@ function result(c, item, ok, extra) {
   const gap = sess.total - (sess.lastCameo || -9) >= 4;
   const cameoKind = !gap ? null : q > 0 && sess.run > 0 && sess.run % 3 === 0 ? 'streak' : q > 0 && prevWrong >= 1 && Math.random() < 0.4 ? 'comeback' : q === 0 && sess.wrongRun === 2 ? 'rough' : null;
   if (cameoKind) sess.lastCameo = sess.total;
-  /* A miss comes back later in the same session, a few questions on, until you get it right (up to 3 more tries;
+  /* A miss comes back later in the same session, six questions on, until you get it right (up to 3 more tries;
      after that it's left for tomorrow so one stubborn word doesn't take over the session). The retry is the easier
      kind (picking instead of typing), and a word you only met today is shown to you again first.
      Only the first answer moves the word's schedule. */
@@ -1441,7 +1454,9 @@ function result(c, item, ok, extra) {
     if (n <= 3) {
       const easy = item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx, easy: 1 } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' };
       const add = [n >= 2 && item.type !== 'mixq' && c.kind !== 'r' && sess.newIds.has(c.id) ? { id: c.id, type: 'teach', again: 1 } : null, Object.assign(easy, { retry: n })].filter(Boolean);
-      Q.splice(Math.min(Q.length, qi + 1 + 3), 0, ...add);
+      // 6 questions later: in Pyc & Rawson (2009) a gap of 6 items beat back-to-back, and longer gaps beat 6, so it
+      // comes back after real forgetting has started but while it can still be recalled in the same session
+      Q.splice(Math.min(Q.length, qi + 1 + MISS_GAP), 0, ...add);
       retryNote = '<div class="small muted" style="margin-top:4px">🔁 This one comes back in a few questions.</div>';
     } else retryNote = '<div class="small muted" style="margin-top:4px">We\'ll come back to this one tomorrow.</div>';
   } else if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push(item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
@@ -1472,6 +1487,7 @@ function twWrap(el) {
 const EN_WORDS = new Set("i i'm i've it's you you're your he she we they it is are was were am be been the a an to of in on at for with and or not don't didn't will would can do did does have has had my me this that what where who when why how there here words word".split(' '));
 const looksBisaya = txt => { const ws = String(txt).split(/\s+/).map(w => w.replace(/^[^\p{L}']+|[^\p{L}'-]+$/gu, '').toLowerCase()).filter(w => /\p{L}/u.test(w));
   return ws.length > 0 && !ws.some(w => EN_WORDS.has(w)) && ws.filter(w => cardForTok(w)).length / ws.length >= 0.5; };
+const MISS_GAP = 6;
 function tappableWords() {
   const app = $('#app'), f = $('#foot'); if (!app) return;
   app.querySelectorAll('.tile').forEach(t => { if (t.classList.contains('look')) return; t.onclick = e => { e.stopPropagation(); wordSheet(t.textContent.trim().replace(/[.,!?…"“”]/g, '')); }; t.classList.add('look'); });
@@ -1737,7 +1753,7 @@ const EX = {
     $('#ex').innerHTML = `<div class="teachhead"><div class="th-text"><div class="label">${c.kind === 'c' ? 'One of your gap words' : c.kind === 'g' ? 'How Bisaya really works' : c.kind === 'f' ? 'Building block' : c.kind === 'd' ? 'Line from a conversation: ' + esc(c.convo) : 'New ' + (c.kind === 'w' ? 'word' : 'phrase')}</div>
       <div class="ceb">${esc(c.ceb)}</div>${phonHtml(c.ceb)}</div>${picImg(picFile(c), 'big')}</div><div class="prompt" style="font-weight:500">${esc(c.en)}</div>
       ${breakdown(c.ceb)}
-      ${c.note ? `<div class="panel note">${castImg('binko', 'peek')}<div class="label">Binko explains · ${c.kind === 'p' || c.kind === 'w' ? 'when to use it' : 'how it fits together'}</div>${esc(c.note)}</div>` : ''}${mixHtml(c)}
+      ${c.note ? `<div class="panel note">${castImg('binko', 'peek')}<div class="label">Binko explains · ${c.kind === 'p' || c.kind === 'w' ? 'when to use it' : 'how it fits together'}</div>${esc(c.note)}</div>` : ''}${mixHtml(c, item && item.type === 'teach')}
       ${ruleChip(c.ceb)}
       ${(c.combos || []).some(x => knownOk(x[0], new Set(tokens(c.ceb).map(lowTok)))) ? `<div><div class="label">Swap in other words</div>${c.combos.filter(x => knownOk(x[0], new Set(tokens(c.ceb).map(lowTok)))).map(x => `<div class="small"><b>${esc(x[0])}</b> <span class="muted">· ${esc(x[1])}</span></div>`).join('')}</div>` : ''}
       ${usedIn(c)}
