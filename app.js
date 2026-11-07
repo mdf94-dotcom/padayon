@@ -1300,6 +1300,16 @@ VIEWS.stories = function () {
   document.querySelectorAll('[data-story]').forEach(b => b.onclick = () => { ST = { i: +b.dataset.story, at: 0, en: {}, phase: 'read', qi: 0, right: 0 }; go('story'); });
 };
 let ST = null;
+/* Choices you confirm: a tap only selects (it can be changed), Check grades it. Timed games (Rush, Speed, the map games) stay one tap.
+   mount puts the Check button somewhere other than the foot; hint is shown above it. */
+function pickThenCheck(sel, onGrade, hint, mount) {
+  const btns = [...document.querySelectorAll(sel)]; let pick = null;
+  const html = `${hint ? `<div class="small muted">${hint}</div>` : ''}<button class="btn primary block" id="chk" disabled>Check</button>`;
+  if (mount) mount(html); else foot(html);
+  btns.forEach(b => b.onclick = () => { if (b.disabled) return; btns.forEach(x => x.classList.remove('sel')); b.classList.add('sel'); pick = b; $('#chk').disabled = false; });
+  $('#chk').onclick = () => { if (!pick) return; $('#chk').disabled = true; btns.forEach(x => { x.disabled = true; x.classList.remove('sel'); }); onGrade(pick); };
+  return btns;
+}
 VIEWS.story = function () {
   const s = STORIES[ST.i];
   const head = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">${s.emoji} ${esc(s.title)}</h2></div>`;
@@ -1316,7 +1326,7 @@ VIEWS.story = function () {
   } else if (ST.phase === 'quiz' && ST.qi < s.q.length) {
     const q = s.q[ST.qi], opts = shuffle(q.a.map((t, i) => ({ t, ok: i === 0 })));
     $('#app').innerHTML = `${head}<div class="ex"><div class="label">Question ${ST.qi + 1} of ${s.q.length}</div><div class="prompt">${esc(q.q)}</div><div class="opts">${opts.map((o, i) => `<button class="opt" data-i="${i}">${esc(o.t)}</button>`).join('')}</div></div><div class="foot" id="foot"></div>`;
-    document.querySelectorAll('.opt').forEach(b => b.onclick = () => {
+    pickThenCheck('.opt', b => {
       const o = opts[+b.dataset.i]; logAnswer(o.ok); if (o.ok) ST.right++;
       document.querySelectorAll('.opt').forEach((x, i) => { x.disabled = true; if (opts[i].ok) x.classList.add('right'); else if (x === b) x.classList.add('wrong'); });
       foot(`<button class="btn primary block" id="cont">${ST.qi + 1 < s.q.length ? 'Next question' : 'Finish'}</button>`); $('#cont').onclick = () => { ST.qi++; render(); };
@@ -1400,12 +1410,12 @@ VIEWS.place = function () {
     <button class="btn ghost block" id="pldk">I don't know this one</button></div>`;
   if ($('#pl')) { $('#pl').onclick = e => play(c.id, 1, e.currentTarget); play(c.id, 1, $('#pl')); }
   let answered = false;   // a double tap counts once
-  const answer = ok => { if (answered) return; answered = true; document.querySelectorAll('.opt, #pldk').forEach(x => x.disabled = true); if (ok) PL.right++; PL.qi++;
+  const answer = ok => { if (answered) return; answered = true; document.querySelectorAll('.opt, #pldk, #chk').forEach(x => x.disabled = true); if (ok) PL.right++; PL.qi++;
     // stop early once the round can't be passed, or once it's already passed
     if (PL.qi - PL.right > PL.qs.length - PL.need) { PL.qi = PL.qs.length; }
     else if (PL.right >= PL.need) { PL.qi = PL.qs.length; }
     setTimeout(render, 250); };
-  document.querySelectorAll('.opt').forEach(b => b.onclick = () => { if (b.disabled) return; const ok = o[+b.dataset.i].id === c.id; b.classList.add(ok ? 'right' : 'wrong'); showOptMeanings([...document.querySelectorAll('.opt')], o, 'en'); answer(ok); });
+  pickThenCheck('.opt', b => { const ok = o[+b.dataset.i].id === c.id; b.classList.add(ok ? 'right' : 'wrong'); showOptMeanings([...document.querySelectorAll('.opt')], o, 'en'); answer(ok); }, '', h => $('#pldk').insertAdjacentHTML('beforebegin', h));
   $('#pldk').onclick = () => answer(false);
   if ($('#quit')) $('#quit').onclick = () => { if (PL.marked) toast(PL.marked + ' words marked as known'); go('home'); };
 };
@@ -2377,14 +2387,13 @@ VIEWS.build = function () {
     if (BD.qi >= BD.quiz.length) return drillDone(head);
     const q = BD.quiz[BD.qi], r = q.r || BD.nr, opts = shuffle(q.a.map((x, j) => ({ x, ok: j === 0 })));
     $('#app').innerHTML = `${head}<div class="ex"><div class="label">${BD.nr ? 'Drill' : 'Quick review'} · rule ${r.n}, ${esc(r.title)}</div><div class="prompt">${esc(q.q)}</div><div class="opts">${opts.map((o, j) => `<button class="opt cebopt" data-o="${j}">${esc(o.x)}</button>`).join('')}</div></div><div class="foot" id="foot"></div>`;
-    foot('<div class="small muted">Pick the one that sounds right.</div>');
-    document.querySelectorAll('[data-o]').forEach(b => b.onclick = () => {
+    pickThenCheck('[data-o]', b => {
       const j = +b.dataset.o, ok = opts[j].ok; logAnswer(ok); if (ok) { BD.qRight++; addXP(4); }
       document.querySelectorAll('[data-o]').forEach((x, k) => { x.disabled = true; if (opts[k].ok) x.classList.add('right'); else if (k === j) x.classList.add('wrong'); });
       const f = $('#foot'); f.className = 'foot ' + (ok ? 'good' : 'bad');
       f.innerHTML = `<div class="verdict">${ok ? 'Tama!' : 'Dili pa.'}</div><div class="small">${esc(q.why)}</div><button class="btn primary block" id="cont">Continue</button>`;
       $('#cont').onclick = () => { BD.qi++; render(); };
-    });
+    }, 'Pick the one that sounds right, then Check.');
   } else {
     if (BD.i >= BD.qs.length) return buildOwn(head);
     return buildTiles(head);
@@ -2547,8 +2556,7 @@ VIEWS.real = function () {
     const meaning = () => {
       const opts = shuffle(g.a.map((x, j) => ({ x, ok: j === 0 })));
       $('#step').innerHTML = `<div class="panel"><div class="label">${esc(g.q)}</div><div class="opts">${opts.map((o, j) => `<button class="opt" data-o="${j}">${esc(o.x)}</button>`).join('')}</div></div>`;
-      foot('<div class="small muted">Use the words you caught.</div>');
-      document.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { const j = +b.dataset.o; logAnswer(!!opts[j].ok); document.querySelectorAll('[data-o]').forEach((x, k) => { x.disabled = true; if (opts[k].ok) x.classList.add('right'); else if (k === j) x.classList.add('wrong'); }); foot(`<button class="btn primary block" id="nx">Next: answer in Bisaya</button>`); $('#nx').onclick = () => respond(g.say, g.ex); });
+      pickThenCheck('[data-o]', b => { const j = +b.dataset.o; logAnswer(!!opts[j].ok); document.querySelectorAll('[data-o]').forEach((x, k) => { x.disabled = true; if (opts[k].ok) x.classList.add('right'); else if (k === j) x.classList.add('wrong'); }); foot(`<button class="btn primary block" id="nx">Next: answer in Bisaya</button>`); $('#nx').onclick = () => respond(g.say, g.ex); }, 'Use the words you caught.');
     };
     words();
   } else {
@@ -2558,12 +2566,11 @@ VIEWS.real = function () {
       <p class="muted small" style="margin:0">Sound on, subtitles off. It stops by itself after ${c.to - c.from} seconds. Replay it as often as you like.</p><div id="step"></div></div><div class="foot" id="foot"></div>`;
     const opts = shuffle(c.a.map((x, j) => ({ x, ok: j === 0 })));
     $('#step').innerHTML = `<div class="panel"><div class="label">${esc(c.q)}</div><div class="opts">${opts.map((o, j) => `<button class="opt" data-o="${j}">${esc(o.x)}</button>`).join('')}</div><div id="key"></div></div>`;
-    foot('<div class="small muted">Pick an answer after you watch.</div>');
-    document.querySelectorAll('[data-o]').forEach(b => b.onclick = () => {
+    pickThenCheck('[data-o]', b => {
       const j = +b.dataset.o; logAnswer(!!opts[j].ok); document.querySelectorAll('[data-o]').forEach((x, k) => { x.disabled = true; if (opts[k].ok) x.classList.add('right'); else if (k === j) x.classList.add('wrong'); });
       $('#key').innerHTML = `<div class="label" style="margin-top:8px">What they said (the show's subtitles)</div>${c.en.map(l => `<div class="small">${esc(l)}</div>`).join('')}`;
       foot(`<button class="btn primary block" id="nx">Next: answer in Bisaya</button>`); $('#nx').onclick = () => respond(c.say, c.ex);
-    });
+    }, 'Pick an answer after you watch.');
   }
   $('#quit').onclick = () => { RB = null; goTab(); };
 };

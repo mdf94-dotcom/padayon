@@ -32,6 +32,17 @@ const RIGHT_RUNS = 25;
     { // typed meanings: the whole meaning as shown, one part of it, or a bracket-only meaning all count; a wrong word doesn't
     const m = await page.evaluate(() => [meaningOk('rock or stone', 'rock or stone'), meaningOk('stone', 'rock or stone'), meaningOk('plural', '(plural: more than one)'), !meaningOk('dog', '(plural: more than one)'), !meaningOk('cat', 'rock or stone')]);
     R.ok(m.every(Boolean), 'typed meaning matching ' + m); }
+  if (how === 'pick') { // confirm before grading: in the rule drill, story quiz and placement, a tap only selects (and can change); Check grades it
+    const r = await page.evaluate(() => { const out = {}; const t = today(); PATH.flatMap(s => s.ids).slice(0, 1200).forEach(id => { if (card(id) && id[0] !== 'r') S.cards[id] = { b: 3, d: t + 10, r: 4, w: 0 }; });
+      S.rules = {}; BD = null; startBuild(); if (BD && BD.phase === 'teach') { BD.phase = 'drill'; render(); }
+      const grab = () => [...document.querySelectorAll('#app .opt')];
+      let o = grab(); if (!o.length) return { none: view };
+      o[0].click(); out.drillGradedOnTap = o.some(x => x.classList.contains('right') || x.classList.contains('wrong'));
+      o[1].click(); out.drillMoved = o[1].classList.contains('sel') && !o[0].classList.contains('sel');
+      document.querySelector('#chk').click(); out.drillGraded = o.some(x => x.classList.contains('right')) && !!document.querySelector('#cont');
+      view = 'home'; return out; });
+    R.ok(r.drillGradedOnTap === false && r.drillMoved && r.drillGraded, 'rule drill: tap selects, Check grades ' + JSON.stringify(r));
+  }
   // the map games
     for (const mode of ['prov', 'lang']) {
       await page.evaluate(() => { view = 'rushhome'; render(); }); await page.click('#geo' + mode); await page.waitForFunction(() => view === 'geogame', null, { timeout: 15000 });
@@ -73,7 +84,7 @@ const RIGHT_RUNS = 25;
     // Conversations, every Story, Real Bisaya: keep pressing whatever moves you on, until the screen is left; "stuck" = nothing to press
     const walkThrough = (enter, stay) => page.evaluate(async ({ enter, stay }) => { eval(enter); await new Promise(r => setTimeout(r, 40)); const re = new RegExp(stay);
       for (let k = 0; k < 250; k++) { if (!re.test(view)) return 'finished:' + view; const inp = document.querySelector('#app input.field:not([disabled]), #app #rep:not([disabled])'); if (inp && !inp.value) { inp.value = 'Salamat'; inp.dispatchEvent(new Event('input')); }
-        const b = document.querySelector('#nx, #cont, #fin, #sh, #chk:not([disabled]), #tgo:not([disabled]), .opt:not([disabled]), #bank .tile:not(.used), #show, [data-q="2"], [data-q="1"], #again');
+        const b = ['#nx', '#cont', '#fin', '#sh', '#chk:not([disabled])', '#tgo:not([disabled])', '.opt:not([disabled]):not(.sel)', '#bank .tile:not(.used)', '#show', '[data-q="2"]', '[data-q="1"]', '#again'].map(q => document.querySelector(q)).find(Boolean);
         if (!b) return 'stuck:' + view + ':' + document.querySelector('#app').textContent.replace(/\s+/g, ' ').slice(0, 90); if (b.id === 'again') return 'finished:' + view; b.click(); await new Promise(r => setTimeout(r, 20)); }
       return 'loop:' + view; }, { enter, stay });
     const cv = []; for (let k = 0; k < 6; k++) cv.push(await walkThrough("view = 'convos'; render();", '^convos?$'));
