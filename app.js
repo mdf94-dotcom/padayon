@@ -551,13 +551,26 @@ function senseNote(src, k) {
 // the "one word, several meanings" panel: every meaning as a chip (this one highlighted), how to spot it, two examples
 function senseHtml(c) {
   if (!c || !c.sense || typeof SENSES === 'undefined') return '';
-  const [src, k] = c.sense, ss = SENSES[src], me = ss[k], w = firstAlt(c.ceb);
-  return `<div class="panel sensep"><div class="label">One word, ${ss.length} meanings</div>
-    <div class="senses">${ss.map((x, j) => `<span class="${j === k ? 'on' : ''}">${j === k ? '👉 ' : ''}${esc(x.en)}</span>`).join('')}</div>
-    <div class="small muted" style="margin:6px 0 2px">This card is <b>${esc(w)} = ${esc(me.en)}</b>. The other meanings each have their own card.</div>
-    ${me.tip ? `<div><b>How to spot it:</b> ${esc(me.tip)}</div>` : ''}
-    <div class="sx">${me.ex.map(e => `<div class="sxr"><div><b>${esc(e[0])}</b><div class="small muted">${esc(e[1])}</div></div>${hasVoice(e[0]) ? `<button class="play sm" data-vs="${esc(e[0])}" aria-label="Play example">${I.play}</button>` : ''}</div>`).join('')}</div></div>`;
+  const [src, k] = c.sense, ss = SENSES[src];
+  return `<div class="panel sensep" data-src="${esc(src)}" data-k="${k}" data-w="${esc(firstAlt(c.ceb))}"><div class="label">One word, ${ss.length} meanings</div>
+    <div class="senses">${ss.map((x, j) => `<button type="button" class="${j === k ? 'on' : ''}" data-sj="${j}" aria-pressed="${j === k}">${j === k ? '👉 ' : ''}${esc(x.en)}</button>`).join('')}</div>
+    <div class="sbody">${senseBody(src, k, k, firstAlt(c.ceb))}</div></div>`;
 }
+// one meaning's part of the panel: this card's meaning, or (tapped) one of the others, which comes later as its own card
+function senseBody(src, j, k, w) {
+  const me = SENSES[src][j];
+  return `<div class="small muted" style="margin:6px 0 2px">${j === k ? `This card is <b>${esc(w)} = ${esc(me.en)}</b>. The other meanings each have their own card. Tap one to see it.` : `<b>${esc(w)} = ${esc(me.en)}</b> is another meaning. It gets its own card later. Tap 👉 to go back to this card's meaning.`}</div>
+    ${me.tip ? `<div><b>How to spot it:</b> ${esc(me.tip)}</div>` : ''}
+    <div class="sx">${me.ex.map(e => `<div class="sxr"><div><b>${esc(e[0])}</b><div class="small muted">${esc(e[1])}</div></div>${hasVoice(e[0]) ? `<button class="play sm" data-vs="${esc(e[0])}" aria-label="Play example">${I.play}</button>` : ''}</div>`).join('')}</div>`;
+}
+// tapping a meaning chip swaps the panel to that meaning (works wherever the panel is shown)
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('.sensep [data-sj]'); if (!b) return;
+  const p = b.closest('.sensep'), j = +b.dataset.sj, k = +p.dataset.k;
+  p.querySelectorAll('[data-sj]').forEach(x => { const on = +x.dataset.sj === j; x.classList.toggle('sel', on && j !== k); x.setAttribute('aria-pressed', on); });
+  p.querySelector('.sbody').innerHTML = senseBody(p.dataset.src, j, k, p.dataset.w);
+  p.querySelectorAll('.sbody [data-vs]').forEach(x => x.onclick = () => playSentence(x.dataset.vs, x));
+});
 function card0(id) {
   const k = id[0], n = +id.slice(1);
   if (HIDE.has(id)) return null;
@@ -1407,7 +1420,7 @@ const GUIDE_V = 4;
 const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
   { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
-  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🆕', 'New kinds of questions: reply to what someone says, hear the difference, fill the gap, name the picture'], ['🔀', 'A word with several meanings (like <b>naa</b>) gets one card per meaning, learned on different days'], ['🔁', 'Miss one? It comes back six questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
+  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🆕', 'New kinds of questions: reply to what someone says, hear the difference, fill the gap, name the picture'], ['🔀', 'A word with several meanings (like <b>naa</b>) gets one card per meaning, learned on different days. Tap a meaning to compare it'], ['🔁', 'Miss one? It comes back six questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['✅', '<b>Don\'t mix up</b> boxes: easy-to-confuse words side by side, with ✅ right and ❌ wrong examples. Look-alike words are learned on different days, then once you know two of them they come back as questions: fill in the blank, or pick or type the right one'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
