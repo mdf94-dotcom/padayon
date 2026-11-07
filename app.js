@@ -980,7 +980,7 @@ function renderCrash(e) {
   const b = $('#crashre'); if (b) b.onclick = () => location.reload();
 }
 let BINKO_N = (() => { try { const n = (+localStorage.getItem('padayon-binko') || 0) + 1; localStorage.setItem('padayon-binko', n); return n; } catch (e) { return Math.floor(Math.random() * 20); } })();
-function go(v) { if (v === 'home' && view !== 'home') { if (HOME_SPK) HOME_SPK = nextFactTeller(); BINKO_N++; try { localStorage.setItem('padayon-binko', BINKO_N); } catch (e) { } } view = v; render(); }
+function go(v) { if (typeof stopRecorder === 'function') stopRecorder(); if (v === 'home' && view !== 'home') { if (HOME_SPK) HOME_SPK = nextFactTeller(); BINKO_N++; try { localStorage.setItem('padayon-binko', BINKO_N); } catch (e) { } } view = v; render(); }
 function ringSvg(v, goal) { const r = 36, c = 2 * Math.PI * r, f = Math.min(1, v / goal); return `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - f)}" transform="rotate(-90 42 42)"/></svg>`; }
 function unitRow(u, key) {
   const live = u.ids.filter(id => card(id)), n = live.length, l = learned(live), s = seen(live);   // hidden cards don't count, so a unit can reach 100%
@@ -1488,7 +1488,7 @@ VIEWS.session = function () {
   if (['mc', 'type', 'speak', 'say'].includes(item.type) && picFile(c)) { const pr = $('#ex .prompt'); if (pr && !$('#ex .epic')) pr.insertAdjacentHTML('beforebegin', picImg(picFile(c), 'md')); }
 };
 function foot(html) { $('#foot').className = 'foot'; $('#foot').innerHTML = html; }
-function next() { stopAudio(); qi++; try { VIEWS.session(); } catch (e) { console.warn('session step failed:', e.message); view = 'home'; render(); return; } window.scrollTo(0, 0); }
+function next() { stopAudio(); if (typeof stopRecorder === 'function') stopRecorder(); qi++; try { VIEWS.session(); } catch (e) { console.warn('session step failed:', e.message); view = 'home'; render(); return; } window.scrollTo(0, 0); }
 function result(c, item, ok, extra) {
   const q = ok === true ? 2 : ok === false ? 0 : ok;
   if (!sess.graded.has(c.id) && item.type !== 'teach' && item.type !== 'shadow') {

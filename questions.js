@@ -109,13 +109,15 @@ function extraTypes(id, b) {
 /* 5. record and compare: your voice next to the real one */
 const canRecord = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
 function recorderHtml() { return canRecord() ? `<div class="recrow"><button class="btn ghost sm" id="recgo">🎙️ Record yourself</button><button class="btn ghost sm" id="recme" hidden>▶ Play mine</button><button class="btn ghost sm" id="recref" hidden>▶ Play the real one</button><span class="small muted" id="recst"></span></div>` : ''; }
-let REC = null;
+let REC = null, REC_MINE = null;
+// moving on (next question, another screen) ends a recording and stops your own playback
+function stopRecorder() { try { if (REC && REC.state === 'recording') REC.stop(); } catch (e) { } if (REC_MINE) { REC_MINE.pause(); REC_MINE = null; } }
 function wireRecorder(text, c) {
   const go = $('#recgo'); if (!go) return;
   const st = $('#recst'), me = $('#recme'), ref = $('#recref'); let url = null;
   const real = btn => { if (c && c.audio) play(c.id, 1, btn); else playSentence(text, btn); };
   ref.onclick = e => real(e.currentTarget);
-  me.onclick = () => { if (url) { const a = new Audio(url); a.play().catch(() => { }); } };
+  me.onclick = () => { if (url) { if (REC_MINE) REC_MINE.pause(); const a = REC_MINE = new Audio(url); a.play().catch(() => { }); } };
   go.onclick = async () => {
     if (REC && REC.state === 'recording') { REC.stop(); return; }
     try {
