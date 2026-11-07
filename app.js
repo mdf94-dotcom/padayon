@@ -228,6 +228,13 @@ capStreak(S);
 function fixNewMax(st) { if ((st.streakReset || 0) < STREAK_RESET) return; let m = st.newMax || 0; if (st.newReal && st.newReal.d >= STREAK_BASE) m = Math.max(m, st.newReal.n || 0); if (st.newDay && st.newDay.d >= STREAK_BASE + (st.dayShift || 0)) m = Math.max(m, st.newDay.n || 0); st.newMax = m; }
 fixNewMax(S);
 function localSave() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { } }
+// Start over: words, rules, streak, XP and stats go back to zero on every device. Your name and settings stay.
+function wipeProgress() {
+  const now = Date.now(), keep = { settings: S.settings, guideV: S.guideV, dayShift: S.dayShift, redoDone: S.redoDone };
+  S = migrate(Object.assign(fresh(), keep, { wipedAt: now, streakReset: now, started: today() }));
+  S.settings = Object.assign(S.settings, keep.settings, { pathV: keep.settings.pathV || 1 });
+  clearResume(); MIX_MEMO.clear(); save();
+}
 function save() { S.updated = Date.now(); DAY_SHIFT = S.dayShift || 0; localSave(); schedulePush(); if (typeof pushBoard === 'function') pushBoard(); }
 
 /* ---------- sync across devices (Firebase: Google sign-in + one Firestore doc per person) ---------- */
@@ -236,6 +243,8 @@ const Sync = { user: null, state: 'off', last: 0, timer: null, unsub: null, err:
 const userDoc = () => firebase.firestore().collection('users').doc(Sync.user.uid);
 function mergeState(a, b) {
   a = migrate(JSON.parse(JSON.stringify(a))); b = migrate(JSON.parse(JSON.stringify(b)));
+  // "Reset all my progress" (or loading a backup) on any device replaces everything from before it, on every device
+  if ((a.wipedAt || 0) !== (b.wipedAt || 0)) return (a.wipedAt || 0) > (b.wipedAt || 0) ? a : b;
   // gap words: keep a's ids; give b's entries a's id when the English matches, or a fresh id when only the id collides
   const aByEn = {}, aIds = new Set(); a.custom.forEach(c => { aByEn[norm(c.en)] = c.id; aIds.add(c.id); });
   let maxC = Math.max(0, ...a.custom.concat(b.custom).map(c => +c.id.slice(1) || 0));
@@ -1192,11 +1201,16 @@ VIEWS.me = function () {
   ${flagsHtml()}
   <section class="panel"><h2>Already know some Bisaya?</h2><p class="small muted" style="margin:0">A quick placement check marks the words you already know as learned, so you skip ahead. About 5 minutes.</p><div class="row"><button class="btn ghost" id="placego">Take the placement check</button></div></section>
   <section class="panel"><h2>How Padayon works</h2><p class="small muted" style="margin:0">A quick tour of every part of the app.</p><div class="row"><button class="btn ghost" id="guidego">Show the guide</button></div></section>
+  <section class="panel"><h2>Start over</h2><p class="small muted" style="margin:0">Erase all your progress: words, grammar rules, streak, XP and stats, on every device you're signed in on. Your name and settings stay. Tip: tap <b>Save a backup</b> above first, so you can load it back if you change your mind.</p>
+    <div id="wipebox"><button class="btn ghost" id="wipego" style="color:var(--bad);border-color:var(--bad)">Reset all my progress</button></div></section>
   <section class="panel"><h2>About</h2><p class="small muted" style="margin:0">Made for the Balay Ta family. Computer voice: Meta MMS Cebuano (CC BY-NC 4.0). Pictures: Twemoji (CC BY 4.0).</p></section>
   </div>`);
   wireProgress();
   document.querySelectorAll('#musicseg button').forEach(b => b.onclick = () => { S.settings.music = b.dataset.m === '1'; save(); render(); toast(S.settings.music ? 'Music on. On iPhone, turn off silent mode to hear it.' : 'Music off'); });
   $('#guidego').onclick = () => openGuide('me');
+  $('#wipego').onclick = () => { $('#wipebox').innerHTML = `<p class="small" style="margin:0 0 6px"><b>This can't be undone</b> (unless you saved a backup). Type <b>RESET</b> to confirm.</p><div class="keybox"><input class="field" id="wipetxt" autocomplete="off" autocapitalize="characters" placeholder="RESET"><button class="btn primary" id="wipeok" disabled style="background:var(--bad);border-color:var(--bad)">Erase</button></div><button class="btn ghost sm" id="wipeno" style="margin-top:6px">Cancel</button>`;
+    const t = $('#wipetxt'); t.focus(); t.oninput = () => $('#wipeok').disabled = t.value.trim().toUpperCase() !== 'RESET';
+    $('#wipeno').onclick = () => render(); $('#wipeok').onclick = () => { wipeProgress(); toast('Your progress was reset. Padayon from the start!'); go('home'); }; };
   $('#placego').onclick = startPlacement;
   if (FLAGS_ALL === null && Sync.user && !window.__flagsTried) (window.__flagsTried = 1, loadFlags()).then(r => { if (r && view === 'me') render(); });
   $('#syncset').onclick = () => Sync.user ? signOutSync() : signIn();
@@ -1204,7 +1218,7 @@ VIEWS.me = function () {
   document.querySelectorAll('[data-set]').forEach(g => g.querySelectorAll('button').forEach(b => b.onclick = () => { S.settings[g.dataset.set] = +b.dataset.v; save(); render(); }));
   $('#pack2').onclick = importPack; $('#pack3').onclick = () => { go('home'); autoPack(); };
   $('#exp').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' })); a.download = 'padayon-progress-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); };
-  $('#imp').onclick = () => { const fi = $('#filein'); fi.accept = '.json,application/json'; fi.value = ''; fi.onchange = async () => { try { const s = JSON.parse(await fi.files[0].text()); if (s.v !== 1) throw 0; S = migrate(s); clearResume(); save(); toast('Progress loaded'); go('home'); } catch (e) { toast('That is not a Padayon backup file.'); } }; fi.click(); };
+  $('#imp').onclick = () => { const fi = $('#filein'); fi.accept = '.json,application/json'; fi.value = ''; fi.onchange = async () => { try { const s = JSON.parse(await fi.files[0].text()); if (s.v !== 1) throw 0; S = migrate(s); S.wipedAt = Date.now(); clearResume(); save(); toast('Progress loaded'); go('home'); } catch (e) { toast('That is not a Padayon backup file.'); } }; fi.click(); };
 };
 /* ---------- Binko's stories ----------
    Short silly family stories, told by Binko a line at a time, each opening once you know every Bisaya word in it.
@@ -1353,7 +1367,7 @@ const GUIDE = [
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
   { t: 'Ranks', tab: 'board', art: '📊', pts: [['📊', 'See how the family is doing'], ['🎯', 'Streaks, accuracy, words, games'], ['⌨️', 'Game scores say if they were typed or multiple choice'], ['🔑', 'Sign in on <b>Me</b> to join']] },
-  { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day (the most you\'ll get: fewer when reviews pile up)'], ['🎵', 'Background music on or off, or tap the speaker in the top corner of any screen']], set: true },
+  { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day (the most you\'ll get: fewer when reviews pile up)'], ['🎵', 'Background music on or off, or tap the speaker in the top corner of any screen'], ['💾', 'Save a backup, or <b>Start over</b> to reset all your progress on every device']], set: true },
   { t: 'One last thing', art: '🎯', pts: [['✏️', 'A quick check of what you already know'], ['⏭️', 'Words you know get skipped'], ['🤷', 'Not sure? Tap "I don\'t know". That\'s fine!']] }
 ];
 let guideAt = 0, guideBack = 'home';
