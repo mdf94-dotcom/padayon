@@ -71,6 +71,16 @@ const { open, ready, serve, chromium, Report } = require('./lib');
     ids.slice(0, 40).forEach(id => { const c = card(id), w = norm(firstAlt(c.ceb)); [...distract(c, 3, 'en'), ...distract(c, 3, 'ceb')].forEach(d => { if (d.ceb && norm(firstAlt(d.ceb)) === w) clash++; }); });
     return { n: ids.length, bad: ids.filter(id => { const c = card(id); return !c || !c.en || !c.note || !pathIds.has(id); }).length, clash, oneMeaning: ids.every(id => !/;/.test(card(id).en)) }; });
   R.ok(sense.n > 50 && !sense.bad && !sense.clash, 'meaning cards ' + JSON.stringify(sense));
+  // the newer kinds: reply, hear the difference, fill the gap, picture, say your reply; each renders and grades from a real answer
+  const newer = await page.evaluate(() => { const all = Object.keys(S.cards), out = {};
+    const pickId = { reply: Object.keys(REPLY_OF).find(id => S.cards[id] && replyChoices(card(id)).length >= 2), hear2: all.find(id => pairFor(card(id))), cloze: all.find(id => clozeFor(card(id))), pic: all.find(id => picFile(card(id)) && distract(card(id), 3, 'ceb').length >= 2) };
+    for (const [type, id] of Object.entries(pickId)) { if (!id) { out[type] = 'no card'; continue; }
+      Q = [{ id, type }, { id: 'g0', type: 'teach' }]; qi = 0; sess = newSess('daily'); view = 'session'; VIEWS.session();
+      const opts = [...document.querySelectorAll('#ex .opt')], inp = document.querySelector('#ans');
+      if (opts.length) { opts[0].click(); document.querySelector('#chk').click(); out[type] = { n: opts.length, rights: opts.filter(o => o.classList.contains('right')).length, graded: /good|bad/.test(document.querySelector('#foot').className) }; }
+      else if (inp) { inp.value = type === 'cloze' ? clozeFor(card(id)).ans : firstAlt(card(id).ceb); inp.dispatchEvent(new Event('input')); document.querySelector('#chk').click(); out[type] = { typedRight: inp.classList.contains('right') }; } }
+    return out; });
+  R.ok(Object.values(newer).every(x => x && x !== 'no card' && (x.typedRight || (x.n >= 2 && x.rights === 1 && x.graded))), 'newer question kinds ' + JSON.stringify(newer));
   // before answering, a tap on a Bisaya choice picks it (never opens a word page), even right after the last question
   const pickable = await page.evaluate(async () => { const ids = Object.keys(S.cards).filter(i => i[0] === 'w' && card(i)).slice(0, 3); Q = ids.map(id => ({ id, type: 'mc' })); qi = 0; sess = newSess('daily'); view = 'session'; VIEWS.session();
     document.querySelector('#ex .opt').click(); document.querySelector('#chk').click(); document.querySelector('#cont').click(); await new Promise(r => setTimeout(r, 120));

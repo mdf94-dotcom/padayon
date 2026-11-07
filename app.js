@@ -595,7 +595,7 @@ function memOf(c) {
   return c;
 }
 const recallNow = c => { memOf(c); return fRecall(Math.max(0, today() - c.lr), c.s); };
-const RECOG = new Set(['mc', 'listen', 'tiles', 'rq', 'rid']);   // picking from choices
+const RECOG = new Set(['mc', 'listen', 'tiles', 'rq', 'rid', 'reply', 'hear2', 'pic']);   // picking from choices
 function fsrsStep(c, g, t, first) {
   if (first) { c.s = FW[g - 1]; c.df = fClamp(fInitD(g), 1, 10); c.lr = t; return; }
   memOf(c); const el = Math.max(0, t - c.lr), r = fRecall(el, c.s), d = c.df, st = c.s;
@@ -795,7 +795,12 @@ function pickNew() {
   if (left > 0) take(PATH.slice(cur + 1).flatMap(st => st.ids).filter(id => { const c = card(id); return c && needsExample(c); }), left);
   return out;
 }
+// about a third of the time, a card that can take one of the newer kinds of question gets it instead (questions.js)
 function exType(id, isNew) {
+  const t = exType0(id, isNew); if (isNew || typeof extraTypes !== 'function') return t;
+  const x = extraTypes(id, S.cards[id] ? S.cards[id].b || 0 : 0); return x.length && Math.random() < 0.35 ? pick(x) : t;
+}
+function exType0(id, isNew) {
   const c = card(id), b = isNew ? 0 : (S.cards[id] ? S.cards[id].b : 0);
   if (c.kind === 'r') return b <= 0 ? 'rq' : b === 1 ? pick(['rid', 'rq', 'rid']) : pick(['rid', 'rfix', 'rq']);
   const n = tokens(c.ceb).length, multi = n >= 2 && n <= 9;
@@ -853,7 +858,7 @@ const stillWanted = (r, cx) => r === playReq && cx === audioCtx();
 /* ---------- computer voice: cards with no native recording ----------
    voice/ holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
-const VOICE_V = 16; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
+const VOICE_V = 17; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
 /* The computer voice comes in pieces: a small index, then one piece per stage. You only download the pieces for
    where you are on the path (plus the next one); the rest arrive when a sentence from them is first played. */
 async function loadVoice() {
@@ -1146,6 +1151,8 @@ VIEWS.practice = function () {
   ${g('Speak', 'var(--pink)', [
     { go: 'shadow', icon: I.mic, c: 'var(--pink)', sub: 'Sundog · speak along', name: 'Shadowing', badge: lk('shadow') },
     { go: 'convos', icon: PI.chat, c: 'var(--pink)', sub: 'Istorya · play your part', name: 'Conversations' },
+    { go: 'aboutme', icon: PI.pen, c: 'var(--pink)', sub: 'Answer questions about your own life', name: 'Tell me about you' },
+    { go: 'retell', icon: PI.clock, c: 'var(--pink)', sub: '4-3-2 · say it in 60, 45, then 30 seconds', name: 'Retell it faster' },
     { id: 'talkgo', icon: PI.phone, c: 'var(--pink)', sub: 'Estorya · call or chat with family', name: 'Talk out loud', badge: plan.talk ? 'Done today' : 'Tick it' }])}
   ${g('Build &amp; read', 'var(--good)', [
     { id: 'buildgo', icon: PI.blocks, c: 'var(--good)', sub: 'Gramatika · learn a rule, then use it', name: 'Grammar', badge: ruleN + ' of ' + RULES.length },
@@ -1400,7 +1407,7 @@ const GUIDE_V = 4;
 const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
   { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
-  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🔀', 'A word with several meanings (like <b>naa</b>) gets one card per meaning, learned on different days'], ['🔁', 'Miss one? It comes back six questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
+  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🆕', 'New kinds of questions: reply to what someone says, hear the difference, fill the gap, name the picture'], ['🔀', 'A word with several meanings (like <b>naa</b>) gets one card per meaning, learned on different days'], ['🔁', 'Miss one? It comes back six questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['✅', '<b>Don\'t mix up</b> boxes: easy-to-confuse words side by side, with ✅ right and ❌ wrong examples. Look-alike words are learned on different days, then once you know two of them they come back as questions: fill in the blank, or pick or type the right one'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
@@ -1904,13 +1911,14 @@ const EX = {
   },
   speak(c, item) {
     const secs = Math.round(Math.min(10, 3 + tokens(c.ceb).length * 0.8));
-    $('#ex').innerHTML = `<div class="label">Say it out loud in Bisaya</div><div class="prompt">${esc(c.en)}</div><div class="timer"><i id="tb"></i></div><p class="muted small" style="margin:0">${secs} seconds. The whole thing, no English. Then compare with the answer.</p><div id="rev"></div>`;
+    $('#ex').innerHTML = `<div class="label">Say it out loud in Bisaya</div><div class="prompt">${esc(c.ask || c.en)}</div><div class="timer"><i id="tb"></i></div><p class="muted small" style="margin:0">${secs} seconds. The whole thing, no English. Then compare with the answer.</p><div id="rev"></div>`;
     foot(`<button class="btn primary block" id="show">Show answer</button>`);
     const t0 = Date.now();
     const reveal = () => {
       clearInterval(timerH);
       $('#rev').innerHTML = `<div class="ceb">${esc(c.ceb)}</div>${c.audio ? `<div class="playrow" style="margin-top:12px"><button class="play sm" id="pl2" aria-label="Play">${I.play}</button><span class="muted small">Compare with the native recording.</span></div>` : ''}`;
       if (c.audio) { $('#pl2').onclick = e => play(c.id, 1, e.currentTarget); play(c.id, 1, $('#pl2')); }
+      if (typeof recorderHtml === 'function') { $('#rev').insertAdjacentHTML('beforeend', recorderHtml()); wireRecorder(c.ceb, c); }
       foot(`<div class="label">How did it go?</div><div class="grades"><button class="btn" data-q="2">Said it smoothly</button><button class="btn" data-q="1">Got there, but slowly or with small mistakes</button><button class="btn" data-q="0">Blanked or used English</button></div>`);
       document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => result(c, item, +b.dataset.q));
     };
@@ -1921,7 +1929,8 @@ const EX = {
     const rates = [1, 1, Math.max(1.1, S.speed)];
     $('#ex').innerHTML = `<div class="label">Shadowing</div><div class="ceb">${esc(c.ceb)}</div><div class="muted">${esc(c.en)}</div>
       <div class="stage">${['Listen', 'Speak along', 'Speak along, ' + rates[2].toFixed(1) + '×'].map((n, i) => `<span id="st${i}">${n}</span>`).join('')}</div>
-      <p class="muted small" style="margin:0">Say it at the same time as the speaker, copying the rhythm and melody.</p>`;
+      <p class="muted small" style="margin:0">Say it at the same time as the speaker, copying the rhythm and melody.</p>${typeof recorderHtml === 'function' ? recorderHtml() : ''}`;
+    if (typeof wireRecorder === 'function') wireRecorder(c.ceb, c);
     foot(`<button class="btn primary block" id="cont">Continue</button>`);
     $('#cont').onclick = () => { sess.xp += 5; addXP(5); save(); next(); };
     const tok = qi;
