@@ -559,7 +559,7 @@ function senseHtml(c) {
 // one meaning's part of the panel: this card's meaning, or (tapped) one of the others, which comes later as its own card
 function senseBody(src, j, k, w) {
   const me = SENSES[src][j];
-  return `<div class="small muted" style="margin:6px 0 2px">${j === k ? `This card is <b>${esc(w)} = ${esc(me.en)}</b>. The other meanings each have their own card. Tap one to see it.` : `<b>${esc(w)} = ${esc(me.en)}</b> is another meaning. It gets its own card later. Tap 👉 to go back to this card's meaning.`}</div>
+  return `<div style="margin-top:6px"></div>
     ${me.tip ? `<div><b>How to spot it:</b> ${esc(me.tip)}</div>` : ''}
     <div class="sx">${me.ex.map(e => `<div class="sxr"><div><b>${esc(e[0])}</b><div class="small muted">${esc(e[1])}</div></div>${hasVoice(e[0]) ? `<button class="play sm" data-vs="${esc(e[0])}" aria-label="Play example">${I.play}</button>` : ''}</div>`).join('')}</div>`;
 }
