@@ -1862,6 +1862,8 @@ function typedCheck(c, item, inp, tolFrac, dictMode) {
   if (dictMode) return result(c, item, pass ? 1 : false, missed.length ? 'Missed or misheard: <b>' + esc(missed.join(', ')) + '</b>' : 'You wrote "' + said + '"');
   return result(c, item, pass, pass ? 'Watch the spelling: you wrote "' + said + '"' : 'You wrote "' + said + '"');
 }
+// Prompt that asks for the Bisaya: drop any (bracketed example) that contains the answer word.
+const askEn = (c, t) => { t = String(t == null ? c.en : t); const fold = x => x.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); const ws = fold(String(c.ceb || '')).match(/[a-z'-]{2,}/g) || []; if (!ws.length) return t; const re = new RegExp("(^|[^A-Za-zÀ-ɏ'-])(" + ws.map(w => w.replace(/[-']/g, '\\$&')).join('|') + ")(?=$|[^A-Za-zÀ-ɏ'-])", 'gi'); const out = t.replace(/\s*\(([^()]*)\)/g, (m, inner) => { const f = fold(inner); if (!re.test(f)) { re.lastIndex = 0; return m; } re.lastIndex = 0; let b = inner.replace(re, '$1___'); re.lastIndex = 0; if (b === inner) b = f.replace(re, '$1___'); re.lastIndex = 0; return /[:=]/.test(b) && /[a-z]{2,}/.test(b.replace(/___/g, '')) ? ' (' + b + ')' : ''; }).trim(); return out || t; };
 const EX = {
   teach(c, item) {
     sess.newIds.add(c.id);
@@ -1883,7 +1885,7 @@ const EX = {
     foot(`<button class="btn primary block" id="cont">Got it</button>`); $('#cont').onclick = next;
   },
   listen(c, item) { const d = distract(c, 3, 'en'); if (d.length < 2) return EX.dict(c, item); $('#ex').innerHTML = `<h2>What did you hear?</h2>${playBlock(S.speed)}<div class="opts"></div>`; wirePlay(c, S.speed); choiceEx(c, item, shuffle([c, ...d]), 'en'); },
-  mc(c, item) { const d = distract(c, 3, 'ceb'); if (d.length < 2) return c.kind === 'f' || c.kind === 'd' ? EX.build(c, item) : EX.type(c, item); $('#ex').innerHTML = `<div class="label">How do you say</div><div class="prompt">${esc(c.en)}</div><div class="opts"></div>`; choiceEx(c, item, shuffle([c, ...d]), 'ceb', 'cebopt'); },
+  mc(c, item) { const d = distract(c, 3, 'ceb'); if (d.length < 2) return c.kind === 'f' || c.kind === 'd' ? EX.build(c, item) : EX.type(c, item); $('#ex').innerHTML = `<div class="label">How do you say</div><div class="prompt">${esc(askEn(c))}</div><div class="opts"></div>`; choiceEx(c, item, shuffle([c, ...d]), 'ceb', 'cebopt'); },
   build(c, item) {
     const combo = c.combos ? pick([[c.ceb, c.en]].concat(c.combos)) : [c.ceb, c.en];
     const cc = Object.assign({}, c, { ceb: combo[0], en: combo[1] });
@@ -1893,7 +1895,7 @@ const EX = {
     const others = (c.combos || []).map(x => x[0]).concat(taughtIds().filter(id => id !== c.id).map(id => card(id).ceb)).flatMap(x => tokens(x).map(t => t.replace(/[.,!?…]/g, ''))).filter(t => !low.includes(t.toLowerCase()) && known(t));
     const extra = [...new Set(shuffle(swaps).slice(0, 2).concat(shuffle(others)))].slice(0, Math.max(3, Math.ceil(ans.length * 0.8)));
     const bank = shuffle(ans.map((t, i) => ({ t, k: 'a' + i })).concat(extra.map((t, i) => ({ t, k: 'x' + i })))); const chosen = [];
-    $('#ex').innerHTML = `<div class="label">Build it in Bisaya</div><div class="prompt">${esc(cc.en)}</div><div class="tray" id="tray"></div><div class="bank" id="bank">${bank.map(b => `<button class="tile" data-k="${b.k}">${esc(b.t)}</button>`).join('')}</div><p class="muted small" style="margin:0">Some tiles are look-alikes. Watch ko / ka, koy / kay, mo- / ni-.</p>`;
+    $('#ex').innerHTML = `<div class="label">Build it in Bisaya</div><div class="prompt">${esc(askEn(cc))}</div><div class="tray" id="tray"></div><div class="bank" id="bank">${bank.map(b => `<button class="tile" data-k="${b.k}">${esc(b.t)}</button>`).join('')}</div><p class="muted small" style="margin:0">Some tiles are look-alikes. Watch ko / ka, koy / kay, mo- / ni-.</p>`;
     foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
     const draw = () => {
       $('#tray').innerHTML = chosen.map(k => `<button class="tile" data-k="${k}">${esc(bank.find(b => b.k === k).t)}</button>`).join('');
@@ -1948,7 +1950,7 @@ const EX = {
     $('#idk').onclick = () => { inp.disabled = true; inp.classList.add('wrong'); result(cc, item, false, "That's okay. " + extra); };
   },
   type(c, item) {
-    $('#ex').innerHTML = `<div class="label">Write it in Bisaya</div><div class="prompt">${esc(c.en)}</div><input class="field" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type in Bisaya"><p class="muted small" style="margin:0">Small typos are fine, but little words like ko / ka have to be exact. "ug" and "og" both count.</p>`;
+    $('#ex').innerHTML = `<div class="label">Write it in Bisaya</div><div class="prompt">${esc(askEn(c))}</div><input class="field" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type in Bisaya"><p class="muted small" style="margin:0">Small typos are fine, but little words like ko / ka have to be exact. "ug" and "og" both count.</p>`;
     foot(`<button class="btn primary block" id="chk" disabled>Check</button><button class="btn ghost block" id="idk">I don't know</button>`);
     const inp = $('#ans'); inp.focus(); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
     inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) $('#chk').click(); };
@@ -1963,7 +1965,7 @@ const EX = {
   },
   speak(c, item) {
     const secs = Math.round(Math.min(10, 3 + tokens(c.ceb).length * 0.8));
-    $('#ex').innerHTML = `<div class="label">Say it out loud in Bisaya</div><div class="prompt">${esc(c.ask || c.en)}</div><div class="timer"><i id="tb"></i></div><p class="muted small" style="margin:0">${secs} seconds. The whole thing, no English. Then compare with the answer.</p><div id="rev"></div>`;
+    $('#ex').innerHTML = `<div class="label">Say it out loud in Bisaya</div><div class="prompt">${esc(askEn(c, c.ask || c.en))}</div><div class="timer"><i id="tb"></i></div><p class="muted small" style="margin:0">${secs} seconds. The whole thing, no English. Then compare with the answer.</p><div id="rev"></div>`;
     foot(`<button class="btn primary block" id="show">Show answer</button>`);
     const t0 = Date.now();
     const reveal = () => {
