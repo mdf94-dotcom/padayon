@@ -511,10 +511,16 @@ function senseClash(id, also) { if (typeof SENSE_LIST === 'undefined') return fa
   return [src, ...(SENSE_OF[src] || [])].some(x => x !== id && (also.includes(x) || (S.cards[x] && S.cards[x].fresh))); }
 function mixClash(id, also) { const c = card(id); if (!c || !c.mix) return false;
   return c.mix.some(m => (m.w || []).length && mixWordIds(m).some(x => x !== id && (also.includes(x) || (S.cards[x] && S.cards[x].fresh)))); }
+// a rule written as sentences becomes a bulleted list, one word per line with the word in bold ("niya = by him/her …")
+function ruleList(text) {
+  const parts = String(text).split(/(?<=[.!?])\s+(?=[A-Za-zÀ-ÿ'/(])/).map(x => x.trim()).filter(Boolean);
+  if (parts.length < 2) return `<div>${esc(text)}</div>`;
+  return `<ul class="rulel">${parts.map(x => { const m = x.match(/^([^=]{1,40}?)\s*=\s*(.+)$/); return `<li>${m ? `<b>${esc(m[1])}</b> = ${esc(m[2])}` : esc(x)}</li>`; }).join('')}</ul>`;
+}
 function mixHtml(c, teaching) {
   if (!c || !c.mix || !c.mix.length) return '';
   const ms = teaching ? c.mix.filter(m => !(m.w || []).length || mixKnown(m, c.id) >= 1) : c.mix; if (!ms.length) return '';
-  return ms.map(m => `<div class="panel mix"><div class="label">Don't mix up · ${esc(m.title)}</div><div>${esc(m.rule)}</div>
+  return ms.map(m => `<div class="panel mix"><div class="label">Don't mix up · ${esc(m.title)}</div>${ruleList(m.rule)}
     <ul class="mixl">${m.ok.map(([a, b]) => `<li>✅ <b>${esc(a)}</b> <span class="muted">${esc(b)}</span></li>`).join('')}${(m.no || []).map(([a, b]) => `<li>❌ <s>${esc(a)}</s> → ✅ <b>${esc(b)}</b></li>`).join('')}</ul></div>`).join('');
 }
 // one question from a "Don't mix up" box: fix a common mistake, or tell apart the words in the box
@@ -872,7 +878,7 @@ const stillWanted = (r, cx) => r === playReq && cx === audioCtx();
 /* ---------- computer voice: cards with no native recording ----------
    voice/ holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
-const VOICE_V = 19; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
+const VOICE_V = 20; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
 /* The computer voice comes in pieces: a small index, then one piece per stage. You only download the pieces for
    where you are on the path (plus the next one); the rest arrive when a sentence from them is first played. */
 async function loadVoice() {
@@ -1579,6 +1585,8 @@ function twWrap(el) {
     span.innerHTML = n.textContent.split(/(\s+)/).map(p => { const w = p.replace(/^[^\p{L}']+|[^\p{L}'-]+$/gu, ''); return w && /\p{L}/u.test(w) ? `<span class="tw" data-tok="${esc(w)}" role="button" tabindex="0">${esc(p)}</span>` : esc(p); }).join('');
     n.replaceWith(span);
   });
+  // words inside highlights (the wavy "this part differs" mark, bold) are words too
+  [...el.children].filter(x => /^(MARK|B|I|EM|STRONG|S)$/.test(x.tagName) && !x.closest('.tw') && !x.querySelector('.tw')).forEach(twWrap);
 }
 // a choice counts as Bisaya when most of its words are Bisaya cards and none is a common English word
 const EN_WORDS = new Set("i i'm i've it's you you're your he she we they it is are was were am be been the a an to of in on at for with and or not don't didn't will would can do did does have has had my me this that what where who when why how there here words word".split(' '));
@@ -1792,6 +1800,9 @@ function wirePlay(c, rate) { $('#pl').onclick = e => play(c.id, rate, e.currentT
 /* ---------- why the answer you picked is wrong ----------
    The wrong choices are built to trip you up (look-alikes, ko/ka, mo-/ni-), so a miss shows what your pick means
    and which word makes the difference. */
+// which "no" to use: dili, wala or ayaw
+const NEG_WHY = { dili: '<b>Dili</b> fits here: it\'s about now or later, or describing something (not / won\'t / no).', wala: '<b>Wala</b> fits here: it\'s about something that didn\'t happen, or not having something (didn\'t / don\'t have / none).', ayaw: '<b>Ayaw</b> fits here: you\'re telling someone not to do something (don\'t!).' };
+const NEG_WHEN = '<ul class="rulel"><li>Telling someone not to? <b>ayaw</b></li><li>Didn\'t happen, or don\'t have it? <b>wala</b></li><li>Anything else (isn\'t, won\'t, no)? <b>dili</b></li></ul>';
 function diffNote(right, picked) {
   const a = tokens(firstAlt(right)).map(t => t.replace(/[.,!?…]/g, '')), b = tokens(firstAlt(picked)).map(t => t.replace(/[.,!?…]/g, ''));
   const la = a.map(lowTok), lb = b.map(lowTok);
@@ -1801,6 +1812,9 @@ function diffNote(right, picked) {
     return [miss.length ? 'Missing: ' + miss.map(t => `<b>${esc(t)}</b>${g(t)}`).join(', ') : '', extra.length ? 'Extra: ' + extra.map(t => `<b>${esc(t)}</b>${g(t)}`).join(', ') : ''].filter(Boolean).join('. '); }
   const pairs = []; la.forEach((t, i) => { if (t !== lb[i]) pairs.push([a[i], b[i]]); });
   if (!pairs.length || pairs.length > 2) return '';
+  // the three ways to say "no": explain which one fits and why, not just two glosses
+  if (pairs.length === 1) { const neg = w => ({ dili: 'dili', di: 'dili', wala: 'wala', wa: 'wala', ayaw: 'ayaw' })[lowTok(w)]; const r = neg(pairs[0][0]), w = neg(pairs[0][1]);
+    if (r && w && r !== w) return NEG_WHY[r] + ' ' + NEG_WHEN; }
   // only explain a swap when both sides have a real meaning (not just "na- = became")
   if (pairs.some(([x, y]) => !glossOf(x) || !glossOf(y) || /^[a-z]+- =/.test(glossOf(x)) || /^[a-z]+- =/.test(glossOf(y)))) return '';
   return pairs.map(([x, y]) => `<b>${esc(y)}</b> = ${esc(glossOf(y) || '?')}, but <b>${esc(x)}</b> = ${esc(glossOf(x) || '?')}`).join('. ');

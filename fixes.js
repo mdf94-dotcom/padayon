@@ -167,3 +167,40 @@ Object.assign(GLOSS_MORE, { pod: 'also; too', hikay: 'party; event', masakit: 'h
 GLOSS_MORE.kawota = 'scratch (it)'; GLOSS_MORE.kalota = 'scratch (it)';
 // Aduna's own cards show sentences with aduna, not naa
 if (SENSES.m3213) SENSES.m3213.forEach(s => s.ex = s.ex.map(([c, e]) => [c.replace(/^Naay /, 'Adunay ').replace(/^Naa /, 'Aduna '), e]));
+
+/* na and pa, as Mikhail laid them out:
+   pa = still / not yet / more (an action or state still going, hasn't happened yet, or more of something)
+   na = already / now / anymore (it has happened or changed, do it now, or no longer) */
+SENSES.w60 = [
+  { en: 'still', ex: [['Bata pa siya.', 'She is still a child.'], ['Sayo pa.', 'It is still early.']], tip: 'pa after a word that describes = still (bata pa = still a child)' },
+  SENSES.w60[1],   // more (keeps its card)
+  { en: 'not yet', ex: [['Wala pa ko kakaon.', 'I have not eaten yet.'], ['Wala pa.', 'Not yet.']], tip: 'wala pa = not yet: it hasn\'t happened, but it will' }];
+SENSES.w60[1] = { en: 'more, one more', ex: [['Usa pa, palihug.', 'One more, please.'], ['Gusto pa ko ug kan-on.', 'I want more rice.']], tip: 'pa after a number or a thing you want = more' };
+SENSES.w149 = [
+  { en: 'already', ex: [['Nikaon na ko.', 'I have already eaten.'], ['Humana na ko.', 'I am already done.']], tip: 'na after something that happened or changed = already' },
+  { en: 'now (do it now)', ex: [['Tulog na.', 'Go to sleep now.'], ['Lakaw na.', 'Go now.']], tip: 'an action word + na, said to someone = do it now' },
+  { en: 'anymore', ex: [['Dili na ko mobalik.', 'I will not come back anymore.'], ['Wala na.', "There's none left."]], tip: 'dili na / wala na = not anymore, no longer' }];
+[['w60', 2], ['w149', 1], ['w149', 2]].forEach(x => { SENSE_LIST.push(x); (SENSE_OF[x[0]] = SENSE_OF[x[0]] || []).push('s' + (SENSE_LIST.length - 1)); });
+GNOTES.w60 = 'pa = something is still going, hasn\'t happened yet, or you want more. Still: Bata pa siya. — She is still a child. · Not yet: Wala pa ko kakaon. — I haven\'t eaten yet. · More: Usa pa, palihug. — One more, please. Its opposite is na (already, now, anymore).';
+GNOTES.w149 = 'na = something has already happened or changed, do it now, or no longer. Already: Nikaon na ko. — I\'ve already eaten. · Now: Tulog na. — Go to sleep now. · Anymore: Dili na ko mobalik. — I won\'t come back anymore. Its opposite is pa (still, not yet, more).';
+(m => { if (!m) return;
+  m.rule = 'pa = still, not yet, or more: something is still going, hasn\'t happened yet, or you want more. na = already, now, or anymore: it has happened or changed, do it now, or no longer.';
+  m.ok = [['Bata pa siya.', 'She is still a child.'], ['Wala pa ko kakaon.', "I haven't eaten yet."], ['Usa pa, palihug.', 'One more, please.'], ['Nikaon na ko.', "I've already eaten."], ['Tulog na.', 'Go to sleep now.'], ['Dili na ko mobalik.', "I won't come back anymore."]];
+  m.no = [['Wala na ko kakaon (for "not yet").', 'Wala pa ko kakaon.'], ['Bata na siya (for "still a child").', 'Bata pa siya.']];
+  m.fill = (m.fill || []).concat([['Bata ___ siya.', 'pa', ['pa', 'na'], 'She is still a child.'], ['Sayo ___.', 'pa', ['pa', 'na'], 'It is still early.'], ['Humana ___ ko.', 'na', ['na', 'pa'], "I'm already done."],
+    ['Tulog ___.', 'na', ['na', 'pa'], 'Go to sleep now.'], ['Dili ___ ko mobalik.', 'na', ['na', 'pa'], "I won't come back anymore."], ['Nikaon ___ ko.', 'na', ['na', 'pa'], "I've already eaten."]]);
+})(MIXUPS.find(m => m.title === 'na · pa'));
+
+// dili · wala · ayaw: when to use which, the way people ask it
+(m => { if (!m) return;
+  m.rule = 'Three ways to say no. Ask: am I telling someone not to? Use ayaw (don\'t!). Did it not happen, or is something missing? Use wala (didn\'t, don\'t have, none). Otherwise (isn\'t, won\'t, no) use dili. After wala and ayaw the action word goes back to mo- or its root.';
+  m.ok = [['Dili ko gutom.', "I'm not hungry. (describing)"], ['Dili ko moadto ugma.', "I won't go tomorrow. (later)"], ['Dili.', 'No.'], ['Wala ko mokaon.', "I didn't eat. (didn't happen)"], ['Wala koy kwarta.', "I don't have money. (not having)"], ['Wala nako tuyo-a.', "I didn't mean to. (didn't happen)"], ['Ayaw kaon!', "Don't eat! (telling someone)"]];
+})(MIXUPS.find(m => m.title === 'dili · wala · ayaw'));
+// one word per sentence, so each becomes its own bullet
+(() => { const set = (t, r) => { const m = MIXUPS.find(x => x.title === t); if (m) m.rule = r; };
+  set('si · ni · kang · ang · sa', 'si = the person (with a name) doing it or being talked about. ni = of / by a person (with a name). kang = to / for a person (with a name). ang = the (things). sa = to / at / of (places and things).');
+  set('na · pa', 'pa = still, not yet, or more: something is still going, hasn\'t happened yet, or you want more. na = already, now, or anymore: it has happened or changed, do it now, or no longer.');
+  set('ug/og · nga', 'ug (also og) = "and", or "some / a" before a thing after an action word. nga = joins a describing word to the thing (it can shorten to -ng).');
+  set('tinuyo vs tinuod', 'tinuyo = on purpose (from tuyo, to intend). tinuod = true.');
+  set('ta (we, with you) · mi (we, not you)', 'kita / ta / nato / atong = we, including the person you\'re talking to. kami / mi / namo / among = we, but not you.');
+})();
