@@ -567,7 +567,8 @@ function senseBody(src, j, k, w) {
 document.addEventListener('click', e => {
   const b = e.target.closest && e.target.closest('.sensep [data-sj]'); if (!b) return;
   const p = b.closest('.sensep'), j = +b.dataset.sj, k = +p.dataset.k;
-  p.querySelectorAll('[data-sj]').forEach(x => { const on = +x.dataset.sj === j; x.classList.toggle('sel', on && j !== k); x.setAttribute('aria-pressed', on); });
+  // the meaning you're looking at is filled in; the others (this card's own one too, still marked 👉) go plain
+  p.querySelectorAll('[data-sj]').forEach(x => { const on = +x.dataset.sj === j; x.classList.toggle('on', on); x.classList.remove('sel'); x.setAttribute('aria-pressed', on); });
   p.querySelector('.sbody').innerHTML = senseBody(p.dataset.src, j, k, p.dataset.w);
   p.querySelectorAll('.sbody [data-vs]').forEach(x => x.onclick = () => playSentence(x.dataset.vs, x));
 });
