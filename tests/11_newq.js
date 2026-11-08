@@ -63,7 +63,8 @@ const { open, ready, Report } = require('./lib');
     for (const id of ids) { Q = [{ id, type: 'teach' }, { id: 'g0', type: 'teach' }]; qi = 0; sess = newSess('daily'); view = 'session'; VIEWS.session(); const p = document.querySelector('.sensep'); if (!p) { out.push([id, 'no panel']); continue; }
       const chips = [...p.querySelectorAll('[data-sj]')], k = +p.dataset.k, ss = SENSES[p.dataset.src];
       for (const ch of chips) { const j = +ch.dataset.sj; ch.click(); const body = p.querySelector('.sbody').textContent; if (!body.includes(ss[j].ex[0][0])) out.push([id, 'chip ' + j + ' shows the wrong meaning']); if (ch.tagName !== 'BUTTON') out.push([id, 'chip is not a button']); }
-      chips[k].click(); if (!p.querySelector('.sbody').textContent.includes('This card is')) out.push([id, "👉 doesn't come back"]); }
+      for (const ch of chips) { ch.click(); const filled = chips.filter(x => x.classList.contains('on')); if (filled.length !== 1 || filled[0] !== ch) out.push([id, 'the tapped chip is not the only filled one']); }
+      chips[k].click(); if (!p.querySelector('.sbody').textContent.includes(ss[k].ex[0][0])) out.push([id, "👉 doesn't come back"]); }
     stopAudio(); return { n: ids.length, bad: out }; });
   R.ok(sens.n > 20 && !sens.bad.length, `meaning chips (${sens.n} cards): ` + JSON.stringify(sens.bad.slice(0, 4)));
   // a simulated week with the new kinds mixed in: nothing crashes, nothing falls back to Today

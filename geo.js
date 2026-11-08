@@ -78,7 +78,7 @@ const allLangs = () => [...new Set(Object.values(GEO_LANG).map(x => x.main))];
 let GG = null;
 async function startGeo(mode, practice) {
   await loadGeo(); if (!GEO) return toast('The map did not load. Check your connection.');
-  GG = { mode, practice: !!practice, n: 0, miss: 0, seen: new Set(), last: null, how: rushTyped() ? 'type' : 'pick' };
+  ANS_RUN = 0; if (!practice && typeof Sfx !== 'undefined') Sfx.countdown(); GG = { mode, practice: !!practice, n: 0, miss: 0, seen: new Set(), last: null, how: rushTyped() ? 'type' : 'pick' };
   geoNext(); go('geogame');
 }
 function geoNext() {
@@ -113,7 +113,7 @@ VIEWS.geogame = function () {
   wireSay(); if (GG.mode === 'lang') sayIt(t.n);
   const btns = [...document.querySelectorAll('.geo-opts .opt')];
   const t0 = Date.now(); clearInterval(timerH);
-  if (secs) timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / (secs * 1000), tb = $('#tb'); if (tb) tb.style.width = Math.max(0, f * 100) + '%'; if (f <= 0) answer(-1, null); }, 100);
+  let lastTick = 99; if (secs) timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / (secs * 1000), tb = $('#tb'); if (tb) tb.style.width = Math.max(0, f * 100) + '%'; if (!GG.practice) lastTick = hurryTick(f * secs, lastTick); if (f <= 0) answer(-1, null); }, 100);
   const answer = (i, text) => {
     if (GG.done) return; GG.done = true; clearInterval(timerH);
     const others = GG.mode === 'prov' ? GEO.p.map(p => p.n) : allLangs();

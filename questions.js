@@ -123,9 +123,9 @@ function wireRecorder(text, c) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); const chunks = [];
       REC = new MediaRecorder(stream); REC.ondataavailable = e => chunks.push(e.data);
-      REC.onstop = () => { stream.getTracks().forEach(t => t.stop()); if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(new Blob(chunks, { type: REC.mimeType || 'audio/webm' }));
+      REC.onstop = () => { if (typeof Music !== 'undefined') Music.hold(false); stream.getTracks().forEach(t => t.stop()); if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(new Blob(chunks, { type: REC.mimeType || 'audio/webm' }));
         go.textContent = '🎙️ Record again'; me.hidden = false; ref.hidden = false; st.textContent = 'Now play yours, then the real one.'; };
-      REC.start(); go.textContent = '⏹ Stop'; st.textContent = 'Recording… say it now'; setTimeout(() => { if (REC && REC.state === 'recording') REC.stop(); }, 8000);
+      if (typeof Music !== 'undefined') Music.hold(true); REC.start(); go.textContent = '⏹ Stop'; st.textContent = 'Recording… say it now'; setTimeout(() => { if (REC && REC.state === 'recording') REC.stop(); }, 8000);
     } catch (e) { st.textContent = 'The microphone is off. Allow it in your browser to record.'; }
   };
 }

@@ -955,11 +955,17 @@ const rulePic = (r, cls) => typeof PIC_X !== 'undefined' ? picImg(PIC_X.rule[r.i
 let view = 'home';
 const VIEWS = {};
 // background music: upbeat in Rush, calm in lessons and practice, off on menus and whenever you're speaking
+// which music plays: each activity has its own set of tracks (music.js). Listening questions and the mic get silence.
+const QUIET_TYPES = new Set(['speak', 'shadow', 'pron', 'say', 'replysay', 'listen', 'tiles', 'dict', 'hear2']);
 function musicFor() {
   if (view === 'rush' || (view === 'geogame' && GG && !GG.practice)) return 'rush';
-  if (view === 'session') { const it = Q[qi]; return it && ['speak', 'shadow', 'pron', 'say'].includes(it.type) ? 'off' : 'calm'; }
+  if (view === 'session') { const it = Q[qi]; if (it && QUIET_TYPES.has(it.type)) return 'off'; return sess && sess.mode === 'daily' ? 'daily' : sess && ['speed', 'dict'].includes(sess.mode) ? 'off' : 'practice'; }
+  if (view === 'build') return 'grammar';
   if (TAB_VIEWS.has(view) && HOME_SPK) return HOME_SPK.who;
-  return ['speedrun', 'build', 'real', 'story', 'stories', 'geo', 'geogame', 'numbers', 'numround'].includes(view) ? 'calm' : 'off';
+  if (view === 'story' || view === 'stories') return 'stories';
+  if (view === 'numbers' || view === 'numround') return 'numbers';
+  if (['speedrun', 'retell'].includes(view)) return 'off';
+  return ['real', 'geo', 'geogame', 'aboutme'].includes(view) ? 'practice' : 'off';
 }
 function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); try { const ret = (VIEWS[view] || VIEWS.home)(); if (ret && ret.catch) ret.catch(e => renderCrash(e)); clearHealed(); } catch (e) {
     // a lesson or game screen redrawn after its lesson ended has nothing to show: go back to Today quietly
@@ -1252,6 +1258,10 @@ VIEWS.me = function () {
   <section class="panel"><h2>Daily cards</h2>
     ${[['newPerDay', 'New cards per day', [5, 8, 10, 15]]].map(([f, l, opts]) => `<div><div class="label">${l}</div><div class="seg" data-set="${f}">${opts.map(n => `<button class="${st[f] === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`).join('')}
     <div><div class="label">Background music</div><div class="seg" id="musicseg"><button class="${S.settings.music !== false ? 'on' : ''}" data-m="1">On</button><button class="${S.settings.music === false ? 'on' : ''}" data-m="0">Off</button></div></div>
+    <div><div class="label">Music volume</div><input type="range" min="0" max="100" step="5" class="vol" id="mvol" value="${Math.round((S.settings.musicVol == null ? 0.4 : S.settings.musicVol) * 100)}" aria-label="Music volume"></div>
+    <div><div class="label">Sound effects</div><div class="seg" id="sfxseg"><button class="${S.settings.sfx !== false ? 'on' : ''}" data-m="1">On</button><button class="${S.settings.sfx === false ? 'on' : ''}" data-m="0">Off</button></div></div>
+    <div><div class="label">Sound effects volume</div><input type="range" min="0" max="100" step="5" class="vol" id="svol" value="${Math.round((S.settings.sfxVol == null ? 0.4 : S.settings.sfxVol) * 100)}" aria-label="Sound effects volume"></div>
+    <div><div class="label">Vibration</div><div class="seg" id="vibseg"><button class="${S.settings.vibe !== false ? 'on' : ''}" data-m="1">On</button><button class="${S.settings.vibe === false ? 'on' : ''}" data-m="0">Off</button></div><p class="small muted" style="margin:4px 0 0">Android phones only; iPhones don't let websites vibrate.</p></div>
     <p class="muted small" style="margin:0">${minsText(st.newPerDay || 8)} This is the most you'll get: when old words pile up or answers get shaky, Binko gives fewer new ones until you catch up.</p><p class="muted small" style="margin:0">🎵 ${IPHONE_MUSIC}</p></section>
   <section class="panel"><h2>Your data</h2>
     <p class="small muted" style="margin:0">${hasPack() ? `Word pack loaded: ${P.length} phrases and ${W.length} words with recordings.` : 'Word pack not loaded yet.'}</p>
@@ -1262,9 +1272,13 @@ VIEWS.me = function () {
   <section class="panel"><h2>How Padayon works</h2><p class="small muted" style="margin:0">A quick tour of every part of the app.</p><div class="row"><button class="btn ghost" id="guidego">Show the guide</button></div></section>
   <section class="panel"><h2>Start over</h2><p class="small muted" style="margin:0">Erase all your progress: words, grammar rules, streak, XP and stats, on every device you're signed in on. Your name and settings stay. Tip: tap <b>Save a backup</b> above first, so you can load it back if you change your mind.</p>
     <div id="wipebox"><button class="btn ghost" id="wipego" style="color:var(--bad);border-color:var(--bad)">Reset all my progress</button></div></section>
-  <section class="panel"><h2>About</h2><p class="small muted" style="margin:0">Made for the Balay Ta family. Computer voice: Meta MMS Cebuano (CC BY-NC 4.0). Pictures: Twemoji (CC BY 4.0).</p></section>
+  <section class="panel"><h2>About</h2><p class="small muted" style="margin:0">Made for the Balay Ta family. Computer voice: Meta MMS Cebuano (CC BY-NC 4.0). Pictures: Twemoji (CC BY 4.0). Music and sound effects: made by the app itself (Kulintang Morning, Rondalla Stroll, Bamboo Breeze, Marimba Pad, Lo-fi Jeepney, Rain on Nipa, Harana Night, Abaca Loom, Music Box Study, Lola's Tale, Island Dusk, Market Count, Tinikling Steps, Rush, Fiesta Rush, Sinulog Drums).</p></section>
   </div>`);
   wireProgress();
+  document.querySelectorAll('#sfxseg button').forEach(b => b.onclick = () => { S.settings.sfx = b.dataset.m === '1'; save(); render(); if (S.settings.sfx && typeof Sfx !== 'undefined') Sfx.right(1); });
+  document.querySelectorAll('#vibseg button').forEach(b => b.onclick = () => { S.settings.vibe = b.dataset.m === '1'; save(); render(); try { if (S.settings.vibe && navigator.vibrate) navigator.vibrate(30); } catch (e) { } });
+  const mv = $('#mvol'); if (mv) mv.onchange = () => { S.settings.musicVol = +mv.value / 100; save(); if (typeof Music !== 'undefined') Music.volume(); };
+  const sv = $('#svol'); if (sv) sv.onchange = () => { S.settings.sfxVol = +sv.value / 100; save(); if (typeof Sfx !== 'undefined') Sfx.right(1); };
   document.querySelectorAll('#musicseg button').forEach(b => b.onclick = () => { S.settings.music = b.dataset.m === '1'; save(); render(); toast(S.settings.music ? 'Music on. On iPhone, turn off silent mode to hear it.' : 'Music off'); });
   $('#guidego').onclick = () => openGuide('me');
   $('#wipego').onclick = () => { $('#wipebox').innerHTML = `<p class="small" style="margin:0 0 6px"><b>This can't be undone</b> (unless you saved a backup). Type <b>RESET</b> to confirm.</p><div class="keybox"><input class="field" id="wipetxt" autocomplete="off" autocapitalize="characters" placeholder="RESET"><button class="btn primary" id="wipeok" disabled style="background:var(--bad);border-color:var(--bad)">Erase</button></div><button class="btn ghost sm" id="wipeno" style="margin-top:6px">Cancel</button>`;
@@ -1436,7 +1450,7 @@ const GUIDE = [
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
   { t: 'Ranks', tab: 'board', art: '📊', pts: [['📊', 'See how the family is doing'], ['🎯', 'Streaks, accuracy, words, games'], ['⌨️', 'Game scores say if they were typed or multiple choice'], ['🔑', 'Sign in on <b>Me</b> to join']] },
-  { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day (the most you\'ll get: fewer when reviews pile up)'], ['🎵', 'Background music on or off, or tap the speaker in the top corner of any screen'], ['🗺️', 'Your <b>word web</b> is on Today, your <b>path map</b> on Practice, and <b>Then and now</b> on Me'], ['💾', 'Save a backup, or <b>Start over</b> to reset all your progress on every device']], set: true },
+  { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day (the most you\'ll get: fewer when reviews pile up)'], ['🎵', 'Music changes with what you\'re doing (lessons, practice, grammar, stories, numbers, games) and switches tracks during your daily session. Set music, sound effects and vibration in Settings, or tap the speaker in the top corner'], ['🗺️', 'Your <b>word web</b> is on Today, your <b>path map</b> on Practice, and <b>Then and now</b> on Me'], ['💾', 'Save a backup, or <b>Start over</b> to reset all your progress on every device']], set: true },
   { t: 'One last thing', art: '🎯', pts: [['✏️', 'A quick check of what you already know'], ['⏭️', 'Words you know get skipped'], ['🤷', 'Not sure? Tap "I don\'t know". That\'s fine!']] }
 ];
 let guideAt = 0, guideBack = 'home';
@@ -1966,7 +1980,12 @@ const EX = {
     if (qi === tok) document.querySelectorAll('.stage span').forEach(s => s.className = 'done');
   }
 };
-function finishSession() { stopAudio(); const full = qi >= Q.length; if (full && sess.mode === 'daily') clearResume(); if (full && sess.mode === 'daily') { tick('session'); try{ if (window.parent !== window) window.parent.postMessage({practice:'done', app:'bisaya'}, location.origin); }catch(e){} } if (full && sess.mode === 'dict') tick('dict'); save(); go('summary'); }
+function finishSounds(full) {
+  if (typeof Sfx === 'undefined' || !full) return; Sfx.done(); if (typeof Music !== 'undefined') Music.endGroup();
+  if (sess.mode === 'daily' && S.sfxStreakDay !== today()) { S.sfxStreakDay = today(); setTimeout(() => Sfx.streakKept(), 1300); }
+  try { const cur = pathState().cur; if (S.stageSeen == null) S.stageSeen = cur; else if (cur > S.stageSeen) { S.stageSeen = cur; setTimeout(() => Sfx.stage(), 2400); } } catch (e) { }
+}
+function finishSession() { stopAudio(); const full = qi >= Q.length; finishSounds(full); ANS_RUN = 0; if (full && sess.mode === 'daily') clearResume(); if (full && sess.mode === 'daily') { tick('session'); try{ if (window.parent !== window) window.parent.postMessage({practice:'done', app:'bisaya'}, location.origin); }catch(e){} } if (full && sess.mode === 'dict') tick('dict'); save(); go('summary'); }
 VIEWS.summary = function () {
   if (typeof journeySnap === 'function') journeySnap();
   const acc = sess.total ? Math.round(sess.right / sess.total * 100) : 0;
@@ -2169,7 +2188,7 @@ const ruleQuiz = (r, roots) => r.quiz.filter(q => q.w.every(w => roots.has(w)));
 // grammar rules come as soon as you know the words to practice them: up to two new ones a day
 const RULES_PER_DAY = 2;
 const rulesToday = () => S.ruleDay === today() ? (S.ruleCnt || 1) : 0;
-function noteRuleLearned() { S.ruleCnt = rulesToday() + 1; S.ruleDay = today(); }
+function noteRuleLearned() { S.ruleCnt = rulesToday() + 1; S.ruleDay = today(); if (typeof Sfx !== 'undefined') Sfx.rule(); }
 function nextRule(skip) {
   if (rulesToday() + (skip ? 1 : 0) >= RULES_PER_DAY) return null;
   const roots = knownRoots();
@@ -2577,7 +2596,10 @@ VIEWS.real = function () {
 };
 
 /* ---------- accuracy log, leaderboard, and Padayon Rush (endless listening game) ---------- */
-function logAnswer(ok) { const t = today(); S.acc = S.acc || {}; const a = S.acc[t] || (S.acc[t] = { r: 0, t: 0 }); a.t++; if (ok) a.r++; Object.keys(S.acc).forEach(k => { if (+k < t - 30) delete S.acc[k]; }); }
+// timed games: a tick for each of the last 3 seconds, higher as time runs out
+function hurryTick(left, last) { const k = Math.ceil(left); if (k <= 3 && k >= 1 && k < last && typeof Sfx !== 'undefined') Sfx.tick(k === 1); return Math.min(last, k); }
+let ANS_RUN = 0;   // right answers in a row (any screen); the right-answer chime rises with it
+function logAnswer(ok) { ANS_RUN = ok ? ANS_RUN + 1 : 0; if (typeof Sfx !== 'undefined') ok ? Sfx.right(ANS_RUN) : Sfx.wrong(); const t = today(); S.acc = S.acc || {}; const a = S.acc[t] || (S.acc[t] = { r: 0, t: 0 }); a.t++; if (ok) a.r++; Object.keys(S.acc).forEach(k => { if (+k < t - 30) delete S.acc[k]; }); }
 function acc7() { const t = today(); let r = 0, n = 0; Object.entries(S.acc || {}).forEach(([k, v]) => { if (+k > t - 7) { r += v.r; n += v.t; } }); return { r, n, pct: n ? Math.round(r / n * 100) : 0 }; }
 const weekStart = () => { const t = today(), dow = (t + 4) % 7; return t - ((dow + 6) % 7); }; // Monday
 const xpWeek = () => { const w = weekStart(); return Object.entries(S.xp).reduce((s, [k, v]) => s + (+k >= w ? v : 0), 0); };
@@ -2731,7 +2753,7 @@ function rushOptions(c, pool) {
   for (const [, d] of near) { if (out.length >= 4) break; const v = norm(d.en); if (!v || used.has(v) || out.some(o => sameMeaning(o.en, d.en))) continue; used.add(v); out.push(d); }
   return shuffle(out);
 }
-function startRush() { if (typeof Music !== 'undefined') Music.resetLevel(); if (!hasPack()) { toast('Load the content pack first.'); return goTab(); } RU = { pool: rushPool(), n: 0, seen: new Set(), how: rushTyped() ? 'type' : 'pick' }; sess = newSess('rush'); view = 'rush'; rushQ(); }
+function startRush() { ANS_RUN = 0; if (typeof Sfx !== 'undefined') Sfx.countdown(); if (typeof Music !== 'undefined') Music.resetLevel(); if (!hasPack()) { toast('Load the content pack first.'); return goTab(); } RU = { pool: rushPool(), n: 0, seen: new Set(), how: rushTyped() ? 'type' : 'pick' }; sess = newSess('rush'); view = 'rush'; rushQ(); }
 async function rushQ() {
   if ((S.guideV || 0) < GUIDE_V) return go('guide');
   if (typeof Music !== 'undefined') { Music.level(RU.n); Music.set('rush'); }
@@ -2758,7 +2780,7 @@ async function rushQ() {
   };
   btns.forEach((b, i) => b.onclick = () => finish(i));
   if (typed) { $('#tslot').innerHTML = typeBox('Type the meaning in English'); wireType(t => finish(null, t)); }
-  timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / (secs * 1000); const tb = $('#tb'); if (tb) tb.style.width = Math.max(0, f * 100) + '%'; if (f <= 0) finish(null, null); }, 100);
+  let lastTick = 99; timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / (secs * 1000); const tb = $('#tb'); if (tb) tb.style.width = Math.max(0, f * 100) + '%'; lastTick = hurryTick(f * secs, lastTick); if (f <= 0) finish(null, null); }, 100);
 }
 function rushOver(why, c, picked, typedText) {
   const n = RU ? RU.n : 0, best = S.rushBest || 0, how = RU ? RU.how : 'pick', r = bestWith(best, S.rushHow, n, how), isBest = r.isBest; S.rushBest = r.best; S.rushHow = r.how; save(); view = 'summary';
