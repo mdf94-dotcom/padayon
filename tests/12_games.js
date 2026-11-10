@@ -84,7 +84,7 @@ const RIGHT_RUNS = 25;
     // Conversations, every Story, Real Bisaya: keep pressing whatever moves you on, until the screen is left; "stuck" = nothing to press
     const walkThrough = (enter, stay) => page.evaluate(async ({ enter, stay }) => { eval(enter); await new Promise(r => setTimeout(r, 40)); const re = new RegExp(stay);
       for (let k = 0; k < 250; k++) { if (!re.test(view)) return 'finished:' + view; const inp = document.querySelector('#app input.field:not([disabled]), #app #rep:not([disabled])'); if (inp && !inp.value) { inp.value = 'Salamat'; inp.dispatchEvent(new Event('input')); }
-        const b = ['#nx', '#cont', '#fin', '#sh', '#chk:not([disabled])', '#tgo:not([disabled])', '.opt:not([disabled]):not(.sel)', '#bank .tile:not(.used)', '#show', '[data-q="2"]', '[data-q="1"]', '#again'].map(q => document.querySelector(q)).find(Boolean);
+        const b = ['#nx', '#cont', '#fin', '#sh', '#chk:not([disabled])', '#tgo:not([disabled])', '.opt:not([disabled]):not(.sel)', '#bank .tile:not(.used)', '#show', '[data-q="2"]', '[data-q="1"]', '[data-g="1"]', '#again'].map(q => document.querySelector(q)).find(Boolean);
         if (!b) return 'stuck:' + view + ':' + document.querySelector('#app').textContent.replace(/\s+/g, ' ').slice(0, 90); if (b.id === 'again') return 'finished:' + view; b.click(); await new Promise(r => setTimeout(r, 20)); }
       return 'loop:' + view; }, { enter, stay });
     const cv = []; for (let k = 0; k < 6; k++) cv.push(await walkThrough("view = 'convos'; render();", '^convos?$'));
