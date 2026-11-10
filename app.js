@@ -1534,6 +1534,8 @@ VIEWS.session = function () {
 function foot(html) { $('#foot').className = 'foot'; $('#foot').innerHTML = html; }
 function next() { stopAudio(); if (typeof stopRecorder === 'function') stopRecorder(); qi++; try { VIEWS.session(); } catch (e) { console.warn('session step failed:', e.message); view = 'home'; render(); return; } window.scrollTo(0, 0); }
 function result(c, item, ok, extra) {
+  { const ae = document.activeElement; if (ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) ae.blur(); }   // close the phone keyboard so it can't cover the right/wrong panel
+  setTimeout(() => { const f = $('#foot'); if (!f) return; const h = window.visualViewport ? visualViewport.height : innerHeight; if (f.getBoundingClientRect().bottom > h + 2 || f.getBoundingClientRect().top > h - 60) f.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, 350);
   const q = ok === true ? 2 : ok === false ? 0 : ok;
   if (!sess.graded.has(c.id) && item.type !== 'teach' && item.type !== 'shadow') {
     sess.graded.add(c.id);
