@@ -40,7 +40,7 @@ const RULES = [
       { q: '"Where are you going?"', a: ['Asa ka moadto?', 'Asa moadto ka?', 'Ka asa moadto?'], why: 'Ka comes right after asa, then the action.', w: ['asa', 'ka', 'adto'] },
       { q: 'Someone asks "Kinsa?" (Who?). Answer "Me!"', a: ['Ako!', 'Ko!', 'Ka!'], why: 'Ko can\'t stand alone. The long form ako can.', w: ['ako', 'ko', 'kinsa'] },
       { q: '"Are you hungry?"', a: ['Gutom ka?', 'Ka gutom?', 'Gutom ikaw ka?'], why: 'Gutom first, ka second.', w: ['gutom', 'ka'] }] },
-  { id: 'neg', title: 'Dili, wala, ayaw: three ways to say no', short: "Dili = won't / not. Wala = didn't / don't have. Ayaw = don't! Ko comes right after them.",
+  { id: 'neg', title: 'Dili, wala, ayaw: three ways to say no', short: "Dili = won't / not. Wala = didn't / don't have. Ayaw = don't! Ko comes right after them, and the action word after wala or ayaw uses mo- (wala ko mokaon).",
     steps: [
       ['Dili (people often say just di) means not or won\'t. Put it first, and ko slides in right after it.', [['Dili ko mokaon', "I won't eat", 'dili, then ko, then the action'], ['Di ko gutom', "I'm not hungry", 'di = dili']]],
       ['Wala (or wa) means didn\'t, or there isn\'t any. After wala, the action keeps its mo- front.', [['Wala ko mokaon', "I didn't eat", 'wala + mo- action'], ['Wala', "There isn't any / No", 'on its own']]],

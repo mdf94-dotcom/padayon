@@ -1805,6 +1805,30 @@ function wirePlay(c, rate) { $('#pl').onclick = e => play(c.id, rate, e.currentT
 // which "no" to use: dili, wala or ayaw
 const NEG_WHY = { dili: '<b>Dili</b> fits here: it\'s about now or later, or describing something (not / won\'t / no).', wala: '<b>Wala</b> fits here: it\'s about something that didn\'t happen, or not having something (didn\'t / don\'t have / none).', ayaw: '<b>Ayaw</b> fits here: you\'re telling someone not to do something (don\'t!).' };
 const NEG_WHEN = '<ul class="rulel"><li>Telling someone not to? <b>ayaw</b></li><li>Didn\'t happen, or don\'t have it? <b>wala</b></li><li>Anything else (isn\'t, won\'t, no)? <b>dili</b></li></ul>';
+// "wala ka nikaon" vs "wala ka mokaon": the same action word with a different front. Explain the front, not the whole rule.
+const VF_PRE = /^(mo|mu|ni|mi|nag|mag|gi|na|ma)(?=[a-z]{3,})/;
+const VF_SAYS = { mo: 'will / the plain form', mu: 'will / the plain form', ni: 'did', mi: 'did', nag: 'was doing', mag: 'will be doing', gi: 'did it (the thing is the focus)' };
+function verbFormNote(rightToks, r, w) {
+  const pr = (r.match(VF_PRE) || [])[1], pw = (w.match(VF_PRE) || [])[1]; if (!pr || !pw || pr === pw) return '';
+  if (r.slice(pr.length) !== w.slice(pw.length)) return '';
+  const before = rightToks.slice(0, rightToks.indexOf(r)).find(t => /^(wala|wa|ayaw|gusto|ganahan|kinahanglan|dili|di)$/.test(t));
+  const trig = { wa: 'wala', di: 'dili' }[before] || before;
+  if ((pr === 'mo' || pr === 'mu') && trig === 'wala') { const said = rightToks.map(t => t === r ? w : t).join(' '); return `<b>${esc(w)}</b> → <b>${esc(r)}</b>. After <b>wala</b> the action word goes back to mo-: wala already says it didn\u2019t happen, so the action word doesn\u2019t need ni- (did) too. You will hear <i>${esc(said)}</i> in casual talk, but <i>${esc(rightToks.join(' '))}</i> is the standard way.`; }
+  if ((pr === 'mo' || pr === 'mu') && trig === 'ayaw') return `<b>${esc(w)}</b> → <b>${esc(r)}</b>. After <b>ayaw</b> (don\u2019t!) the action word stays plain: mo- or just the root.`;
+  if ((pr === 'mo' || pr === 'mu') && trig) return `<b>${esc(w)}</b> → <b>${esc(r)}</b>. After <b>${trig}</b> the action word uses mo-.`;
+  return VF_SAYS[pr] && VF_SAYS[pw] ? `<b>${esc(w)}</b> (${pw}- = ${VF_SAYS[pw]}) → <b>${esc(r)}</b> (${pr}- = ${VF_SAYS[pr]}).` : '';
+}
+// wrong>right: a one-line reason for the swaps people make most
+const PAIR_WHY = (() => { const o = {}, add = (a, b, t) => { o[a + '>' + b] = t; o[b + '>' + a] = t; };
+  add('gyud', 'kaayo', '<b>kaayo</b> = very (how much: nasuko kaayo = very angry). <b>gyud</b> = really, truly (stresses that it\u2019s true: nasuko gyud = really is angry). For "very", use kaayo.');
+  add('gud', 'kaayo', '<b>kaayo</b> = very (how much). <b>gud / gyud</b> = really, truly (stresses that it\u2019s true). For "very", use kaayo.');
+  add('na', 'pa', '<b>na</b> = already, now, anymore (something changed). <b>pa</b> = still, not yet, more (nothing changed yet).');
+  add('ko', 'ka', '<b>ko</b> = I. <b>ka</b> = you.');
+  add('ko', 'ta', '<b>ko</b> = I. <b>ta</b> = we (you and me).');
+  add('ka', 'mo', '<b>ka</b> = you (one person). <b>mo</b> = you (two or more).');
+  add('mi', 'ta', '<b>mi</b> = we, not you. <b>ta</b> = we, you included.');
+  add('naa', 'wala', '<b>naa</b> = there is / have. <b>wala</b> = there isn\u2019t / don\u2019t have.');
+  return o; })();
 function diffNote(right, picked) {
   const a = tokens(firstAlt(right)).map(t => t.replace(/[.,!?…]/g, '')), b = tokens(firstAlt(picked)).map(t => t.replace(/[.,!?…]/g, ''));
   const la = a.map(lowTok), lb = b.map(lowTok);
@@ -1817,6 +1841,10 @@ function diffNote(right, picked) {
   // the three ways to say "no": explain which one fits and why, not just two glosses
   if (pairs.length === 1) { const neg = w => ({ dili: 'dili', di: 'dili', wala: 'wala', wa: 'wala', ayaw: 'ayaw' })[lowTok(w)]; const r = neg(pairs[0][0]), w = neg(pairs[0][1]);
     if (r && w && r !== w) return NEG_WHY[r] + ' ' + NEG_WHEN; }
+  // pairs people mix up: say what each one adds
+  if (pairs.length === 1) { const k = [lowTok(pairs[0][1]), lowTok(pairs[0][0])].join('>'); if (PAIR_WHY[k]) return PAIR_WHY[k]; }
+  // same action, wrong front (wala ka nikaon → wala ka mokaon): say exactly why
+  if (pairs.length === 1) { const vf = verbFormNote(la, lowTok(pairs[0][0]), lowTok(pairs[0][1])); if (vf) return vf; }
   // only explain a swap when both sides have a real meaning (not just "na- = became")
   if (pairs.some(([x, y]) => !glossOf(x) || !glossOf(y) || /^[a-z]+- =/.test(glossOf(x)) || /^[a-z]+- =/.test(glossOf(y)))) return '';
   return pairs.map(([x, y]) => `<b>${esc(y)}</b> = ${esc(glossOf(y) || '?')}, but <b>${esc(x)}</b> = ${esc(glossOf(x) || '?')}`).join('. ');
@@ -1862,7 +1890,8 @@ function typedCheck(c, item, inp, tolFrac, dictMode) {
   inp.classList.remove('right', 'wrong'); inp.classList.add(pass ? 'right' : 'wrong');
   if (best === 0) return result(c, item, true);
   if (dictMode) return result(c, item, pass ? 1 : false, missed.length ? 'Missed or misheard: <b>' + esc(missed.join(', ')) + '</b>' : 'You wrote "' + said + '"');
-  return result(c, item, pass, pass ? 'Watch the spelling: you wrote "' + said + '"' : 'You wrote "' + said + '"');
+  if (!pass) { const dn = diffNote(tgt, inp.value); return result(c, item, false, 'You wrote "' + said + '"' + (dn ? '<br>' + dn : '')); }
+  return result(c, item, pass, 'Watch the spelling: you wrote "' + said + '"');
 }
 // Prompt that asks for the Bisaya: drop any (bracketed example) that contains the answer word.
 const askEn = (c, t) => { t = String(t == null ? c.en : t); const fold = x => x.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); const ws = fold(String(c.ceb || '')).match(/[a-z'-]{2,}/g) || []; if (!ws.length) return t; const re = new RegExp("(^|[^A-Za-zÀ-ɏ'-])(" + ws.map(w => w.replace(/[-']/g, '\\$&')).join('|') + ")(?=$|[^A-Za-zÀ-ɏ'-])", 'gi'); const out = t.replace(/\s*\(([^()]*)\)/g, (m, inner) => { const f = fold(inner); if (!re.test(f)) { re.lastIndex = 0; return m; } re.lastIndex = 0; let b = inner.replace(re, '$1___'); re.lastIndex = 0; if (b === inner) b = f.replace(re, '$1___'); re.lastIndex = 0; return /[:=]/.test(b) && /[a-z]{2,}/.test(b.replace(/___/g, '')) ? ' (' + b + ')' : ''; }).trim(); return out || t; };
@@ -1906,7 +1935,7 @@ const EX = {
       $('#chk').disabled = !chosen.length;
     };
     document.querySelectorAll('#bank .tile').forEach(b => b.onclick = () => { if (!chosen.includes(b.dataset.k)) { chosen.push(b.dataset.k); draw(); } });
-    $('#chk').onclick = () => { const got = chosen.map(k => bank.find(b => b.k === k).t).join(' '); result(cc, item, norm(got) === norm(ans.join(' ')), norm(got) === norm(ans.join(' ')) ? '' : 'You built "' + esc(got) + '"'); };
+    $('#chk').onclick = () => { const got = chosen.map(k => bank.find(b => b.k === k).t).join(' '); { const okB = norm(got) === norm(ans.join(' ')), dn = okB ? '' : diffNote(ans.join(' '), got); result(cc, item, okB, okB ? '' : 'You built "' + esc(got) + '"' + (dn ? '<br>' + dn : '')); } };
   },
   tiles(c, item) {
     const ans = tokens(c.ceb), low = ans.map(a => a.toLowerCase());
@@ -2473,7 +2502,7 @@ function buildTiles(head) {
     logAnswer(ok); if (ok) { BD.right++; addXP(6); }
     const f = $('#foot'); f.className = 'foot ' + (ok ? 'good' : 'bad');
     f.innerHTML = `<div class="verdict">${ok ? 'Tama!' : 'Dili pa. Not yet.'}</div><div class="ans"><span>${esc(want)}</span> <span class="muted" style="font-weight:400">· ${esc(en)}</span></div>
-      ${ok ? '' : `<div class="small">You built "${esc(got)}"</div>`}<div class="small"><b>Rule ${r.n}, ${esc(r.title)}:</b> ${esc(r.short)}</div>
+      ${ok ? '' : `<div class="small">You built "${esc(got)}"</div>${(d => d ? `<div class="small">${d}</div>` : '')(diffNote(want, got))}`}<div class="small"><b>Rule ${r.n}, ${esc(r.title)}:</b> ${esc(r.short)}</div>
       <button class="btn primary block" id="cont">Continue</button>`;
     $('#cont').onclick = () => { BD.i++; render(); };
   };
