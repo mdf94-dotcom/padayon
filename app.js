@@ -1672,7 +1672,8 @@ function distract(c, n, field) {
   const sameWord = norm(firstAlt(c.ceb));
   const ok = (d, loose) => { const v = norm(d[field]); if (!v || used.has(v) || sameMeaning(c.en, d.en)) return false;
     if (d.ceb && norm(firstAlt(d.ceb)) === sameWord) return false;                                   // another meaning of the same word
-    if (field === 'ceb' && alts(d.ceb).some(a => answers.has(a))) return false;                    // another way to say the answer is also right
+    if (field === 'ceb' && alts(d.ceb).some(a => answers.has(a))) return false;
+    if (field === 'ceb' && d.ceb && casualOk(c.ceb, firstAlt(d.ceb))) return false;                  // the casual form isn't wrong                    // another way to say the answer is also right
     if (!loose && d.en && out.some(o => o.en && sameMeaning(o.en, d.en))) return false;            // two wrong choices shouldn't mean the same thing
     used.add(v); return true; };
   // minimal-change fakes only make sense when the options are in Bisaya
@@ -1878,6 +1879,15 @@ function typoOk(g, tgt, tol) {
     if ((swapOf[t] && swapOf[t].has(w)) || SWAP_PREFIX.some(s => s.some(p => t.startsWith(p) && s.some(o => o !== p && w === o + t.slice(p.length))))) return false;   // a look-alike the lessons warn about
     return !VOCAB_WORDS.has(w); });                                                       // another real word isn't a typo
 }
+// "wala ka nikaon" is how many people say it; the standard form is "wala ka mokaon". Count it, and say so.
+function casualOk(right, got) {
+  const a = tokens(firstAlt(right)).map(lowTok), b = tokens(String(got || '')).map(lowTok);
+  if (a.length !== b.length || !a.length) return '';
+  const diff = a.map((t, i) => [t, b[i], i]).filter(([x, y]) => x !== y); if (diff.length !== 1) return '';
+  const [r, w, i] = diff[0], pr = (r.match(/^(mo|mu)(?=[a-z]{3,})/) || [])[1], pw = (w.match(/^(ni|mi)(?=[a-z]{3,})/) || [])[1];
+  if (!pr || !pw || r.slice(pr.length) !== w.slice(pw.length) || !a.slice(0, i).some(t => t === 'wala' || t === 'wa')) return '';
+  return `Counts! <b>${esc(b.join(' '))}</b> is how a lot of people say it. The standard way is <b>${esc(a.join(' '))}</b>: after wala the action word goes back to mo-.`;
+}
 function typedCheck(c, item, inp, tolFrac, dictMode) {
   const g = norm(inp.value); inp.disabled = true;
   let best = 99, tgt = '';
@@ -1890,6 +1900,7 @@ function typedCheck(c, item, inp, tolFrac, dictMode) {
   inp.classList.remove('right', 'wrong'); inp.classList.add(pass ? 'right' : 'wrong');
   if (best === 0) return result(c, item, true);
   if (dictMode) return result(c, item, pass ? 1 : false, missed.length ? 'Missed or misheard: <b>' + esc(missed.join(', ')) + '</b>' : 'You wrote "' + said + '"');
+  if (!pass) { const cz = casualOk(tgt, inp.value); if (cz) { inp.classList.remove('wrong'); inp.classList.add('right'); return result(c, item, true, cz); } }
   if (!pass) { const dn = diffNote(tgt, inp.value); return result(c, item, false, 'You wrote "' + said + '"' + (dn ? '<br>' + dn : '')); }
   return result(c, item, pass, 'Watch the spelling: you wrote "' + said + '"');
 }
@@ -1935,7 +1946,7 @@ const EX = {
       $('#chk').disabled = !chosen.length;
     };
     document.querySelectorAll('#bank .tile').forEach(b => b.onclick = () => { if (!chosen.includes(b.dataset.k)) { chosen.push(b.dataset.k); draw(); } });
-    $('#chk').onclick = () => { const got = chosen.map(k => bank.find(b => b.k === k).t).join(' '); { const okB = norm(got) === norm(ans.join(' ')), dn = okB ? '' : diffNote(ans.join(' '), got); result(cc, item, okB, okB ? '' : 'You built "' + esc(got) + '"' + (dn ? '<br>' + dn : '')); } };
+    $('#chk').onclick = () => { const got = chosen.map(k => bank.find(b => b.k === k).t).join(' '); { const cz = norm(got) === norm(ans.join(' ')) ? '' : casualOk(ans.join(' '), got), okB = norm(got) === norm(ans.join(' ')) || !!cz, dn = okB ? '' : diffNote(ans.join(' '), got); result(cc, item, okB, cz || (okB ? '' : 'You built "' + esc(got) + '"' + (dn ? '<br>' + dn : ''))); } };
   },
   tiles(c, item) {
     const ans = tokens(c.ceb), low = ans.map(a => a.toLowerCase());
@@ -2498,11 +2509,11 @@ function buildTiles(head) {
   };
   document.querySelectorAll('#bank .tile').forEach(b => b.onclick = () => { if (!chosen.includes(b.dataset.k)) { chosen.push(b.dataset.k); draw(); } });
   $('#chk').onclick = () => {
-    const got = chosen.map(k => bank.find(b => b.k === k).t).join(' '), want = cap(toks.join(' ')), ok = norm(got) === norm(want);
+    const got = chosen.map(k => bank.find(b => b.k === k).t).join(' '), want = cap(toks.join(' ')), cz = norm(got) === norm(want) ? '' : casualOk(want, got), ok = norm(got) === norm(want) || !!cz;
     logAnswer(ok); if (ok) { BD.right++; addXP(6); }
     const f = $('#foot'); f.className = 'foot ' + (ok ? 'good' : 'bad');
     f.innerHTML = `<div class="verdict">${ok ? 'Tama!' : 'Dili pa. Not yet.'}</div><div class="ans"><span>${esc(want)}</span> <span class="muted" style="font-weight:400">· ${esc(en)}</span></div>
-      ${ok ? '' : `<div class="small">You built "${esc(got)}"</div>${(d => d ? `<div class="small">${d}</div>` : '')(diffNote(want, got))}`}<div class="small"><b>Rule ${r.n}, ${esc(r.title)}:</b> ${esc(r.short)}</div>
+      ${cz ? `<div class="small">${cz}</div>` : ''}${ok ? '' : `<div class="small">You built "${esc(got)}"</div>${(d => d ? `<div class="small">${d}</div>` : '')(diffNote(want, got))}`}<div class="small"><b>Rule ${r.n}, ${esc(r.title)}:</b> ${esc(r.short)}</div>
       <button class="btn primary block" id="cont">Continue</button>`;
     $('#cont').onclick = () => { BD.i++; render(); };
   };

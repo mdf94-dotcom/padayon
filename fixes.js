@@ -204,3 +204,6 @@ GNOTES.w149 = 'na = something has already happened or changed, do it now, or no 
   set('tinuyo vs tinuod', 'tinuyo = on purpose (from tuyo, to intend). tinuod = true.');
   set('ta (we, with you) · mi (we, not you)', 'kita / ta / nato / atong = we, including the person you\'re talking to. kami / mi / namo / among = we, but not you.');
 })();
+// "Wala ko nikaon" is common casual speech, so it isn't shown or tested as a mistake; mo- stays the taught form.
+(() => { const m = MIXUPS.find(x => x.title === 'mo- · ni- · nag- · gi-'); if (m) { m.no = m.no.filter(x => !/^wala ko n/i.test(x[0])); if (!/casual/.test(m.rule)) m.rule += ' (You will also hear wala ko nikaon in casual talk.)'; }
+  for (const k in MIX_FILL) MIX_FILL[k].forEach(f => { if (/^wala \w+ ___/i.test(f[0]) && /^mo/.test(f[1])) f[2] = f[2].map(o => /^(ni|mi)/.test(o) ? 'kan-on' : o); }); })();
