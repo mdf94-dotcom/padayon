@@ -79,15 +79,15 @@ Object.assign(EX, {
   },
   pic(c, item) {
     const f = picFile(c); if (!f) return EX.mc(c, item);
-    const known = S.cards[c.id] && S.cards[c.id].b >= 2;
-    if (known && Math.random() < 0.5) {   // know it well: type it
+    const known = S.cards[c.id] && S.cards[c.id].b >= 2, twins = picTwins(c);
+    if (known && !twins.some(id => S.cards[id]) && Math.random() < 0.5) {   // know it well: type it
       $('#ex').innerHTML = `<div class="label">What's this in Bisaya?</div><div class="picq">${picImg(f, 'big')}</div><input class="field" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type in Bisaya">`;
       foot(`<button class="btn primary block" id="chk" disabled>Check</button><button class="btn ghost block" id="idk">I don't know</button>`);
       const inp = $('#ans'); inp.focus(); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
       inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) $('#chk').click(); };
       $('#chk').onclick = () => typedCheck(c, item, inp, 0.12, false); wireIdk(c, item, inp); return;
     }
-    const d = distract(c, 3, 'ceb'); if (d.length < 2) return EX.mc(c, item);
+    const tw = new Set(twins), twA = new Set(twins.map(id => lowTok(firstAlt(card(id).ceb)))), f0 = f; const d = distract(c, 8, 'ceb').filter(x => !tw.has(x.id) && picFile(x) !== f0 && !twA.has(lowTok(firstAlt(x.ceb)))).slice(0, 3); if (d.length < 2) return EX.mc(c, item);
     $('#ex').innerHTML = `<div class="label">What's this in Bisaya?</div><div class="picq">${picImg(f, 'big')}</div><div class="opts"></div>`;
     choiceEx(c, item, shuffle([c, ...d]), 'ceb', 'cebopt');
   }
@@ -96,13 +96,20 @@ Object.assign(EX, {
 function diffWord(a, b) { const x = tokens(a), y = tokens(b); const i = x.findIndex((t, j) => lowTok(t) !== lowTok(y[j] || '')); return i < 0 ? a : x[i].replace(/[.,!?…]+$/, ''); }
 
 /* which new kinds a card can get, by how well you know it (exType in app.js mixes these in) */
+// A picture question only when the picture can point to one answer: no "I / you / he" words
+// (a picture of someone hungry can't tell gutom ko from gutom ka). Choices never share the picture; typing only when
+// no card you've learned shares it.
+const PIC_PRON = new Set('ko ako ka ikaw siya kami mi kita ta mo kamo sila nako akong ako imo nimo imong niya iyang namo amo among nato ato atong ninyo inyo inyong nila ila ilang ka? nimo'.split(' '));
+const picOk = c => { const f = picFile(c); if (!f) return false; const toks = tokens(firstAlt(c.ceb)).map(lowTok); return toks.length <= 2 && !toks.some(t => PIC_PRON.has(t)); };
+// other cards with the same picture but a different answer (they can't be told apart by the picture)
+const picTwins = c => { const f = picFile(c), a = lowTok(firstAlt(c.ceb)); return Object.keys(PIC).filter(id => id !== c.id && PIC[id] === f && card(id) && lowTok(firstAlt(card(id).ceb)) !== a); };
 function extraTypes(id, b) {
   const c = card(id); if (!c || c.kind === 'r') return [];
   const out = [];
   if (c.kind === 'd' && REPLY_OF[id]) out.push(b >= 2 ? 'replysay' : 'reply');
   if (b >= 1 && pairFor(c)) out.push('hear2');
   if (b >= 2 && clozeFor(c)) out.push('cloze');
-  if (b >= 1 && picFile(c) && tokens(firstAlt(c.ceb)).length <= 2) out.push('pic');
+  if (b >= 1 && picOk(c)) out.push('pic');
   return out;
 }
 
