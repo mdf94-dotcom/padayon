@@ -1673,6 +1673,7 @@ function distract(c, n, field) {
   const ok = (d, loose) => { const v = norm(d[field]); if (!v || used.has(v) || sameMeaning(c.en, d.en)) return false;
     if (d.ceb && norm(firstAlt(d.ceb)) === sameWord) return false;                                   // another meaning of the same word
     if (field === 'ceb' && alts(d.ceb).some(a => answers.has(a))) return false;
+    if (field === 'ceb' && d.ceb && formOf(c, d)) return false;                                     // short form / other spelling of the answer (ani = niini, to = kadto)
     if (field === 'ceb' && d.ceb && casualOk(c.ceb, firstAlt(d.ceb))) return false;                  // the casual form isn't wrong                    // another way to say the answer is also right
     if (!loose && d.en && out.some(o => o.en && sameMeaning(o.en, d.en))) return false;            // two wrong choices shouldn't mean the same thing
     used.add(v); return true; };
@@ -1880,6 +1881,11 @@ function typoOk(g, tgt, tol) {
     return !VOCAB_WORDS.has(w); });                                                       // another real word isn't a typo
 }
 // "wala ka nikaon" is how many people say it; the standard form is "wala ka mokaon". Count it, and say so.
+// Two cards for the same word: one's meaning names the other ("short for niini", "(kadto)", "another spelling of ...").
+const formOf = (a, b) => { const fold = x => String(x || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const one = c => { const t = tokens(firstAlt(c.ceb)).map(lowTok); return t.length === 1 && t[0].length >= 2 ? fold(t[0]) : ''; };
+  const names = (c, w) => w && new RegExp("(^|[^a-z'-])" + w.replace(/[-']/g, '\\$&') + "($|[^a-z'-])").test(fold(c.en));
+  const wa = one(a), wb = one(b); if (!wa || !wb || wa === wb) return false; return names(a, wb) || names(b, wa); };
 function casualOk(right, got) {
   const a = tokens(firstAlt(right)).map(lowTok), b = tokens(String(got || '')).map(lowTok);
   if (a.length !== b.length || !a.length) return '';
