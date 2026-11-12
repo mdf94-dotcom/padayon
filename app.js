@@ -2537,15 +2537,20 @@ function buildOwn(head) {
   const o = opts[Math.floor(Math.random() * opts.length)]; if (!o) return finishBuild();
   $('#app').innerHTML = `${head}<div class="ex">${binkoSays('Your turn to be the creator! Make your own sentence. Any word you know can go in the blank.')}
     <div class="panel"><div class="label">Pattern</div><div class="ceb">${esc(o.pat)}</div><div class="small">${esc(o.tip)}</div>
-    <div class="small muted" style="margin-top:6px">Words you know that fit: ${o.words.slice(0, 12).map(esc).join(', ')}</div></div>
+    <div style="margin-top:8px"><button class="linkbtn" id="hint">Stuck? Show a few words that fit</button><div class="small muted" id="hintw"></div></div></div>
     <input class="field" id="own" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type your sentence in Bisaya"><div id="res"></div></div><div class="foot" id="foot"></div>`;
   foot(`<button class="btn primary block" id="chk" disabled>Check my sentence</button>`);
   const inp = $('#own'); inp.focus(); inp.oninput = () => $('#chk').disabled = !inp.value.trim();
+  $('#hint').onclick = () => { $('#hint').remove(); $('#hintw').textContent = 'Words you know that fit: ' + shuffle(o.words.slice()).slice(0, 3).join(', '); };
   const finish = finishBuild;
   const check = () => {
-    const v = norm(inp.value), okShape = o.re.test(v), fill = o.words.some(w => v.split(' ').includes(w));
+    const v = norm(inp.value), shape = o.re.test(v), toks = v.split(' '), fill = o.words.some(w => toks.includes(w));
+    // a typo of a word they know (mokoan → mokaon): say which word they meant
+    const near = shape && !fill ? toks.map(t => { const b = o.words.map(w => [w, lev(t, w)]).sort((x, y) => x[1] - y[1])[0]; return b && b[1] > 0 && b[1] <= 2 && t.length > 2 ? [t, b[0]] : null; }).find(Boolean) : null;
+    const okShape = shape && (fill || !near);
     inp.classList.remove('right', 'wrong'); inp.classList.add(okShape ? 'right' : 'wrong');
-    $('#res').innerHTML = okShape ? `<div class="panel good-note"><b>${fill ? 'Tama! That follows the pattern.' : 'The order is right.'}</b>${fill ? '' : '<div class="small">Check the action word is one you know: ' + esc(o.words.slice(0, 6).join(', ')) + '…</div>'}<div class="small muted">Say it out loud twice.</div></div>`
+    $('#res').innerHTML = near ? `<div class="panel"><b>Almost! Watch the spelling.</b><div class="small">You wrote <b>${esc(near[0])}</b>. Did you mean <b>${esc(near[1])}</b>?</div></div>`
+      : okShape ? `<div class="panel good-note"><b>${fill ? 'Tama! That follows the pattern.' : 'The order is right.'}</b>${fill ? '' : '<div class="small">That word isn\u2019t one Padayon has taught yet, so it can\u2019t check it. Words you know that fit: ' + esc(o.words.slice(0, 6).join(', ')) + '.</div>'}<div class="small muted">Say it out loud twice.</div></div>`
       : `<div class="panel"><b>Close. Check the order.</b><div class="small">The pattern is <b>${esc(o.pat)}</b>. ${esc(RULE.ko.short)}</div></div>`;
     foot(`<button class="btn primary block" id="fin">${okShape ? 'Done' : 'Finish anyway'}</button>${okShape ? '' : '<button class="btn ghost block" id="again">Try again</button>'}`);
     $('#fin').onclick = finish; if ($('#again')) $('#again').onclick = () => { inp.focus(); foot(`<button class="btn primary block" id="chk">Check my sentence</button>`); $('#chk').onclick = check; };
