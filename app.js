@@ -1769,7 +1769,7 @@ function wordSheet(tok) {
     <div class="teachhead"><div class="th-text"><div class="label">${c ? (c.kind === 'w' ? 'Word' : 'Phrase') : 'Word'}</div><div class="ceb">${esc(tok)}</div>${phonHtml(tok)}</div>${c ? picImg(picFile(c), 'big') : ''}</div>
     <div class="prompt" style="font-weight:500">${esc(derived ? (g || c.en) : c ? c.en : (g || 'No meaning saved for this word yet.'))}</div>
     ${derived ? `<div class="small muted">Built from <b>${esc(firstAlt(c.ceb))}</b> · ${esc(firstAlt(c.en))}</div>` : ''}
-    <div class="row" style="gap:10px;align-items:center"><button class="play sm" id="wsplay" aria-label="Hear it">${I.play}</button><span class="muted small">${status}</span></div>
+    <div class="row" style="gap:10px;align-items:center"><button class="play sm" id="wsplay" aria-label="Hear it">${I.play}</button><span class="muted small">${derived && !hasVoice(tok) ? `Plays the root word, <b>${esc(firstAlt(c.ceb))}</b>. ` : ''}${status}</span></div>
     ${ex ? `<div class="panel"><div class="label">Example</div><b>${esc(ex[0])}</b><div class="muted small">${esc(ex[1])}</div></div>` : ''}
     ${c && c.sense ? senseHtml(c) : ''}${c && (c.sense ? c.baseNote : c.note) ? `<div class="panel note"><div class="label">Binko explains</div>${esc(c.sense ? c.baseNote : c.note)}</div>` : ''}${mixHtml(c)}</section>`;
   const box = document.createElement('div'); box.id = 'wsheet'; box.innerHTML = html; document.body.appendChild(box); box.querySelectorAll('[data-vs]').forEach(b => b.onclick = () => playSentence(b.dataset.vs, b));
@@ -2018,7 +2018,7 @@ const EX = {
     const t0 = Date.now();
     const reveal = () => {
       clearInterval(timerH);
-      $('#rev').innerHTML = `<div class="ceb">${esc(c.ceb)}</div>${c.audio ? `<div class="playrow" style="margin-top:12px"><button class="play sm" id="pl2" aria-label="Play">${I.play}</button><span class="muted small">Compare with the native recording.</span></div>` : ''}`;
+      $('#rev').innerHTML = `${c.replyTo ? '<div class="label" style="margin-top:8px">Your reply</div>' : ''}<div class="ceb">${esc(c.ceb)}</div>${c.audio ? `<div class="playrow" style="margin-top:12px"><button class="play sm" id="pl2" aria-label="Play">${I.play}</button><span class="muted small">Compare with the native recording.</span></div>` : ''}`;
       if (c.audio) { $('#pl2').onclick = e => play(c.id, 1, e.currentTarget); play(c.id, 1, $('#pl2')); }
       if (typeof recorderHtml === 'function') { $('#rev').insertAdjacentHTML('beforeend', recorderHtml()); wireRecorder(c.ceb, c); }
       foot(`<div class="label">How did it go?</div><div class="grades"><button class="btn" data-q="2">Said it smoothly</button><button class="btn" data-q="1">Got there, but slowly or with small mistakes</button><button class="btn" data-q="0">Blanked or used English</button></div>`);
@@ -2308,11 +2308,11 @@ function ruleChoice(c, item, opts, rightId, shown, extra) {
   $('#chk').onclick = () => {
     const ok = opts[sel].id === rightId;
     btns.forEach((b, i) => { b.disabled = true; if (opts[i].id === rightId) b.classList.add('right'); else if (i === sel) b.classList.add('wrong'); });
-    let why = '';
+    let why = ''; const fin = shown.res || shown;   // what the answer box shows and plays (for a reply: your reply, not their line)
     if (!ok) { const p = opts[sel], pr = RULE[p.id];
-      why = pr ? `You picked <b>${esc(pr.title)}</b>. That rule is about: ${esc(pr.short)}<br>` : `You picked <b>${esc(p.t)}</b>.${diffNote(shown.ceb, p.t) ? ' ' + diffNote(shown.ceb, p.t) + '.' : ''}<br>`; }
+      why = pr ? `You picked <b>${esc(pr.title)}</b>. That rule is about: ${esc(pr.short)}<br>` : `You picked <b>${esc(p.t)}</b>.${diffNote(fin.ceb, p.t) ? ' ' + diffNote(fin.ceb, p.t) + '.' : ''}<br>`; }
     // keep the card's own kind: a missed word comes back as a word question, not as a grammar-rule question (which would crash)
-    result({ id: c.id, kind: c.kind || 'r', ceb: shown.ceb, en: shown.en, audio: false }, item, ok, why + extra);
+    result({ id: c.id, kind: c.kind || 'r', ceb: fin.ceb, en: fin.en, audio: false }, item, ok, why + extra);
   };
 }
 // a rule step's examples, keeping only sentences made of words you've met (plus the rule's own little words)

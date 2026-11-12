@@ -46,11 +46,11 @@ Object.assign(EX, {
       <div class="row" style="gap:10px;align-items:center"><div class="ceb">${esc(r.said[1])}</div><button class="play sm" id="pl" aria-label="Play">${I.play}</button></div>
       <div class="small muted">${esc(r.said[2])}</div><div class="prompt" style="font-size:1rem;margin-top:6px">Your reply:</div><div class="opts"></div>`;
     const opts = shuffle([c.ceb, ...wrong].map((t, i) => ({ id: i ? 'x' + i : 'ok', t, ceb: 1 })));
-    ruleChoice(c, item, opts, 'ok', { ceb: r.said[1], en: r.said[2] }, `<b>${esc(c.ceb)}</b> · ${esc(c.en)}${c.note ? '<br>' + esc(c.note) : ''}`);
+    ruleChoice(c, item, opts, 'ok', { ceb: r.said[1], en: r.said[2], res: { ceb: c.ceb, en: c.en } }, `${esc(r.who)} said <b>${esc(r.said[1])}</b> (${esc(r.said[2])}). That's your reply to it.${c.note ? '<br>' + esc(c.note) : ''}`);
   },
   replysay(c, item) {   // once you know the reply: say it out loud, then compare
     const r = REPLY_OF[c.id]; if (!r) return EX.speak(c, item);
-    EX.speak(Object.assign({}, c, { ask: `${r.who} says “${r.said[1]}” (${r.said[2]}). Say your reply: ${c.en}` }), item);
+    EX.speak(Object.assign({}, c, { replyTo: r.said[1], ask: `${r.who} says “${r.said[1]}” (${r.said[2]}). Say your reply: ${c.en}` }), item);
   },
   hear2(c, item) {
     const v = pairFor(c); if (!v) return EX.listen(c, item);
