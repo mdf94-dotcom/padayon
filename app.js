@@ -1826,6 +1826,7 @@ function verbFormNote(rightToks, r, w) {
 const PAIR_WHY = (() => { const o = {}, add = (a, b, t) => { o[a + '>' + b] = t; o[b + '>' + a] = t; };
   add('gyud', 'kaayo', '<b>kaayo</b> = very (how much: nasuko kaayo = very angry). <b>gyud</b> = really, truly (stresses that it\u2019s true: nasuko gyud = really is angry). For "very", use kaayo.');
   add('gud', 'kaayo', '<b>kaayo</b> = very (how much). <b>gud / gyud</b> = really, truly (stresses that it\u2019s true). For "very", use kaayo.');
+  add('pa', 'gihapon', '<b>pa</b> = still, for now (it will change: bata pa = still a child). <b>gihapon</b> = still the same, unchanged (mao gihapon = still the same), and also anyway.');
   add('na', 'pa', '<b>na</b> = already, now, anymore (something changed). <b>pa</b> = still, not yet, more (nothing changed yet).');
   add('ko', 'ka', '<b>ko</b> = I. <b>ka</b> = you.');
   add('ko', 'ta', '<b>ko</b> = I. <b>ta</b> = we (you and me).');

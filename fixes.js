@@ -207,3 +207,10 @@ GNOTES.w149 = 'na = something has already happened or changed, do it now, or no 
 // "Wala ko nikaon" is common casual speech, so it isn't shown or tested as a mistake; mo- stays the taught form.
 (() => { const m = MIXUPS.find(x => x.title === 'mo- · ni- · nag- · gi-'); if (m) { m.no = m.no.filter(x => !/^wala ko n/i.test(x[0])); if (!/casual/.test(m.rule)) m.rule += ' (You will also hear wala ko nikaon in casual talk.)'; }
   for (const k in MIX_FILL) MIX_FILL[k].forEach(f => { if (/^wala \w+ ___/i.test(f[0]) && /^mo/.test(f[1])) f[2] = f[2].map(o => /^(ni|mi)/.test(o) ? 'kan-on' : o); }); })();
+
+// pa · gihapon: both are "still", but they don't mean the same thing
+MIXUPS.push({ w: ['pa', 'gihapon'], title: 'pa · gihapon',
+  rule: 'pa = still, for now: it hasn\'t changed yet, but it will (bata pa = still a child). gihapon = still the same: it hasn\'t changed, even with time or something in the way. gihapon also means anyway.',
+  ok: [['Bata pa siya.', 'She is still a child.'], ['Sayo pa.', 'It is still early.'], ['Gwapa gihapon ka.', 'You are still pretty (just like before).'], ['Mao gihapon.', 'Still the same.'], ['Niulan, pero nilakaw gihapon mi.', 'It rained, but we left anyway.']],
+  no: [],
+  fill: [['Sayo ___.', 'pa', ['pa', 'gihapon'], 'It is still early.'], ['Mao ___.', 'gihapon', ['gihapon', 'pa'], 'Still the same.'], ['Bata ___ siya.', 'pa', ['pa', 'gihapon'], 'She is still a child.'], ['Niulan, pero nilakaw ___ mi.', 'gihapon', ['gihapon', 'pa'], 'It rained, but we left anyway.']] });
