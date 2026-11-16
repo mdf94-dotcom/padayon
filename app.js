@@ -477,6 +477,8 @@ function card(id) {
   if (CARD_MEMO.has(id)) return CARD_MEMO.get(id);
   const c = cardBuild(id); if (id[0] !== 'c') CARD_MEMO.set(id, c); return c;
 }
+// other everyday ways to say a card that count as right when typed or built
+const ALSO_OK = { g6: ['Asa na ka?', 'Asa ka karon?'] };
 function cardBuild(id) {
   const c = card0(id); if (!c) return c;
   // one way to say it per card; the others are their own cards (VARIANTS) and are still accepted when typed
@@ -485,7 +487,8 @@ function cardBuild(id) {
   if (GNOTES[id]) c.note = GNOTES[id];   // little and confusing words: what it is, what it isn't, two examples
   // a word with several meanings: this card teaches the first one; the others are their own cards (s0, s1, ...)
   if (typeof SENSES !== 'undefined') { const sid = SENSES[id] ? id : SENSE_SAME[id]; if (sid && SENSES[sid]) { c.en = SENSES[sid][0].en; c.baseNote = c.note || ''; c.sense = [sid, 0]; c.note = senseNote(sid, 0) + (c.note ? ' ' + c.note : ''); } }
-  if (sp) { c.ceb = sp.p; if (sp.en) c.en = sp.en; c.also = sp.also; if (id[0] === 'p') c.audio = false;
+  if (ALSO_OK[id]) c.also = [...(c.also || []), ...ALSO_OK[id]];
+  if (sp) { c.ceb = sp.p; if (sp.en) c.en = sp.en; c.also = [...(sp.also || []), ...(ALSO_OK[id] || [])]; if (id[0] === 'p') c.audio = false;
     const others = (VAR_OF[id] || []).map(v => VARIANTS[+v.slice(1)][1]);
     c.note = [GNOTES[id] ? '' : sp.n, c.note].filter(Boolean).join(' ');
     if (others.length) c.note += ' (' + others.map(o => '"' + o + '"').join(', ') + (others.length > 1 ? ' each have' : ' has') + ' its own card.)'; }
@@ -1528,8 +1531,7 @@ VIEWS.session = function () {
   $('#quit').onclick = () => { if (sess.mode === 'daily') { stopAudio(); saveResume(); go('home'); if (qi > 0 && loadResume()) toast('Saved your place. Tap Continue on Today to pick up where you left off.'); return; } if (qi > 0 && sess.total > 0) finishSession(); else goTab(); };
   if (typeof Music !== 'undefined') Music.set(musicFor());
   EX[item.type](c, item);
-  // a picture on questions that already show the English (never on ones that ask for the meaning)
-  if (['mc', 'type', 'speak', 'say'].includes(item.type) && picFile(c)) { const pr = $('#ex .prompt'); if (pr && !$('#ex .epic')) pr.insertAdjacentHTML('beforebegin', picImg(picFile(c), 'md')); }
+  // no pictures on question screens (they confused more than they helped); cards and answers still show them
 };
 function foot(html) { $('#foot').className = 'foot'; $('#foot').innerHTML = html; }
 function next() { stopAudio(); if (typeof stopRecorder === 'function') stopRecorder(); qi++; try { VIEWS.session(); } catch (e) { console.warn('session step failed:', e.message); view = 'home'; render(); return; } window.scrollTo(0, 0); }
@@ -1839,6 +1841,10 @@ function diffNote(right, picked) {
   if (la.length !== lb.length) { const extra = lb.filter(t => !la.includes(t)), miss = la.filter(t => !lb.includes(t)); const g = t => glossOf(t) ? ` (${esc(glossOf(t))})` : '';
     return [miss.length ? 'Missing: ' + miss.map(t => `<b>${esc(t)}</b>${g(t)}`).join(', ') : '', extra.length ? 'Extra: ' + extra.map(t => `<b>${esc(t)}</b>${g(t)}`).join(', ') : ''].filter(Boolean).join('. '); }
   const pairs = []; la.forEach((t, i) => { if (t !== lb[i]) pairs.push([a[i], b[i]]); });
+  // a word in the wrong place (asa na ka vs asa ka ron): say what's missing and extra, not nonsense word-by-word pairs
+  if (pairs.length > 1 && pairs.some(([x, y]) => lb.includes(lowTok(x)) || la.includes(lowTok(y)))) { const extra = lb.filter(t => !la.includes(t)), miss = la.filter(t => !lb.includes(t)); const g = t => glossOf(t) ? ` (${esc(glossOf(t))})` : '';
+    if (!extra.length && !miss.length) return 'Same words, different order. Little words like ko, ka and ta ride right after the first word.';
+    return [miss.length ? 'Missing: ' + miss.map(t => `<b>${esc(t)}</b>${g(t)}`).join(', ') : '', extra.length ? 'Extra: ' + extra.map(t => `<b>${esc(t)}</b>${g(t)}`).join(', ') : ''].filter(Boolean).join('. '); }
   if (!pairs.length || pairs.length > 2) return '';
   // the three ways to say "no": explain which one fits and why, not just two glosses
   if (pairs.length === 1) { const neg = w => ({ dili: 'dili', di: 'dili', wala: 'wala', wa: 'wala', ayaw: 'ayaw' })[lowTok(w)]; const r = neg(pairs[0][0]), w = neg(pairs[0][1]);

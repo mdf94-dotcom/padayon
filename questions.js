@@ -109,7 +109,7 @@ function extraTypes(id, b) {
   if (c.kind === 'd' && REPLY_OF[id]) out.push(b >= 2 ? 'replysay' : 'reply');
   if (b >= 1 && pairFor(c)) out.push('hear2');
   if (b >= 2 && clozeFor(c)) out.push('cloze');
-  if (b >= 1 && picOk(c)) out.push('pic');
+  // no picture questions (Mykha: the pictures were more confusing than helpful)
   return out;
 }
 
