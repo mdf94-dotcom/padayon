@@ -34,6 +34,9 @@ async function walk(page, label, log, R) {
   guard = 0; let wrongEvery = 0;
   while (await page.evaluate(() => view === 'session') && guard++ < 150) {
     const type = await page.evaluate(() => Q[qi].type); await check('q-' + type, guard % 9 === 1);
+    // a part of the session (today's conversation, a story...): open it, look at it, leave with the X, and land back in the session
+    if (type === 'seg') { const seg = await page.evaluate(() => Q[qi].seg); await click('#seggo'); await page.waitForTimeout(400); await check('part-' + seg, true);
+      await page.locator('#quit').click({ timeout: 6000 }); await page.waitForFunction(() => view === 'session', null, { timeout: 8000 }); R.ok(true, label + ': part ' + seg + ' opens and comes back'); continue; }
     wrongEvery++; const right = wrongEvery % 3 !== 0;
     if (await page.locator('#ans').count()) { const v = await page.evaluate(([r]) => r ? firstAlt(card(Q[qi].id).ceb) : 'zzzz', [right]); await page.fill('#ans', v); await click('#chk'); }
     else if (await page.locator('#ex .opt').count()) { const opts = page.locator('#ex .opt'); await opts.nth(0).click(); await click('#chk'); }

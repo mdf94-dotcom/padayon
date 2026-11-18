@@ -157,8 +157,12 @@ const ABOUT = [
   ['Asa ka gusto moadto?', 'Where do you want to go?', 'Gusto ko moadto sa Cebu.', 'I want to go to Cebu.']
 ];
 let AB = null;
+// questions whose words you already know come first (a question full of new words isn't about you yet)
+function aboutPick(n) { const kw = knownWords(), miss = i => [ABOUT[i][0], ABOUT[i][2]].flatMap(s => tokens(s).map(lowTok)).filter(t => t && !kw.has(t) && !kw.has(rootOf(t))).length;
+  return shuffle(ABOUT.map((_, i) => i)).sort((a, b) => miss(a) - miss(b)).slice(0, n); }
 VIEWS.aboutme = function () {
-  if (!AB) AB = { list: shuffle(ABOUT.map((_, i) => i)).slice(0, 5), i: 0, done: false };
+  if (!AB) AB = { list: aboutPick(5), i: 0, done: false };
+  if (AB.i >= AB.list.length && SEG) { const n = AB.list.length; AB = null; return segBack(`Ayos! ${n} answers about your own life. Back to your session.`); }
   if (AB.i >= AB.list.length) { $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Tell me about you</h2></div><section class="panel">${binkoSays('Ayos! Five answers about your own life. Talking about yourself is the Bisaya you\'ll use most.')}<button class="btn primary block" id="again">Five more</button></section>`;
     $('#quit').onclick = () => { AB = null; go('practice'); }; $('#again').onclick = () => { AB = null; render(); }; return; }
   const q = ABOUT[AB.list[AB.i]];
@@ -174,7 +178,7 @@ VIEWS.aboutme = function () {
     const ws = (mine || '').split(/\s+/).map((w, i) => ({ w: w.replace(/^[^\p{L}']+|[^\p{L}'-]+$/gu, ''), i })).filter(x => x.w && !(x.i > 0 && /^\p{Lu}/u.test(x.w)));
     const bis = ws.length > 0 && !ws.some(x => EN_WORDS.has(x.w.toLowerCase())) && ws.filter(x => glossOf(x.w.toLowerCase()) || cardForTok(x.w.toLowerCase())).length / ws.length >= 0.5;
     $('#rev').innerHTML = `<div class="panel note" style="margin-top:10px"><div class="label">One way to answer</div><div class="ceb" style="font-size:1.2rem">${esc(q[2])}</div><div class="small muted">${esc(q[3])}</div>
-      ${mine ? `<div class="small" style="margin-top:6px">${bis ? '✅ That reads as Bisaya.' : '🤔 Most of that doesn\'t look like Bisaya words yet. Try using the example as a pattern.'} Change the details to fit your own life.</div>` : ''}</div>`;
+      ${mine ? `<div class="small" style="margin-top:6px">${bis ? '✅ That reads as Bisaya.' : '🤔 Most of that doesn\'t look like Bisaya words yet. Try using the example as a pattern.'} Change the details to fit your own life.</div>${freeNotes(mine, true)}` : ''}${mixTipFor(q[2])}</div>`;
     inp.disabled = true; if (mine) { logAnswer(!!bis); if (bis) addXP(4); }   // just looking at an example isn't a wrong answer
     foot(`<div class="small muted" style="text-align:center">Tap any Bisaya word to see what it means.</div><button class="btn primary block" id="cont">Next</button>`); $('#cont').onclick = () => { AB.i++; render(); };
     if (typeof tappableWords === 'function') { document.querySelectorAll('#rev .ceb').forEach(twWrap); }
@@ -200,7 +204,8 @@ VIEWS.retell = function () {
     $('#quit').onclick = () => { RT = null; go('practice'); };
     document.querySelectorAll('[data-rt]').forEach(b => b.onclick = () => { RT.pick = +b.dataset.rt; RT.src = src[RT.pick]; RT.round = 0; render(); }); return;
   }
-  const secs = [60, 45, 30][RT.round], x = RT.src;
+  const secs = (RT.seg ? [40, 30, 20] : [60, 45, 30])[RT.round], x = RT.src;
+  if (RT.round >= 3 && SEG) { RT = null; return segBack('Three times, faster each time. Nindot! Back to your session.'); }
   if (RT.round >= 3) { $('#app').innerHTML = `${head}<section class="panel">${binkoSays('Three times, faster each time. Nindot! Notice how the third one came out smoother.')}<button class="btn primary block" id="again">Pick another</button></section>`;
     $('#quit').onclick = () => { RT = null; go('practice'); }; $('#again').onclick = () => { RT = null; render(); }; return; }
   $('#app').innerHTML = `${head}<div class="ex"><div class="label">Round ${RT.round + 1} of 3 · ${secs} seconds</div><b>${esc(x.title)}</b>

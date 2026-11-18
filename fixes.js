@@ -214,3 +214,6 @@ MIXUPS.push({ w: ['pa', 'gihapon'], title: 'pa · gihapon',
   ok: [['Bata pa siya.', 'She is still a child.'], ['Sayo pa.', 'It is still early.'], ['Gwapa gihapon ka.', 'You are still pretty (just like before).'], ['Mao gihapon.', 'Still the same.'], ['Niulan, pero nilakaw gihapon mi.', 'It rained, but we left anyway.']],
   no: [],
   fill: [['Sayo ___.', 'pa', ['pa', 'gihapon'], 'It is still early.'], ['Mao ___.', 'gihapon', ['gihapon', 'pa'], 'Still the same.'], ['Bata ___ siya.', 'pa', ['pa', 'gihapon'], 'She is still a child.'], ['Niulan, pero nilakaw ___ mi.', 'gihapon', ['gihapon', 'pa'], 'It rained, but we left anyway.']] });
+
+// words in the stories and Real Bisaya replies that had no meaning in the word pop-up
+Object.assign(GLOSS_MORE, { nilupad: 'flew (from lupad, fly)', nisakay: 'got on, rode (from sakay)', nisimba: 'went to Mass / church (from simba)', tambal: 'medicine; cure', magtiayon: 'married couple; husband and wife', mobiyahe: 'will travel (from biyahe, trip)' });

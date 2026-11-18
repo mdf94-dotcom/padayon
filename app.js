@@ -388,16 +388,9 @@ function planDay() { const t = today(); if (!S.plan[t]) S.plan = { [t]: {} }; re
 const WIDE = window.matchMedia ? matchMedia('(min-width:960px)') : { matches: true };
 try { WIDE.addEventListener('change', () => { if (view === 'home') render(); }); } catch (e) { }
 function planItems() {
+  // the daily session is the whole plan: the conversation and the other extras come inside it
   return [
-    { k: 'session', name: 'Daily session', d: 'Reviews, new words, and building blocks.', run: () => startSession() },
-    pickDialog() || planDay().convo ? { k: 'convo', name: "Today's conversation", d: 'New words first, then read it and say your part out loud.', run: () => go('convos') } : (() => { const n = nextConvo(); return { k: 'convo', locked: true, name: "Today's conversation", d: `Locked for now, so it counts as done. "${n.d.title}" opens after you learn ${n.left.length} more word${n.left.length === 1 ? '' : 's'} in your daily sessions.` }; })(),
-    buildLock() ? { k: 'build', locked: true, name: 'Build sentences', d: 'Locked for now, so it counts as done. ' + buildLock() } : { k: 'build', name: 'Build sentences', d: buildDesc(), run: () => startBuild() },
-    realLockItem(),
-    { k: 'speed', name: 'Speed round', d: 'Fast listening that speeds up as you get it right.', run: () => go('speed') },
-    { k: 'dict', name: 'Dictation', d: 'Type what you hear, every little word.', run: () => startDictation() },
-    { k: 'shadow', name: 'Shadowing', d: 'Speak along with one unit. Hands-free.', run: () => go('shadow') },
-    { k: 'talk', name: 'Talk out loud', d: 'A call or chat with family in Bisaya. Tick it when done.', manual: true }
-  ].filter(Boolean).map(lockDrill);
+    { k: 'session', name: 'Daily session', d: 'Reviews, new words, and building blocks.', run: () => startSession() }].filter(Boolean).map(lockDrill);
 }
 const lockDrill = it => { if (!it || !DRILL_MIN[it.k]) return it; const L = drillLock(it.k); return L && !planDay()[it.k] ? Object.assign({}, it, { locked: true, d: `Locked for now, so it counts as done. Opens after you learn ${L.need} more ${L.what}${L.need === 1 ? '' : 's'} with a recording.` }) : it; };
 const planNext = () => { const p = planDay(); return planItems().find(i => !p[i.k] && !i.locked) || null; };
@@ -457,11 +450,11 @@ function nextBtnHtml(id = 'nextup') {
   const n = planNext();
   return n ? (n.manual ? `<div class="small muted">Next on today's plan: <b>${esc(n.name)}</b>. ${esc(n.d)}</div><button class="btn primary block" id="${id}">Back to today's plan</button>`
     : `<button class="btn primary block" id="${id}">Next: ${esc(n.name)}</button>`)
-    : `<div class="small"><b>Everything on today's plan is done.</b> Padayon!</div><button class="btn primary block" id="${id}">Back home</button>`;
+    : `<div class="small"><b>Today's session is done.</b> That's everything for today. Padayon!</div><button class="btn primary block" id="${id}">Back home</button>`;
 }
 function wireNext(id = 'nextup') { const b = $('#' + id); if (!b) return; b.onclick = () => { const n = planNext(); if (n && !n.manual) n.run(); else goTab(); }; }
 function sectionDone(label, line) {
-  stopAudio();
+  stopAudio(); if (SEG) return segBack('Maayo kaayo! ' + label + '. Back to your session.');
   $('#app').innerHTML = `<section class="panel summary"><div class="label">${esc(label)}</div><h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1>${line ? `<p class="muted">${line}</p>` : ''}
     ${cameoHtml('done')}${binkoSays(planNext() ? BINKO_NEXT[planNext().k] : BINKO_NEXT.done)}
     ${nextBtnHtml()}<button class="btn ghost block" id="home2">Home</button></section>`;
@@ -654,6 +647,7 @@ function newPlan() {
 }
 function newAllowance() { const t = today(); if (S.newDay.d !== t) S.newDay = { d: t, n: 0 }; if (S.newDay.cap == null || S.newDay.capV !== S.settings.newPerDay) { S.newDay.cap = newPlan().n; S.newDay.capV = S.settings.newPerDay; } return Math.max(0, S.newDay.cap - S.newDay.n); }
 // how many reviews fit in today's session: the usual 16, plus two for each new word held back (up to 40)
+const reviewsToday = () => Math.max(8, reviewRoom() - 2 * (planDay().session ? 0 : segsToday().length));
 const reviewRoom = () => { const pref = S.settings.newPerDay || 8, cap = S.newDay && S.newDay.d === today() && S.newDay.cap != null ? S.newDay.cap : pref; return Math.min(40, 16 + 2 * Math.max(0, pref - cap)); };
 /* ---------- the learning path ---------- */
 let PATH = [];
@@ -838,7 +832,8 @@ function exType0(id, isNew) {
 function buildSession() {
   ensureRuleCards();
   const extraRound = !!planDay().session;   // "Review what you know" after the day's session: nothing new
-  const nwk = new Set(needsWork()), due = [...nwk, ...dueIds().filter(id => !nwk.has(id))], q = due.filter(id => id[0] !== 'r').slice(0, (newAllowance(), reviewRoom())).concat(due.filter(id => id[0] === 'r').slice(0, 3)).map(id => ({ id, type: exType(id) }));
+  const segs = extraRound ? [] : segsToday();   // today's conversation and one rotating extra, inside the session
+  const nwk = new Set(needsWork()), due = [...nwk, ...dueIds().filter(id => !nwk.has(id))], q = due.filter(id => id[0] !== 'r').slice(0, (newAllowance(), Math.max(8, reviewRoom() - 2 * segs.length))).concat(due.filter(id => id[0] === 'r').slice(0, 3)).map(id => ({ id, type: exType(id) }));
   shuffle(q); q.sort((x, y) => (nwk.has(y.id) ? 1 : 0) - (nwk.has(x.id) ? 1 : 0));
   const nw = extraRound ? [] : pickNew(); let lastPos = 0;
   for (const id of nw) {
@@ -865,9 +860,47 @@ function buildSession() {
   // after a gap fixes it much better than seeing it twice in a row (successive relearning)
   // every new word, not just the first ten (Karpicke & Roediger 2008: words recalled once and dropped are forgotten
   // far faster than words recalled again later in the session)
-  if (nw.length) shuffle(nw.filter(id => id[0] !== 'r').slice(0, 15)).forEach(id => q.push({ id, type: exType(id, true), recap: 1 }));
+  if (nw.length) shuffle(nw.filter(id => id[0] !== 'r').slice(0, segs.length ? 10 : 15)).forEach(id => q.push({ id, type: exType(id, true), recap: 1 }));
+  // the parts: the conversation about a third of the way in, the other about two thirds; never last, so the session
+  // always has a question to come back to
+  segs.forEach((k, j) => q.splice(Math.max(1, Math.min(q.length - 1, Math.floor(q.length * (segs.length === 1 ? 0.5 : j ? 0.68 : 0.35)))), 0, { id: 'seg', type: 'seg', seg: k }));
   q.forEach(x => { if (x.type === 'say' || x.type === 'pron') x.type = 'speak'; });
   return q;
+}
+
+/* ---------- the daily session is the one thing to do each day: the extras come inside it ----------
+   Every day's session carries today's conversation (once one is open) and one more part that rotates day to day
+   through the other extras, so a week of sessions covers all of them. A part opens its own screen; when it ends,
+   or you leave it, you're back in the session at the next question. Each extra is still on the Practice tab
+   for anyone who wants more, but nothing there is needed for the day or the streak. */
+var SEG = null;
+const segStory = () => { if (typeof STORIES === 'undefined') return null; const open = STORIES.map((s, i) => ({ s, i })).filter(x => !storyMissing(x.s).length); if (!open.length) return null;
+  const done = S.storyDone || {}; const fresh = open.filter(x => !done[x.i]); return (fresh.length ? fresh[0] : open[today() % open.length]).i; };
+const segRetell = () => { const src = retellSources(); if (!src.length) return null; const p = pickDialog(); const k = p ? src.findIndex(x => x.title === '💬 ' + p.d.title) : -1; return src[k >= 0 ? k : today() % src.length]; };
+const SEG_INFO = {
+  convo: { name: "Today's conversation", skill: 'speaking', ok: () => !!pickDialog(), d: () => { const p = pickDialog(); return p ? `“${p.d.title}”. New words first, then read it and say your lines out loud.` : ''; }, run: () => go('convos') },
+  real: { name: 'Real Bisaya', skill: 'reading', ok: () => !!realToday(), d: () => { const it = realToday(); return !it ? '' : it.kind === 't' ? `A real post by ${it.t[1]}. Translate it, then reply in Bisaya.` : it.kind === 's' ? `A bit of “${it.g.song}” by ${it.g.artist}. Catch the words you know.` : `A clip from ${it.c.show}. Catch the gist, then answer in Bisaya.`; }, run: () => { RB = null; go('real'); } },
+  story: { name: "Binko's story", skill: 'reading', ok: () => segStory() != null, d: () => { const i = segStory(); return i == null ? '' : `${STORIES[i].emoji} “${STORIES[i].title}”. Every word in it is one you know. A few questions after.`; }, run: () => { ST = { i: segStory(), at: 0, en: {}, phase: 'read', qi: 0, right: 0 }; go('story'); } },
+  speed: { name: 'Speed round', skill: 'listening', ok: () => !drillLock('speed'), d: () => `8 clips you know, played once at ${S.speed.toFixed(1)}×. Pick the meaning before the timer runs out.`, run: () => startSpeed(8) },
+  build: { name: 'Build sentences', skill: 'building', ok: () => RULES.some(r => ruleLearned(r.id)) && buildPool().out.length >= 3, d: () => 'A quick drill on the rules you know, a few sentences to build, then one of your own.', run: () => startBuild(true) },
+  about: { name: 'Tell me about you', skill: 'speaking', ok: () => Object.keys(S.cards).length >= 20, d: () => 'Three questions about your own life. Answer in Bisaya, then compare with an example.', run: () => { AB = { list: aboutPick(3), i: 0 }; go('aboutme'); } },
+  numbers: { name: 'Numbers & time', skill: 'listening', ok: () => typeof NUM !== 'undefined' && NUM.ready && typeof startNumRound === 'function', d: () => 'Five numbers or times at your level.', run: () => startNumRound(5) },
+  retell: { name: 'Retell it faster', skill: 'speaking', ok: () => !!segRetell(), d: () => { const x = segRetell(); return x ? `Tell ${x.title} out loud three times: in 40, 30, then 20 seconds.` : ''; }, run: () => { RT = { pick: 0, src: segRetell(), round: 0, seg: 1 }; go('retell'); } }
+};
+const SEG_ROTA = ['real', 'speed', 'story', 'build', 'about', 'numbers', 'retell'];
+function segsToday() {
+  const ok = k => { try { return SEG_INFO[k].ok(); } catch (e) { return false; } };
+  // the rotating one goes round the parts that are open, so no part repeats while another hasn't had its turn
+  const out = ok('convo') ? ['convo'] : [], open = SEG_ROTA.filter(ok);
+  if (open.length) out.push(open[today() % open.length]);
+  return out;
+}
+// back to the session, one question past the part
+function segBack(msg) {
+  SEG = null; stopAudio(); if (typeof stopRecorder === 'function') stopRecorder(); clearInterval(timerH);
+  if (msg) toast(msg);
+  if (loadResume()) return startSession();
+  view = 'home'; render();
 }
 
 /* ---------- audio playback ---------- */
@@ -881,7 +914,7 @@ const stillWanted = (r, cx) => r === playReq && cx === audioCtx();
 /* ---------- computer voice: cards with no native recording ----------
    voice/ holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
-const VOICE_V = 20; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
+const VOICE_V = 21; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
 /* The computer voice comes in pieces: a small index, then one piece per stage. You only download the pieces for
    where you are on the path (plus the next one); the rest arrive when a sentence from them is first played. */
 async function loadVoice() {
@@ -976,7 +1009,7 @@ function musicFor() {
   if (['speedrun', 'retell'].includes(view)) return 'off';
   return ['real', 'geo', 'geogame', 'aboutme'].includes(view) ? 'practice' : 'off';
 }
-function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); try { const ret = (VIEWS[view] || VIEWS.home)(); if (ret && ret.catch) ret.catch(e => renderCrash(e)); clearHealed(); } catch (e) {
+function render() { if (typeof GUIDE_V !== 'undefined' && (S.guideV || 0) < GUIDE_V && view !== 'guide') { guideAt = 0; guideBack = 'home'; view = 'guide'; } else if (typeof GUIDE_V !== 'undefined' && !S.placed && hasPack() && view !== 'place' && view !== 'guide') { initPlacement(); view = 'place'; } if (SEG && (TAB_VIEWS.has(view) || SEG_EXIT.has(view))) return segBack(); stopAudio(); clearInterval(timerH); const a = $('#app'); a.className = 'app ' + (TAB_VIEWS.has(view) ? 'tabbed' : 'lesson'); try { const ret = (VIEWS[view] || VIEWS.home)(); if (ret && ret.catch) ret.catch(e => renderCrash(e)); clearHealed(); } catch (e) {
     // a lesson or game screen redrawn after its lesson ended has nothing to show: go back to Today quietly
     if (!TAB_VIEWS.has(view)) { try { console.warn('left ' + view + ':', e.message); view = 'home'; a.className = 'app tabbed'; VIEWS.home(); } catch (e2) { renderCrash(e2); } }
     else renderCrash(e); } window.scrollTo(0, 0); if (typeof Music !== 'undefined') try { Music.set(musicFor()); } catch (e) { } try { muteBtn(); a11y(); } catch (e) { } }
@@ -1036,6 +1069,7 @@ const TI = {
 const TABS = [['home', 'Today'], ['practice', 'Practice'], ['rushhome', 'Games'], ['board', 'Ranks'], ['me', 'Me']];
 const TAB_VIEWS = new Set(TABS.map(t => t[0]));
 let lastTab = 'home';
+var SEG_EXIT = new Set(['stories', 'numbers', 'again', 'summary']);
 const goTab = () => go(lastTab);
 function shell(tab, html) {
   lastTab = tab;
@@ -1093,8 +1127,9 @@ function binkoPlan() {
   let s = 'Binko here!';
   const rs = loadResume(); if (rs) return [s + ` You stopped at question <b>${rs.qi + 1} of ${rs.Q.length}</b> last time. Binko saved your spot, so tap Continue and we'll pick right back up!`, `${hi}${name}!`];
   if (!plan.session) {
-    const parts = []; const dueN = Math.min(due, reviewRoom()); if (dueN) parts.push(`<b>${dueN}</b> review${dueN === 1 ? '' : 's'}`); if (nw) parts.push(`<b>${nw}</b> new word${nw === 1 ? '' : 's'}`);
+    const parts = []; const dueN = Math.min(due, reviewsToday()); if (dueN) parts.push(`<b>${dueN}</b> review${dueN === 1 ? '' : 's'}`); if (nw) parts.push(`<b>${nw}</b> new word${nw === 1 ? '' : 's'}`);
     s += parts.length ? ` Today's session has ${list(parts)}` : ' Today\'s session is ready'; s += nr && !S.cards[ruleCardId(nr)] ? `, plus a new grammar rule: <b>${esc(nr.title)}</b>.` : '.';
+    { const sg = segsToday().map(k => k === 'convo' ? (p => p ? `today's conversation, <b>${esc(p.d.title)}</b>` : '')(pickDialog()) : `<b>${esc(SEG_INFO[k].name)}</b>`).filter(Boolean); if (sg.length) s += ` Inside it: ${list(sg)}. That's everything for today!`; }
     const np = newPlan(), pref = S.settings.newPerDay || 8, cap = S.newDay.cap != null ? S.newDay.cap : np.n;
     if (cap < pref && np.why === 'backlog') s += ` You picked ${pref} new words a day, but <b>${due}</b> old ones are waiting, so Binko is giving you ${cap ? cap + ' new today' : 'no new ones today'} and more room for reviews. Words you don't practice slip away!`;
     else if (cap < pref && np.why === 'accuracy') s += ` Recent answers were ${np.pct}% right, so Binko is holding new words to ${cap} today until the old ones feel solid.`;
@@ -1105,6 +1140,23 @@ function binkoPlan() {
   } else s += nx ? ` Today's session is done! Next up: <b>${esc(nx.name)}</b>.` : ' You finished everything today! Binko is doing a happy little spin.';
   return [s, `${hi}${name}!`];
 }
+
+/* Today: what's inside today's session (it's the only thing to do each day) */
+function sessionPartsHtml() {
+  const plan = planDay(), rs = loadResume();
+  if (plan.session) return `<section class="panel plan"><div class="row spread"><h2>Today's session</h2><span class="tag">Done ${I.check}</span></div>
+    <p class="small muted" style="margin:0">That's everything for today. Padayon! Want more? Every part has its own page on the Practice tab, any time.</p></section>`;
+  const segs = rs ? rs.Q.slice(rs.qi).filter(x => x.type === 'seg').map(x => x.seg) : segsToday();
+  const due = Math.min(dueIds().length, Math.max(8, reviewRoom() - 2 * segs.length)), nw = Math.min(newAllowance(), pickNew().length), nr = nextRule();
+  const SEG_EMO = { convo: '💬', real: '📱', story: '📖', speed: '⚡', build: '🧱', about: '🙋', numbers: '🔢', retell: '⏱️' };
+  const rows = [due ? ['🔁', due + ' review' + (due === 1 ? '' : 's'), 'Words and phrases due today, the shaky ones first'] : null,
+    nw ? ['🆕', nw + ' new word' + (nw === 1 ? '' : 's'), 'Taught, then asked again a few questions later'] : null,
+    nr && !S.cards[ruleCardId(nr)] ? ['🧩', 'New rule: ' + nr.title, 'Binko explains it, then two quick questions'] : null,
+    ['🎧', 'Listening, speaking and building', 'Dictation, speak-along and sentence questions mixed in'],
+    ...segs.map(k => { let d = ''; try { d = SEG_INFO[k].d(); } catch (e) { } return [SEG_EMO[k] || '✨', SEG_INFO[k].name, d]; })].filter(Boolean);
+  return `<section class="panel plan"><div class="row spread"><h2>In today's session</h2><span class="muted small">The only thing to do today</span></div>
+    <div class="plist">${rows.map(r => `<div class="prow"><span class="gemo" aria-hidden="true" style="font-size:1.3rem;width:32px;text-align:center">${r[0]}</span><div class="prow-main" style="cursor:default"><b>${esc(r[1])}</b><span class="muted small">${esc(r[2])}</span></div></div>`).join('')}</div></section>`;
+}
 let HOME_SPK = null;
 VIEWS.home = function () {
   if (!HOME_SPK) HOME_SPK = { who: 'binko' };
@@ -1112,7 +1164,7 @@ VIEWS.home = function () {
   const items = planItems(), nextUp = planNext(), doneN = items.filter(i => isDone(i, plan)).length;
   const resumeAt = (!nextUp || nextUp.k === 'session') ? loadResume() : null;
   const open = items.filter(i => !isDone(i, plan)), done = items.filter(i => isDone(i, plan));
-  const mins = Math.max(5, Math.round((Math.min(due, reviewRoom()) + nw * 2 + 2) * 0.6));
+  const segN = plan.session ? 0 : segsToday().length, mins = Math.max(5, Math.round((Math.min(due, Math.max(8, reviewRoom() - 2 * segN)) + nw * 2 + 2) * 0.6 + segN * 2.5));
   const SHORT = { session: 'Reviews and new words', convo: 'Read it, then say your part', speed: 'Listening at ' + S.speed.toFixed(1) + '×', dict: 'Type what you hear', shadow: 'Speak along with one unit', talk: 'Call or chat with family, then tick it' };
   const shortOf = it => it.locked ? 'Opens soon' : it.k === 'build' ? (nextRule() ? 'New rule: ' + nextRule().title : 'Make your own sentences') : it.k === 'real' ? (it.d || '').split('.')[0] : SHORT[it.k] || it.d;
   const row = it => { const d = isDone(it, plan), nx = nextUp && it.k === nextUp.k;
@@ -1128,17 +1180,13 @@ VIEWS.home = function () {
   <section class="hero h-${HOME_SPK.who}">
     <div class="hero-guide">${HOME_SPK.who === 'binko' ? (p => cloverSays('binko', p[0], true, p[1]))(binkoPlan()) : cloverSays(HOME_SPK.who, HOME_SPK.html, true, HOME_SPK.kick)}</div>
     <div class="hero-text"><div class="label">Karon nga adlaw · Today</div><h2>${nextUp ? esc(nextUp.name) : 'All done today. Padayon!'}</h2>
-      <p>${resumeAt ? `Picking up where you left off · question ${resumeAt.qi + 1} of ${resumeAt.Q.length}` : nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${Math.min(due, reviewRoom())} review${Math.min(due, reviewRoom()) === 1 ? '' : 's'}, ${nw} new` : nextUp.d) : 'Come back tomorrow, or do another session.'}</p></div>
+      <p>${resumeAt ? `Picking up where you left off · question ${resumeAt.qi + 1} of ${resumeAt.Q.length}` : nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${Math.min(due, reviewsToday())} review${Math.min(due, reviewsToday()) === 1 ? '' : 's'}, ${nw} new${segN ? ', plus ' + segsToday().map(k => SEG_INFO[k].name.replace("Today's ", '')).join(' and ') : ''}` : nextUp.d) : 'Come back tomorrow, or do another session.'}</p></div>
     <div class="hero-actions"><button class="btn" id="start">${resumeAt ? 'Continue' : nextUp ? (nextUp.manual ? 'I did it' : 'Start') : 'Do another session'}<kbd>Enter</kbd></button></div>
     <div class="hero-foot"><span>${sinceShort()}</span><span>${freezePending() ? `🧊 Freeze ready: finish today to keep your ${S.streak.count}-day streak` : freezeOk(calDay() + 1) ? '🧊 Streak freeze ready' : `Best streak ${S.streak.best || 0}`}</span></div>
   </section>
   ${false ? `<section class="banner"><b>Already know some Bisaya?</b><div class="small">Take the 5-minute placement check and skip the words you already know.</div><div class="row"><button class="btn primary" id="placego2">Take the check</button><button class="btn ghost" id="placeno">No thanks</button></div></section>` : ''}
   ${podHtml()}
-  <section class="panel plan"><div class="row spread"><h2>Today's plan</h2><span class="muted small tnum">${doneN} of ${items.length} done</span></div>
-    <div class="bar"><i style="width:${doneN / items.length * 100}%"></i></div>
-    <div class="plist">${open.map(row).join('')}${showDone ? done.map(row).join('') : ''}</div>
-    ${done.length ? `<button class="donebar" id="showdone">${I.check}<span>Done: ${esc(done.map(i => i.name.replace("Today's ", '')).join(', '))}</span><b>${showDone ? 'Hide' : 'Show'}</b></button>` : ''}
-  </section>${typeof webHtml === 'function' ? webHtml() : ''}</div>
+  ${sessionPartsHtml()}${typeof webHtml === 'function' ? webHtml() : ''}</div>
   <div class="today-side">${WIDE.matches ? statTrio() + stageMini() + boardPanel() : ''}</div></div>`);
   if (typeof wireWeb === 'function') wireWeb();
   $('#start').onclick = () => { if (resumeAt) return binkoBump(startSession); if (!nextUp) return planDay().session ? go('again') : binkoBump(startSession); if (nextUp.manual) { tick(nextUp.k); return render(); } binkoBump(() => nextUp.run()); };
@@ -1172,7 +1220,7 @@ VIEWS.practice = function () {
   const lk = k => DRILL_MIN[k] && drillLock(k) ? 'Opens soon' : '';
   const ruleN = RULES.filter(r => ruleLearned(r.id)).length, realOpen = realItems().filter(x => x.open).length, plan = planDay();
   const g = (name, color, rows) => `<section class="pgroup"><h2 class="glabel" style="color:${color}">${name}</h2><div class="plist2">${rows.map(practiceRow).join('')}</div></section>`;
-  shell('practice', `<div class="ptitle"><h1>Practice</h1><p class="muted">Extra practice, any time. Today's plan lives on the Today tab.</p></div>
+  shell('practice', `<div class="ptitle"><h1>Practice</h1><p class="muted">Extra practice, any time. None of it is needed: your daily session already has a bit of each.</p></div>
   <div class="pgrid">
   ${g('Listen', 'var(--sky)', [
     { go: 'speed', icon: PI.bolt, c: 'var(--sky)', sub: 'Paspas', name: 'Speed round', badge: lk('speed') || S.speed.toFixed(1) + '×' },
@@ -1346,6 +1394,8 @@ VIEWS.story = function () {
       <div class="foot"><button class="btn primary block" id="nx">${!ST.at ? 'Start the story' : last ? 'Quiz time!' : 'Next line'}</button></div>`;
     document.querySelectorAll('[data-en]').forEach(b => b.onclick = () => { ST.en[+b.dataset.en] = 1; render(); });
     document.querySelectorAll('[data-vs]').forEach(b => b.onclick = () => playSentence(b.dataset.vs, b));
+    document.querySelectorAll('.chat .msg > div[style*="font-weight:700"]').forEach(el => { if (!el.querySelector('.tw')) twWrap(el); });
+    if (last) { const tip = mixTipFor(s.lines.map(l => l[0]).join(' ')); if (tip) $('.chat').insertAdjacentHTML('afterend', tip); }
     $('#nx').onclick = () => { if (last) { ST.phase = 'quiz'; return render(); } ST.at++; render(); const l = s.lines[ST.at - 1]; if (l) playSentence(l[0]); const m = document.querySelectorAll('.chat .msg'); if (m.length) m[m.length - 1].scrollIntoView({ block: 'nearest' }); };
   } else if (ST.phase === 'quiz' && ST.qi < s.q.length) {
     const q = s.q[ST.qi], opts = shuffle(q.a.map((t, i) => ({ t, ok: i === 0 })));
@@ -1449,14 +1499,14 @@ const minsText = n => `${n} new words a day is about ${MINS[n] || Math.round(n *
 const IPHONE_MUSIC = 'On iPhone, music only plays when your phone is not on silent (ring switch or Action button set to ring). The Bisaya audio always plays.';
 /* ---------- the guide: shown once to everyone after a big update (bump GUIDE_V), and any time from Me ----------
    Keep it up to date: every new feature gets a point on the page for the tab where it lives. */
-const GUIDE_V = 4;
+const GUIDE_V = 5;
 /* The guide: short, visual pages. Each page has a picture, a few short points, and shows where to find it. */
 const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
-  { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session'], ['✅', 'Tick off today\'s plan'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
-  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A picture and a "sounds like" guide'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🆕', 'New kinds of questions: reply to what someone says, hear the difference, fill the gap, name the picture'], ['🔀', 'A word with several meanings (like <b>naa</b>) gets one card per meaning, learned on different days. Tap a meaning to compare it'], ['🔁', 'Miss one? It comes back six questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
+  { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session. It\'s the only thing to do each day'], ['💬', 'It has everything in it: reviews, new words, a grammar rule, today\'s <b>conversation</b>, and one more part that changes each day (a story, Real Bisaya, a speed round, numbers, building sentences, talking about yourself or retelling a story)'], ['↩️', 'Each part opens its own screen, then brings you right back to the session'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
+  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A "sounds like" guide, and a picture when one really shows the word'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🆕', 'New kinds of questions: reply to what someone says, hear the difference, fill the gap'], ['🔀', 'A word with several meanings (like <b>naa</b>) gets one card per meaning, learned on different days. Tap a meaning to compare it'], ['🔁', 'Miss one? It comes back six questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['✅', '<b>Don\'t mix up</b> boxes: easy-to-confuse words side by side, with ✅ right and ❌ wrong examples. Look-alike words are learned on different days, then once you know two of them they come back as questions: fill in the blank, or pick or type the right one'], ['🤔', 'Miss one? See exactly why']] },
-  { t: 'Practice', tab: 'practice', art: '🎧', pts: [['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
+  { t: 'Practice', tab: 'practice', art: '🎧', pts: [['➕', 'Extra practice any time. None of it is needed: the daily session already has a bit of each'], ['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations. In a conversation, say your line out loud or type it to have it checked. Stuck? There\'s a hint'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
   { t: 'Ranks', tab: 'board', art: '📊', pts: [['📊', 'See how the family is doing'], ['🎯', 'Streaks, accuracy, words, games'], ['⌨️', 'Game scores say if they were typed or multiple choice'], ['🔑', 'Sign in on <b>Me</b> to join']] },
   { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day (the most you\'ll get: fewer when reviews pile up)'], ['🎵', 'Music changes with what you\'re doing (lessons, practice, grammar, stories, numbers, games) and switches tracks during your daily session. Set music, sound effects and vibration in Settings, or tap the speaker in the top corner'], ['🗺️', 'Your <b>word web</b> is on Today, your <b>path map</b> on Practice, and <b>Then and now</b> on Me'], ['💾', 'Save a backup, or <b>Start over</b> to reset all your progress on every device']], set: true },
@@ -1525,6 +1575,9 @@ VIEWS.session = function () {
   if (qi >= Q.length) return finishSession();
   saveResume();
   const item = Q[qi], c = card(item.id);
+  if (item.type === 'seg') { $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End session">${I.x}</button><div class="prog"><i style="width:${(qi / Q.length) * 100}%"></i></div><span class="muted small tnum qcount">${qi + 1} of ${Q.length}</span></div><div class="ex" id="ex"></div><div class="foot" id="foot"></div>`;
+    $('#quit').onclick = () => { stopAudio(); saveResume(); go('home'); if (qi > 0 && loadResume()) toast('Saved your place. Tap Continue on Today to pick up where you left off.'); };
+    return EX.seg(null, item); }
   if (!c || ((item.type === 'pron' || item.type === 'dict' || item.type === 'listen' || item.type === 'tiles' || item.type === 'shadow') && !c.audio)) { qi++; return VIEWS.session(); }
   $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="End session">${I.x}</button><div class="prog"><i style="width:${(qi / Q.length) * 100}%"></i></div><span class="muted small tnum qcount">${qi + 1} of ${Q.length}</span><span class="speedchip">${S.speed.toFixed(1)}×</span></div>
   <div class="ex" id="ex"></div><div class="foot" id="foot"></div>`;
@@ -1901,6 +1954,42 @@ function casualOk(right, got) {
   if (!pr || !pw || r.slice(pr.length) !== w.slice(pw.length) || !a.slice(0, i).some(t => t === 'wala' || t === 'wa')) return '';
   return `Counts! <b>${esc(b.join(' '))}</b> is how a lot of people say it. The standard way is <b>${esc(a.join(' '))}</b>: after wala the action word goes back to mo-.`;
 }
+
+/* ---------- checking Bisaya you wrote yourself (conversations, replies, answers about you) ---------- */
+// the "Don't mix up" box for a word in this sentence, if one fits (the least common word wins: pa/gihapon before ko/ka)
+function mixTipFor(ceb) {
+  if (typeof MIXUPS === 'undefined') return '';
+  const toks = tokens(String(ceb)).map(lowTok), whole = toks.join(' '), common = new Set(['ko', 'ka', 'ta', 'mi', 'mo', 'sa', 'ang', 'og', 'ug', 'nga']);
+  const hits = MIXUPS.filter(m => (m.t || []).some(t => toks.includes(t)) || (m.w || []).some(w => w.includes(' ') ? whole.includes(w) : toks.includes(w)));
+  const score = m => [...(m.w || []), ...(m.t || [])].filter(w => toks.includes(w) && !common.has(w)).length;
+  const m = hits.sort((x, y) => score(y) - score(x))[0];
+  return m ? `<div class="panel rulechip"><div class="label">Don't mix up · ${esc(m.title)}</div><div class="small">${esc(m.rule)}</div></div>` : '';
+}
+// a whole line typed from memory: right, right but for a small typo, a casual form people really use, or wrong (and what differs)
+function lineCheck(typed, right) {
+  const g = norm(typed); let best = 99, tgt = '';
+  for (const x of alts(right)) { const d = lev(g, x); if (d < best) { best = d; tgt = x; } }
+  if (g === tgt) return { ok: 2, note: '' };
+  if (typoOk(g, tgt, Math.max(1, Math.floor(tgt.length * 0.1)))) return { ok: 1, note: 'Almost! Just watch the spelling.' };
+  const cz = casualOk(right, typed); if (cz) return { ok: 1, note: cz };
+  return { ok: 0, note: diffNote(right, typed) };
+}
+// notes on something free you wrote (no single right answer): English slipped in, a typo of a word you know,
+// "ka" when the question was about you, wala + ni- (fine, casual)
+function freeNotes(text, aboutYou) {
+  const toks = tokens(String(text || '')).map(lowTok).filter(t => t && /\p{L}/u.test(t)), out = [];
+  if (!toks.length) return '';
+  const en = toks.filter(t => EN_WORDS.has(t) && !cardForTok(t)); if (en.length) out.push(`<b>${esc(en.slice(0, 3).join(', '))}</b> ${en.length === 1 ? 'is' : 'are'} English. Try saying it all in Bisaya.`);
+  if (!VOCAB_WORDS) typoOk('abcd', 'abce', 9);   // builds the list of every word the app teaches
+  const kw = knownWords();
+  toks.forEach(t => { if (t.length < 4 || kw.has(t) || VOCAB_WORDS.has(t) || glossOf(t) || EN_WORDS.has(t) || out.length > 3) return;
+    const near = [...kw].filter(w => w.length >= 4 && Math.abs(w.length - t.length) <= 2 && lev(w, t) <= (t.length > 6 ? 2 : 1)).sort((x, y) => lev(x, t) - lev(y, t))[0];
+    if (near) out.push(`You wrote <b>${esc(t)}</b>. Did you mean <b>${esc(near)}</b>?`); });
+  const me = ['ko', 'ako', 'akong', 'nako', 'ako\'ng'], you = ['ka', 'ikaw', 'imong', 'nimo', 'imo'];
+  if (aboutYou && toks.some(t => you.includes(t)) && !toks.some(t => me.includes(t))) out.push('This one is about you, so answer with <b>ko</b> (I) and <b>akong</b> (my), not ka / imong (you / your).');
+  const wi = toks.findIndex(t => t === 'wala' || t === 'wa'); if (wi >= 0) { const v = toks.slice(wi + 1).find(t => /^(ni|mi)[a-z]{3,}/.test(t)); if (v) out.push(`<b>Wala … ${esc(v)}</b> is how a lot of people say it. The standard way puts the action word back to mo- after wala (wala ko <b>mo${esc(v.slice(2))}</b>).`); }
+  return out.length ? `<div class="small" style="margin-top:6px">${out.map(x => '• ' + x).join('<br>')}</div>` : '';
+}
 function typedCheck(c, item, inp, tolFrac, dictMode) {
   const g = norm(inp.value); inp.disabled = true;
   let best = 99, tgt = '';
@@ -2058,6 +2147,7 @@ function finishSounds(full) {
 }
 function finishSession() { stopAudio(); const full = qi >= Q.length; finishSounds(full); ANS_RUN = 0; if (full && sess.mode === 'daily') clearResume(); if (full && sess.mode === 'daily') { tick('session'); try{ if (window.parent !== window) window.parent.postMessage({practice:'done', app:'bisaya'}, location.origin); }catch(e){} } if (full && sess.mode === 'dict') tick('dict'); save(); go('summary'); }
 VIEWS.summary = function () {
+  if (SEG) return segBack('Maayo kaayo! Back to your session.');
   if (typeof journeySnap === 'function') journeySnap();
   const acc = sess.total ? Math.round(sess.right / sess.total * 100) : 0;
   $('#app').innerHTML = `<section class="panel summary"><div class="label">${sess.mode === 'speed' ? 'Speed round done' : sess.mode === 'dict' ? 'Dictation done' : 'Session done'}</div>
@@ -2093,9 +2183,9 @@ function lockedScreen(title, k) {
     ${binkoSays(`${esc(title)} is still locked! Binko only uses things you've already learned. Learn ${L.need} more ${L.what}${L.need === 1 ? '' : 's'} with a recording in your daily session and it opens up.`)}`;
   $('#quit').onclick = () => goTab();
 }
-function startSpeed() {
+function startSpeed(n) {
   if (drillLock('speed')) return lockedScreen('Speed round', 'speed');
-  let pool = shuffle(heardIds()).slice(0, 20);
+  let pool = shuffle(heardIds()).slice(0, typeof n === 'number' ? n : 20);
   SP = { list: pool, i: 0, rate: S.speed, run: 0 }; sess = newSess('speed'); speedQ();
 }
 function endSpeed() { S.speed = Math.max(1, Math.round(SP.rate * 10) / 10); S.bestSpeed = Math.max(S.bestSpeed, sess.peak); if (sess.total >= SP.list.length) tick('speed'); save(); view = 'summary'; VIEWS.summary(); }
@@ -2190,13 +2280,26 @@ VIEWS.convo = function () {
     if (DL.i >= n) { $('#app').innerHTML = `${head}<section class="panel summary"><div class="label">Conversation done</div><h1 style="font-size:2rem;color:var(--sea)">Maayo kaayo!</h1><p class="muted">${DL.right} of ${d.lines.filter(l => l[0] === 'b').length} of your lines said right.</p><button class="btn primary block" id="fin">Continue</button></section>`; $('#fin').onclick = done; $('#quit').onclick = () => goTab(); return; }
     const l = d.lines[DL.i], mine = l[0] === 'b';
     $('#app').innerHTML = `${head}<div class="ex"><div class="chat">${d.lines.slice(0, DL.i).map((x, j) => bubble(d, x, j)).join('')}${mine ? '' : bubble(d, l, DL.i)}</div>
-      ${mine ? `<div class="panel"><div class="label">Your turn. Say it in Bisaya</div><div class="prompt">${esc(l[2])}</div>${l[3] ? `<div class="small muted">Hint: ${esc(l[3])}</div>` : ''}<div id="micw"></div><div id="res"></div></div>` : ''}</div><div class="foot" id="foot"></div>`;
+      ${mine ? `<div class="panel"><div class="label">Your turn. Say it in Bisaya</div><div class="prompt">${esc(l[2])}</div>${l[3] ? `<button class="linkbtn" id="lhint">Stuck? Show a hint</button><div class="small muted" id="lhintw"></div>` : ''}<input class="field" id="ln" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Say it out loud, or type it here"><div id="micw"></div><div id="res"></div></div>` : ''}</div><div class="foot" id="foot"></div>`;
     wireBubbles(d);
     const adv = () => { DL.i++; render(); };
     if (!mine) { foot(`<button class="btn primary block" id="nx">Next</button>`); $('#nx').onclick = adv; if (DL.spoke !== 'p' + DL.i) { DL.spoke = 'p' + DL.i; lineSay(l[1]); } }
     else {
-      foot(`<button class="btn primary block" id="show">Show the line</button>`);
-      $('#show').onclick = () => { $('#res').innerHTML = `<div class="corr">${esc(l[1])}</div>`; foot(`<div class="grades"><button class="btn" data-q="1">I said it</button><button class="btn" data-q="0">I blanked or used English</button></div>`); document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { if (+b.dataset.q) DL.right++; adv(); }); };
+      // the hint used to sit right under the prompt and often gave the line away: now it waits behind "Stuck?"
+      if ($('#lhint')) $('#lhint').onclick = () => { $('#lhint').remove(); $('#lhintw').textContent = 'Hint: ' + l[3]; };
+      const inp = $('#ln'), extra = () => `${ruleChip(l[1])}${mixTipFor(l[1])}`;
+      const label = () => { $('#show').textContent = inp.value.trim() ? 'Check' : 'Show the line'; };
+      foot(`<button class="btn primary block" id="show">Show the line</button>`); inp.oninput = label;
+      inp.onkeydown = e => { if (e.key === 'Enter') $('#show').click(); };
+      $('#show').onclick = () => {
+        const typed = inp.value.trim(); inp.disabled = true;
+        if (typed) {   // typed it: graded like any other answer, with what differs if it's off
+          const r = lineCheck(typed, l[1]); if (r.ok) DL.right++; logAnswer(r.ok > 0); inp.classList.add(r.ok ? 'right' : 'wrong');
+          $('#res').innerHTML = `<div class="verdict">${r.ok === 2 ? 'Tama!' : r.ok ? 'Sakto ra!' : 'Dili pa.'}</div><div class="corr">${esc(l[1])}</div>${r.note ? `<div class="small">${r.note}</div>` : ''}${extra()}`;
+          lineSay(l[1]); foot(`<button class="btn primary block" id="nx">Next</button>`); $('#nx').onclick = adv; return;
+        }
+        $('#res').innerHTML = `<div class="corr">${esc(l[1])}</div>${extra()}`; lineSay(l[1]);
+        foot(`<div class="grades"><button class="btn" data-q="1">I said it</button><button class="btn" data-q="0">I blanked or used English</button></div>`); document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { if (+b.dataset.q) DL.right++; adv(); }); };
     }
   } else {
     const left = DL.pool.filter(j => !DL.order.includes(j)), full = DL.order.length === n;
@@ -2237,7 +2340,7 @@ function ruleFor(ceb) {
 }
 function ruleChip(ceb) {
   const r = ruleFor(ceb); if (!r) return '';
-  if (!ruleLearned(r.id)) return `<div class="panel rulechip"><div class="label">How it's built</div><div class="small">This uses <b>${esc(r.title.toLowerCase())}</b>. Binko will teach you that rule step by step in Build sentences.</div></div>`;
+  if (!ruleLearned(r.id)) return `<div class="panel rulechip"><div class="label">How it's built</div><div class="small">This uses <b>${esc(r.title.toLowerCase())}</b>. Binko will teach you that rule step by step in a daily session.</div></div>`;
   return `<div class="panel rulechip"><div class="label">How it's built · rule ${r.n}</div><b>${esc(r.title)}</b><div class="small">${esc(r.short)}</div><button class="linkbtn" data-rule="${r.id}">See the rule</button></div>`;
 }
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-rule]'); if (!b) return; ruleOpen = b.dataset.rule; ruleBack = view; go('rules'); });
@@ -2446,15 +2549,16 @@ function pickSentences(n, favor) {
   while (qs.length < n && round < n) { lists.forEach(l => { if (qs.length < n && l[round]) qs.push(l[round]); }); round++; }
   return shuffle(qs);
 }
-function startBuild() {
-  const L = buildLock();
+function startBuild(part) {
+  const L = part === true ? null : buildLock();
   if (L) { view = 'locked'; $('#app').innerHTML = `<div class="sbar"><button class="x" id="quit" aria-label="Back">${I.x}</button><h2 style="flex:1">Build sentences</h2></div>${binkoSays('Build sentences is still locked! Binko only builds with parts you already have. ' + esc(L))}`; $('#quit').onclick = () => goTab(); return; }
-  const nr = nextRule(), roots = knownRoots();
+  const nr = part === true ? null : nextRule(), roots = knownRoots();   // inside the session the new rule is taught by the session itself
   // a new rule: explain it, then drill it. No new rule: a quick review drill of rules already learned.
   const learned = RULES.filter(r => ruleLearned(r.id));
   const quiz = nr ? shuffle(ruleQuiz(nr, roots)).slice(0, 5) : shuffle(learned.flatMap(r => ruleQuiz(r, roots).map(q => Object.assign({ r }, q)))).slice(0, 3);
   BD = { nr, phase: nr ? 'teach' : (quiz.length ? 'drill' : 'tiles'), step: 0, quiz, qi: 0, qRight: 0, qs: [], i: 0, right: 0 };
-  if (!nr) BD.qs = pickSentences(7);
+  if (!nr) BD.qs = pickSentences(part === true ? 4 : 7);
+  if (part === true) BD.quiz = BD.quiz.slice(0, 2);
   sess = newSess('build'); go('build');
 }
 function buildHead() {
@@ -2616,7 +2720,7 @@ VIEWS.real = function () {
   const respond = (prompt, ex) => {
     $('#step').innerHTML = `<div class="panel"><div class="label">Now answer in Bisaya</div><div class="prompt">${esc(prompt)}</div><input class="field" id="rep" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type or say it out loud"><div id="exr"></div></div>`;
     foot(`<button class="btn primary block" id="sh">Show an example</button>`); $('#rep').focus();
-    $('#sh').onclick = () => { $('#exr').innerHTML = `<div class="corr">${esc(ex)}</div>${ruleChip(ex)}`; foot(`<button class="btn primary block" id="fin">Done</button>`); $('#fin').onclick = done; };
+    $('#sh').onclick = () => { const mine = $('#rep').value.trim(); $('#rep').disabled = true; $('#exr').innerHTML = `${mine ? freeNotes(mine, false) : ''}<div class="label" style="margin-top:8px">One way to say it</div><div class="corr">${esc(ex)}</div>${ruleChip(ex)}${mixTipFor(ex)}`; foot(`<button class="btn primary block" id="fin">Done</button>`); $('#fin').onclick = done; };
   };
   if (it.kind === 't') {
     const t = it.t, url = 'https://twitter.com' + t[0];
@@ -2968,3 +3072,13 @@ const progressKey = () => S.updated + '|' + today() + '|' + PATH.length + '|' + 
 /* After any answer is graded, the saved place moves to the next question, so leaving from the answer screen
    (or closing the app there) never shows or grades the same question twice. */
 { const _result = result; result = function () { const r = _result.apply(this, arguments); try { if (sess && sess.mode === 'daily') saveResume(qi + 1); } catch (e) { } return r; }; }
+// a part of today's session (EX is defined further up the file than the parts code runs, so it goes here)
+EX.seg = function (c, item) {
+  const s = SEG_INFO[item.seg]; let d = ''; try { d = s.d(); } catch (e) { }
+  if (!s || !d) { qi++; return VIEWS.session(); }   // nothing to open today after all (it got locked or used up): skip it
+  $('#ex').innerHTML = `<div class="label">Part of today's session · ${esc(s.skill)}</div><div class="prompt">${esc(s.name)}</div><p class="muted" style="margin:0">${esc(d)}</p>
+    ${binkoSays("When it's done, Binko brings you right back here for the rest of today's session.")}`;
+  foot(`<button class="btn primary block" id="seggo">Start</button><button class="btn ghost block" id="segskip">Skip this part today</button>`);
+  $('#seggo').onclick = () => { stopAudio(); saveResume(qi + 1); SEG = { k: item.seg, from: qi }; try { s.run(); } catch (e) { console.warn('part failed:', e.message); segBack(); } };
+  $('#segskip').onclick = next; $('#seggo').focus({ preventScroll: true });
+};

@@ -88,9 +88,9 @@ VIEWS.numbers = function () {
   const ex = $('#app .ceb'); $('#nsay').onclick = e => sayNum(ex.textContent, e.currentTarget);
   $('#ngo').onclick = () => startNumRound();
 };
-function startNumRound() {
+function startNumRound(count) {
   const st = nset(); NR = { st: Object.assign({}, st), i: 0, right: 0, qs: [] };
-  for (let k = 0; k < 10; k++) NR.qs.push(st.lvl === 'time' ? (([h, m]) => ({ time: true, h, m }))(pickTime()) : { n: pickNum(st.lvl), sys: st.sys });
+  for (let k = 0; k < (typeof count === 'number' ? count : 10); k++) NR.qs.push(st.lvl === 'time' ? (([h, m]) => ({ time: true, h, m }))(pickTime()) : { n: pickNum(st.lvl), sys: st.sys });
   view = 'numround'; render();
 }
 
@@ -150,6 +150,7 @@ function numResult(q, ans, ok) {
   save();
 }
 function numDone() {
+  if (typeof SEG !== 'undefined' && SEG) return segBack(`Numbers: ${NR.right} of ${NR.qs.length}. Back to your session.`);
   view = 'summary'; const n = NR.right, all = NR.qs.length;
   $('#app').innerHTML = `<section class="panel summary"><div class="label">Numbers &amp; time</div><h1 style="font-size:2.4rem;color:var(--sea)">${n} of ${all}</h1>
     ${binkoSays(n === all ? 'PERFECT! Binko counted every single one. Try a harder level!' : n >= 7 ? 'Binko binks you are getting really good at this!' : 'Numbers are tricky! Binko says: try the same level again.')}

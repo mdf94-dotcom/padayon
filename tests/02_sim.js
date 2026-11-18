@@ -20,6 +20,8 @@ const PROFILES = [profile('steady', { miss: 0.15, npd: 8, skip: 0 }), profile('s
         const firstReviewTypes = {};
         while (view === 'session' && qi < Q.length && guard++ < 600) {
           const item = Q[qi], c = card(item.id);
+          // a part of the session (today's conversation, a story...): its start screen shows; the sim skips it
+          if (item.type === 'seg') { const b = document.querySelector('#segskip'); if (b) { if (!document.querySelector('#seggo')) issues.push(['part has no start', item.seg]); b.click(); } else if (Q[qi] === item) { issues.push(['part stuck', item.seg]); next(); } continue; }
           if (!c) { issues.push(['no card', item]); next(); continue; }
           if (HIDE.has(item.id)) issues.push(['hidden asked', item.id]);
           if (item.type === 'teach' || item.type === 'rteach') { if (!cardsBefore.has(item.id)) newOrder.push(item.id); taught.add(item.id); if (item.type === 'rteach') rulesTaught++; }
