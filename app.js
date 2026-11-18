@@ -879,7 +879,7 @@ const segStory = () => { if (typeof STORIES === 'undefined') return null; const 
 const segRetell = () => { const src = retellSources(); if (!src.length) return null; const p = pickDialog(); const k = p ? src.findIndex(x => x.title === '💬 ' + p.d.title) : -1; return src[k >= 0 ? k : today() % src.length]; };
 const SEG_INFO = {
   convo: { name: "Today's conversation", skill: 'speaking', ok: () => !!pickDialog(), d: () => { const p = pickDialog(); return p ? `“${p.d.title}”. New words first, then read it and say your lines out loud.` : ''; }, run: () => go('convos') },
-  real: { name: 'Real Bisaya', skill: 'reading', ok: () => !!realToday(), d: () => { const it = realToday(); return !it ? '' : it.kind === 't' ? `A real post by ${it.t[1]}. Translate it, then reply in Bisaya.` : it.kind === 's' ? `A bit of “${it.g.song}” by ${it.g.artist}. Catch the words you know.` : `A clip from ${it.c.show}. Catch the gist, then answer in Bisaya.`; }, run: () => { RB = null; go('real'); } },
+  real: { name: 'Real Bisaya', skill: 'reading', ok: () => !!realForSession(), d: () => { const it = realForSession(); return it ? `A real post by ${it.t[1]}. Every word in it is one you've learned. Translate it, then reply in Bisaya.` : ''; }, run: () => { planDay().realKey = realForSession().key; RB = null; go('real'); } },
   story: { name: "Binko's story", skill: 'reading', ok: () => segStory() != null, d: () => { const i = segStory(); return i == null ? '' : `${STORIES[i].emoji} “${STORIES[i].title}”. Every word in it is one you know. A few questions after.`; }, run: () => { ST = { i: segStory(), at: 0, en: {}, phase: 'read', qi: 0, right: 0 }; go('story'); } },
   speed: { name: 'Speed round', skill: 'listening', ok: () => !drillLock('speed'), d: () => `8 clips you know, played once at ${S.speed.toFixed(1)}×. Pick the meaning before the timer runs out.`, run: () => startSpeed(8) },
   build: { name: 'Build sentences', skill: 'building', ok: () => RULES.some(r => ruleLearned(r.id)) && buildPool().out.length >= 3, d: () => 'A quick drill on the rules you know, a few sentences to build, then one of your own.', run: () => startBuild(true) },
@@ -2699,6 +2699,18 @@ function realToday() {
   const pref = ['t', 'c', 's'][today() % 3];
   open.sort((a, b) => (done[a.key] || 0) - (done[b.key] || 0) || (a.kind === pref ? -1 : 0) - (b.kind === pref ? -1 : 0) || a.i - b.i);
   p.realKey = open[0].key; return open[0];
+}
+
+// Real Bisaya inside the daily session: only a post where every word, in the post and in the example reply, is one
+// you've learned. Show clips and songs are real-speed speech full of words the app hasn't taught (and there's no
+// Bisaya transcript to check), so they stay on the Practice tab.
+function realForSession() {
+  const kw = knownWords(), done = S.realDone || {}, p = planDay();
+  const known = s => tokens(String(s || '')).map(lowTok).filter(w => w && /[a-z]/.test(w)).every(w => REAL_SKIP.has(w) || knowsWord(kw, w));
+  const ok = realItems().filter(x => x.kind === 't' && x.open && known(x.t[6]));
+  if (!ok.length) return null;
+  if (p.realSegKey) { const it = ok.find(x => x.key === p.realSegKey); if (it) return it; }
+  ok.sort((x, y) => (done[x.key] || 0) - (done[y.key] || 0) || x.i - y.i); p.realSegKey = ok[0].key; return ok[0];
 }
 function realLockHint() {
   const items = realItems(), tw = items.filter(x => x.kind === 't').sort((a, b) => a.left.length - b.left.length)[0];
