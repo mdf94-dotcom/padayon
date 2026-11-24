@@ -225,3 +225,33 @@ Object.assign(GLOSS_MORE, { nilupad: 'flew (from lupad, fly)', nisakay: 'got on,
   const table = `<table class="youtab" style="width:100%;border-collapse:collapse;margin:8px 0;font-size:.92rem"><tr><th></th><th style="text-align:left;padding:4px">one person</th><th style="text-align:left;padding:4px">you all (ny)</th></tr>${rows.map(r => `<tr style="border-top:1px solid rgba(255,255,255,.08)"><td class="muted" style="padding:4px;font-size:.82rem">${r[0]}</td><td style="padding:4px">${r[1]}</td><td style="padding:4px">${r[2]}</td></tr>`).join('')}</table>`;
   MIXUPS.filter(m => m.title === 'kamo · ninyo · kanimo · kaninyo' || m.title === 'ka · ikaw · nimo · imong · imoha').forEach(m => { m.trick = trick; m.table = table; });
 })();
+
+// more patterns that make whole word families stick (same idea as "ny = many")
+(() => {
+  const th = 'style="text-align:left;padding:3px 2px;font-size:.76rem"', td = 'style="padding:3px 2px"', tr = 'style="border-top:1px solid rgba(255,255,255,.08)"';
+  const tab = (head, rows) => `<div style="overflow-x:auto"><table class="youtab" style="width:100%;border-collapse:collapse;margin:8px 0;font-size:.8rem"><tr>${head.map(h => `<th ${th}>${h}</th>`).join('')}</tr>${rows.map(r => `<tr ${tr}>${r.map((x, i) => `<td ${td}${i ? '' : ' class="muted"'}>${x}</td>`).join('')}</tr>`).join('')}</table></div>`;
+  const set = (title, trick, table) => MIXUPS.filter(m => m.title === title).forEach(m => { m.trick = trick; if (table) m.table = table; });
+
+  // every person has the same five spots
+  const grid = tab(['', 'short', 'alone', '-ng', 'n-', 'ka-'], [
+    ['I', '<b>ko</b>', 'ako', 'akong', 'nako', 'kanako'], ['you', '<b>ka</b>', 'ikaw', 'imong', 'nimo', 'kanimo'], ['he/she', '<b>siya</b>', 'siya', 'iyang', 'niya', 'kaniya'],
+    ['we+you', '<b>ta</b>', 'kita', 'atong', 'nato', 'kanato'], ['we, not you', '<b>mi</b>', 'kami', 'among', 'namo', 'kanamo'], ['you all', '<b>mo</b>', 'kamo', 'inyong', 'ninyo', 'kaninyo'], ['they', '<b>sila</b>', 'sila', 'ilang', 'nila', 'kanila']]);
+  const gridTrick = '<b>Every person has the same five spots.</b> Learn the spots once: the short word rides right after the first word (Gutom <b>ko</b>). Ending in <b>-ng</b> = "my / your / their" <b>before</b> the thing (<b>akong</b> balay). Starting with <b>n-</b> = "my / your" <b>after</b> the thing, or "by me" after an action (balay <b>nako</b>). Starting with <b>ka-</b> = "to / for" (para <b>kanako</b>). Then it\'s just swapping the person. In the table: <b>short</b> = right after the first word, <b>alone</b> = starting the sentence or on its own.';
+  set('ko · ako · nako · akong · akoa', gridTrick + ' <b>akoa</b> = mine, on its own.', grid);
+  set('siya · niya · iyang', gridTrick, grid);
+  set('ta (we, with you) · mi (we, not you)', '<b>ta = together.</b> Use ta / kita / atong / nato when the person you\'re talking to is part of it (Mangaon <b>ta</b>! = let\'s eat, you too). Use mi / kami / among / namo for me and my people, <b>not</b> the person you\'re talking to (Nikaon na <b>mi</b> = we already ate, not you).', grid);
+
+  // m = not yet, n = it happened
+  set('mo- · ni- · nag- · gi-', '<b>m = maybe later, n = now done.</b> The <b>m</b> forms haven\'t happened yet; swap the m for an <b>n</b> and it happened: <b>mo</b>kaon → <b>ni</b>kaon, <b>mag</b>luto → <b>nag</b>luto, <b>maka</b>kita → <b>naka</b>kita. After <b>wala, dili, ayaw</b> (and gusto, ganahan, kinahanglan) you always go back to the m form (wala ko <b>mo</b>kaon, gusto ko <b>mo</b>kaon).',
+    tab(['', 'not yet (m)', 'happened (n)'], [['one action', '<b>mo</b>kaon (will eat)', '<b>ni</b>kaon (ate)'], ['keeps going', '<b>mag</b>luto (will be cooking)', '<b>nag</b>luto (was cooking / cooked)'], ['manage to / happen to', '<b>maka</b>kita (can see)', '<b>naka</b>kita (saw)'], ['done to the thing', 'kaon<b>on</b> nako (I\'ll eat it)', '<b>gi</b>kaon nako (I ate it)']]));
+
+  // i close, a by you, o far
+  set('kini · kana · kadto', '<b>i = here by me, a = there by you, o = over there.</b> Listen for the vowel: k<b>i</b>ni / d<b>i</b>nhi (this / here), kan<b>a</b> / dih<b>a</b> (that / there, near you), kadt<b>o</b> / didt<b>o</b> (that / there, far away). The short forms keep it: <b>ni</b>, <b>na</b>, <b>to</b>.',
+    tab(['', 'this / that', 'short', 'place'], [['i: by me', 'k<b>i</b>ni', 'ni', 'd<b>i</b>nhi / d<b>i</b>ri (here)'], ['a: by you', 'kan<b>a</b>', 'na', 'dih<b>a</b> (there)'], ['o: far away', 'kadt<b>o</b>', 'to', 'didt<b>o</b> (over there)']]));
+
+  // which "no"
+  set('dili · wala · ayaw', '<b>wala = it\'s not there / it didn\'t happen. dili = no, isn\'t, won\'t. ayaw = don\'t (telling someone).</b> Quick test: if English says "didn\'t" or "there isn\'t / I don\'t have", it\'s wala. If it\'s "not", "won\'t" or a plain "no", it\'s dili. If you\'re telling someone not to, it\'s ayaw. The action word after all three goes back to the m form.',
+    tab(['', 'say', 'example'], [['didn\'t / there isn\'t', '<b>wala</b>', 'Wala ko mokaon. · Wala koy kwarta.'], ['not / won\'t / no', '<b>dili</b>', 'Dili ko gutom. · Dili ko moadto.'], ['don\'t!', '<b>ayaw</b>', 'Ayaw pagdagan!']]));
+
+  set('unsa · asa · kinsa · kanus-a', '<b>kinsa = who:</b> think <b>kin</b>, your people. <b>asa = where</b> (asa ka? where are you?). <b>unsa = what</b>. <b>kanus-a = when</b>: the long one for the long wait. And <b>pila</b> = how many / how much, <b>ngano</b> = why.');
+})();
