@@ -306,7 +306,7 @@ function mergeState(a, b) {
   { const td = calDay() + (out.dayShift || 0); if (out.plan[td] && out.plan[td].session && (out.streakReset || 0) >= STREAK_RESET && out.streak.last < calDay()) { const c = calDay(); out.streak.count = out.streak.last === c - 1 ? out.streak.count + 1 : 1; out.streak.last = c; out.streak.best = Math.max(out.streak.best || 0, out.streak.count); } }
   if ((a.streakReset || 0) === (b.streakReset || 0)) { out.freezeWk = Math.max(a.freezeWk || 0, b.freezeWk || 0); out.freezeDay = Math.max(a.freezeDay || 0, b.freezeDay || 0); }
   out.pod = (a.pod && b.pod) ? (a.pod.d >= b.pod.d ? a.pod : b.pod) : (a.pod || b.pod);
-  out.flags = Object.assign({}, b.flags || {}, a.flags || {}); out.storyDone = Object.assign({}, b.storyDone || {}, a.storyDone || {}); out.mixStat = Object.assign({}, b.mixStat || {}); Object.entries(a.mixStat || {}).forEach(([k, v]) => { const w = out.mixStat[k]; if (!w || (v.last || 0) >= (w.last || 0)) out.mixStat[k] = v; }); out.placed = Math.max(a.placed || 0, b.placed || 0);
+  out.flags = Object.assign({}, b.flags || {}, a.flags || {}); out.storyDone = Object.assign({}, b.storyDone || {}, a.storyDone || {}); out.tipSeen = Object.assign({}, b.tipSeen || {}, a.tipSeen || {}); out.sessDays = Object.assign({}, b.sessDays || {}, a.sessDays || {}); Object.entries(b.sessDays || {}).forEach(([k, v]) => { if (v === 1) out.sessDays[k] = 1; }); out.mixStat = Object.assign({}, b.mixStat || {}); Object.entries(a.mixStat || {}).forEach(([k, v]) => { const w = out.mixStat[k]; if (!w || (v.last || 0) >= (w.last || 0)) out.mixStat[k] = v; }); out.placed = Math.max(a.placed || 0, b.placed || 0);
   out.realDone = {}; [a.realDone || {}, b.realDone || {}].forEach(x => Object.keys(x).forEach(k => out.realDone[k] = Math.max(out.realDone[k] || 0, x[k])));
   // a day that was opened again: a finished session from before the do-over doesn't count, and new words start fresh
   if (out.redoAt && (out.sessAt || 0) < out.redoAt) { const td = calDay() + (out.dayShift || 0); if (out.plan[td]) delete out.plan[td].session; }
@@ -374,9 +374,9 @@ const calDay = () => today() - DAY_SHIFT;
 const wkOf = t => { const dow = (t + 4) % 7; return t - ((dow + 6) % 7); };
 const freezeOk = t => (S.freezeWk || 0) !== wkOf(t - 1);
 function bumpStreak() {
-  const t = calDay(); const s = S.streak; if (s.last === t) return;
+  const t = calDay(); const s = S.streak; S.sessDays = S.sessDays || {}; S.sessDays[t] = 1; if (s.last === t) return;
   if (s.last === t - 1) s.count++;
-  else if (s.last === t - 2 && s.count > 0 && freezeOk(t)) { s.count++; S.freezeWk = wkOf(t - 1); S.freezeDay = t - 1; setTimeout(() => toast('🧊 Streak freeze! Binko covered the day you missed. Next one is ready next week.'), 600); }
+  else if (s.last === t - 2 && s.count > 0 && freezeOk(t)) { s.count++; S.freezeWk = wkOf(t - 1); S.freezeDay = t - 1; if (!S.sessDays[t - 1]) S.sessDays[t - 1] = 'f'; setTimeout(() => toast('🧊 Streak freeze! Binko covered the day you missed. Next one is ready next week.'), 600); }
   else s.count = 1;
   s.last = t; s.best = Math.max(s.best, s.count);
 }
@@ -515,7 +515,7 @@ function ruleList(text) {
 }
 function mixHtml(c, teaching) {
   if (!c || !c.mix || !c.mix.length) return '';
-  const ms = teaching ? c.mix.filter(m => !(m.w || []).length || mixKnown(m, c.id) >= 1) : c.mix; if (!ms.length) return '';
+  const ms = teaching ? c.mix.filter(m => !mixWordIds(m).filter(id => id !== c.id).length || mixKnown(m, c.id) >= 1) : c.mix; if (!ms.length) return '';
   return ms.map(m => `<div class="panel mix"><div class="label">Don't mix up · ${esc(m.title)}</div>${ruleList(m.rule)}${m.trick ? `<div class="small" style="margin:8px 0 0">💡 ${m.trick}</div>` : ''}${m.table || ''}
     <ul class="mixl">${m.ok.map(([a, b]) => `<li>✅ <b>${esc(a)}</b> <span class="muted">${esc(b)}</span></li>`).join('')}${(m.no || []).map(([a, b]) => `<li>❌ <s>${esc(a)}</s> → ✅ <b>${esc(b)}</b></li>`).join('')}</ul></div>`).join('');
 }
@@ -546,11 +546,26 @@ function mixStat(mx, ok) {
   s.last = today(); s.day = today(); save();
 }
 const mixGot = m => ((S.mixStat || {})[m.title] || {}).row >= 3;
+
+// someone who learned these words before the box had a trick or table sees the whole box once, the first time a
+// question from that group comes up; after that the table opens from the feedback
+function mixIntro(c, item, m) {
+  if (!m || item.introDone || !(m.trick || m.table)) return false;
+  S.tipSeen = S.tipSeen || {}; if (S.tipSeen[m.title]) return false;
+  $('#ex').innerHTML = `<div class="label">New tip · Don't mix up</div><div class="prompt" style="font-size:1rem">Here's a way to keep these apart</div>${mixHtml({ id: c.id, mix: [m] }, false)}`;
+  foot(`<button class="btn primary block" id="cont">Got it, quiz me</button>`);
+  $('#cont').onclick = () => { S.tipSeen[m.title] = today(); save(); item.introDone = 1; VIEWS.session(); }; $('#cont').focus({ preventScroll: true });
+  return true;
+}
+const mixTableLink = m => m.table ? `<details style="margin-top:6px"><summary class="small" style="cursor:pointer">See the table</summary>${m.table}</details>` : '';
+// a group joins your rotation once you know enough of its words: two of them, or all it has if it has fewer
+// (a group whose words aren't cards of their own, like verb endings, joins once you know a card that shows it)
+const mixReady = (m, k) => { const n = mixWordIds(m).length; return n === 0 ? (k.b || 0) >= 1 : mixKnown(m) >= Math.min(2, n); };
 // up to three of these in a daily session, from words you already practice: ones you've missed first
 function mixItems(skip) {
   const seenT = new Map();
   Object.keys(S.cards).filter(id => !skip.has(id) && !S.cards[id].fresh && card(id)).forEach(id => { const c = card(id), k = S.cards[id];
-    (c.mix || []).filter(m => !(m.w || []).length ? (k.b || 0) >= 1 : mixKnown(m) >= 2).forEach(m => { const i = MIXUPS.indexOf(m), st = (S.mixStat || {})[m.title] || {}, since = today() - (st.last || 0);
+    (c.mix || []).filter(m => mixReady(m, k)).forEach(m => { const i = MIXUPS.indexOf(m), st = (S.mixStat || {})[m.title] || {}, since = today() - (st.last || 0);
       if (mixGot(m) && since < 7 + 7 * Math.min(3, st.row - 3)) return;   // you've got it: it rests, then checks in less and less often
       const sc = (k.w || 0) * 2 - (k.b || 0) + Math.random() * 2 + (st.w || 0) * 2 - (st.row || 0) * 2 + (st.last ? 0 : 3) + Math.min(5, since / 3); if (!seenT.has(i) || seenT.get(i).sc < sc) seenT.set(i, { id, sc }); }); });
   const its = [...seenT.entries()].sort((a, b) => b[1].sc - a[1].sc).slice(0, 3).map(([i, x]) => ({ id: x.id, type: 'mixq', mx: i }));
@@ -1182,6 +1197,33 @@ function sessionPartsHtml() {
   return `<section class="panel plan"><div class="row spread"><h2>In today's session</h2><span class="muted small">The only thing to do today</span></div>
     <div class="plist">${rows.map(r => `<div class="prow"><span class="gemo" aria-hidden="true" style="font-size:1.3rem;width:32px;text-align:center">${r[0]}</span><div class="prow-main" style="cursor:default"><b>${esc(r[1])}</b><span class="muted small">${esc(r[2])}</span></div></div>`).join('')}</div></section>`;
 }
+
+/* ---------- Today: a calendar of the days you finished your daily session ----------
+   Kept per account (it syncs with the rest of your progress). Days before the calendar existed are filled in once
+   from your current streak. */
+function sessDaysInit() {
+  if (S.sessDays && S.sessDaysV) return; S.sessDays = S.sessDays || {}; S.sessDaysV = 1;
+  const s = S.streak || {}; if (s.count > 0 && s.last) for (let d = s.last - s.count + 1; d <= s.last; d++) if (!S.sessDays[d]) S.sessDays[d] = d === S.freezeDay ? 'f' : 1;
+  if (planDay().session && !S.sessDays[calDay()]) S.sessDays[calDay()] = 1;
+}
+let CAL_OFF = 0;   // months back from this one
+function calHtml() {
+  sessDaysInit();
+  const t = calDay(), now = new Date(t * 864e5), y = now.getUTCFullYear(), mo = now.getUTCMonth() - CAL_OFF, first = new Date(Date.UTC(y, mo, 1)), Y = first.getUTCFullYear(), M = first.getUTCMonth();
+  const startDay = Math.floor(first.getTime() / 864e5), len = new Date(Date.UTC(Y, M + 1, 0)).getUTCDate(), lead = first.getUTCDay();
+  const days = S.sessDays || {}; let done = 0;
+  const cells = []; for (let i = 0; i < lead; i++) cells.push('<span class="cal-d empty"></span>');
+  for (let i = 0; i < len; i++) { const d = startDay + i, v = days[d], fut = d > t; if (v === 1) done++;
+    cells.push(`<span class="cal-d${v === 1 ? ' done' : v === 'f' ? ' frz' : ''}${d === t ? ' today' : ''}${fut ? ' fut' : ''}" title="${v === 1 ? 'Session done' : v === 'f' ? 'Covered by a streak freeze' : d === t ? 'Today' : ''}">${v === 'f' ? '🧊' : i + 1}</span>`); }
+  const name = first.toLocaleString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return `<div class="cal" id="cal"><div class="cal-top"><button class="cal-nav" id="calprev" aria-label="Previous month">‹</button><span><b>${esc(name)}</b> · ${done} session${done === 1 ? '' : 's'}</span><button class="cal-nav" id="calnext" aria-label="Next month"${CAL_OFF ? '' : ' disabled'}>›</button></div>
+    <div class="cal-g">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => `<span class="cal-h">${x}</span>`).join('')}${cells.join('')}</div></div>`;
+}
+function calWire() {
+  const p = $('#calprev'), n = $('#calnext'); if (!p) return;
+  p.onclick = () => { CAL_OFF++; $('#cal').outerHTML = calHtml(); calWire(); };
+  n.onclick = () => { if (CAL_OFF) CAL_OFF--; $('#cal').outerHTML = calHtml(); calWire(); };
+}
 let HOME_SPK = null;
 VIEWS.home = function () {
   if (!HOME_SPK) HOME_SPK = { who: 'binko' };
@@ -1206,14 +1248,15 @@ VIEWS.home = function () {
     <div class="hero-guide">${HOME_SPK.who === 'binko' ? (p => cloverSays('binko', p[0], true, p[1]))(binkoPlan()) : cloverSays(HOME_SPK.who, HOME_SPK.html, true, HOME_SPK.kick)}</div>
     <div class="hero-text"><div class="label">Karon nga adlaw · Today</div><h2>${nextUp ? esc(nextUp.name) : 'All done today. Padayon!'}</h2>
       <p>${resumeAt ? `Picking up where you left off · question ${resumeAt.qi + 1} of ${resumeAt.Q.length}` : nextUp ? esc(nextUp.k === 'session' ? `About ${mins} minutes · ${Math.min(due, reviewsToday())} review${Math.min(due, reviewsToday()) === 1 ? '' : 's'}, ${nw} new${segN ? ', plus ' + segsToday().map(k => SEG_INFO[k].name.replace("Today's ", '')).join(' and ') : ''}` : nextUp.d) : 'Come back tomorrow, or do another session.'}</p></div>
+    ${calHtml()}
     <div class="hero-actions"><button class="btn" id="start">${resumeAt ? 'Continue' : nextUp ? (nextUp.manual ? 'I did it' : 'Start') : 'Do another session'}<kbd>Enter</kbd></button></div>
     <div class="hero-foot"><span>${sinceShort()}</span><span>${freezePending() ? `🧊 Freeze ready: finish today to keep your ${S.streak.count}-day streak` : freezeOk(calDay() + 1) ? '🧊 Streak freeze ready' : `Best streak ${S.streak.best || 0}`}</span></div>
   </section>
   ${false ? `<section class="banner"><b>Already know some Bisaya?</b><div class="small">Take the 5-minute placement check and skip the words you already know.</div><div class="row"><button class="btn primary" id="placego2">Take the check</button><button class="btn ghost" id="placeno">No thanks</button></div></section>` : ''}
   ${podHtml()}
-  ${sessionPartsHtml()}${typeof webHtml === 'function' ? webHtml() : ''}</div>
+  ${sessionPartsHtml()}</div>
   <div class="today-side">${WIDE.matches ? statTrio() + stageMini() + boardPanel() : ''}</div></div>`);
-  if (typeof wireWeb === 'function') wireWeb();
+  calWire();
   $('#start').onclick = () => { if (resumeAt) return binkoBump(startSession); if (!nextUp) return planDay().session ? go('again') : binkoBump(startSession); if (nextUp.manual) { tick(nextUp.k); return render(); } binkoBump(() => nextUp.run()); };
   startSpecials();
   document.querySelectorAll('[data-run]').forEach(b => b.onclick = () => planItems().find(i => i.k === b.dataset.run).run());
@@ -1329,7 +1372,7 @@ VIEWS.board = function () {
 VIEWS.settings = function () { go('me'); };
 VIEWS.me = function () {
   const st = S.settings;
-  shell('me', `${progressHtml()}
+  shell('me', `${progressHtml()}${typeof webHtml === 'function' ? webHtml() : ''}
   <h2 class="glabel" style="color:var(--muted);margin-top:8px">Account and settings</h2>
   <div class="me-grid">
   <section class="panel acct"><img src="icon-192.png?v=full" alt=""><div style="flex:1;min-width:0"><b style="font-size:1.1rem">${esc(displayName())}</b><div class="small syncline">${syncLine()}</div></div>
@@ -1356,7 +1399,7 @@ VIEWS.me = function () {
     <div id="wipebox"><button class="btn ghost" id="wipego" style="color:var(--bad);border-color:var(--bad)">Reset all my progress</button></div></section>
   <section class="panel"><h2>About</h2><p class="small muted" style="margin:0">Made for the Balay Ta family. Computer voice: Meta MMS Cebuano (CC BY-NC 4.0). Pictures: Twemoji (CC BY 4.0). Music and sound effects: made by the app itself (Kulintang Morning, Rondalla Stroll, Bamboo Breeze, Marimba Pad, Lo-fi Jeepney, Rain on Nipa, Harana Night, Abaca Loom, Music Box Study, Lola's Tale, Island Dusk, Market Count, Tinikling Steps, Rush, Fiesta Rush, Sinulog Drums).</p></section>
   </div>`);
-  wireProgress();
+  wireProgress(); if (typeof wireWeb === 'function') wireWeb();
   document.querySelectorAll('#sfxseg button').forEach(b => b.onclick = () => { S.settings.sfx = b.dataset.m === '1'; save(); render(); if (S.settings.sfx && typeof Sfx !== 'undefined') Sfx.right(1); });
   document.querySelectorAll('#vibseg button').forEach(b => b.onclick = () => { S.settings.vibe = b.dataset.m === '1'; save(); render(); try { if (S.settings.vibe && navigator.vibrate) navigator.vibrate(30); } catch (e) { } });
   const mv = $('#mvol'); if (mv) mv.onchange = () => { S.settings.musicVol = +mv.value / 100; save(); if (typeof Music !== 'undefined') Music.volume(); };
@@ -1524,17 +1567,17 @@ const minsText = n => `${n} new words a day is about ${MINS[n] || Math.round(n *
 const IPHONE_MUSIC = 'On iPhone, music only plays when your phone is not on silent (ring switch or Action button set to ring). The Bisaya audio always plays.';
 /* ---------- the guide: shown once to everyone after a big update (bump GUIDE_V), and any time from Me ----------
    Keep it up to date: every new feature gets a point on the page for the tab where it lives. */
-const GUIDE_V = 6;
+const GUIDE_V = 7;
 /* The guide: short, visual pages. Each page has a picture, a few short points, and shows where to find it. */
 const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
-  { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session. It\'s the only thing to do each day'], ['💬', 'It has everything in it: reviews, new words, a grammar rule, today\'s <b>conversation</b>, and one more part that changes each day (a story, Real Bisaya, a speed round, numbers, building sentences, talking about yourself or retelling a story)'], ['↩️', 'Each part opens its own screen, then brings you right back to the session'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
+  { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session. It\'s the only thing to do each day'], ['📅', 'The calendar above Start shows every day you finished your session (🧊 = a day a streak freeze covered). It\'s your own, on any device you sign in on'], ['💬', 'It has everything in it: reviews, new words, a grammar rule, today\'s <b>conversation</b>, and one more part that changes each day (a story, Real Bisaya, a speed round, numbers, building sentences, talking about yourself or retelling a story)'], ['↩️', 'Each part opens its own screen, then brings you right back to the session'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
   { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A "sounds like" guide, and a picture when one really shows the word'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🆕', 'New kinds of questions: reply to what someone says, hear the difference, fill the gap'], ['🧩', 'Boards: draw lines between matches, drag words into the box beside their meaning, or complete a table. They group words that go together: a verb and its forms, opposites, a topic like family or food, and today\'s new words'], ['💡', '"Don\'t mix up" boxes now have a trick and a table, and their own questions. Each one keeps coming back until you get it right 3 times in a row on different days'], ['🔀', 'A word with several meanings (like <b>naa</b>) gets one card per meaning, learned on different days. Tap a meaning to compare it'], ['🔁', 'Miss one? It comes back six questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['✅', '<b>Don\'t mix up</b> boxes: easy-to-confuse words side by side, with ✅ right and ❌ wrong examples. Look-alike words are learned on different days, then once you know two of them they come back as questions: fill in the blank, or pick or type the right one'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['➕', 'Extra practice any time. None of it is needed: the daily session already has a bit of each'], ['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations. In a conversation, say your line out loud or type it to have it checked. Stuck? There\'s a hint'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
   { t: 'Ranks', tab: 'board', art: '📊', pts: [['📊', 'See how the family is doing'], ['🎯', 'Streaks, accuracy, words, games'], ['⌨️', 'Game scores say if they were typed or multiple choice'], ['🔑', 'Sign in on <b>Me</b> to join']] },
-  { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day (the most you\'ll get: fewer when reviews pile up)'], ['🎵', 'Music changes with what you\'re doing (lessons, practice, grammar, stories, numbers, games) and switches tracks during your daily session. Set music, sound effects and vibration in Settings, or tap the speaker in the top corner'], ['🗺️', 'Your <b>word web</b> is on Today, your <b>path map</b> on Practice, and <b>Then and now</b> on Me'], ['💾', 'Save a backup, or <b>Start over</b> to reset all your progress on every device']], set: true },
+  { t: 'Your settings', tab: 'me', art: '⚙️', pts: [['🃏', 'How many new words a day (the most you\'ll get: fewer when reviews pile up)'], ['🎵', 'Music changes with what you\'re doing (lessons, practice, grammar, stories, numbers, games) and switches tracks during your daily session. Set music, sound effects and vibration in Settings, or tap the speaker in the top corner'], ['🗺️', 'Your <b>path map</b> is on Practice; your <b>word web</b> and <b>Then and now</b> are on Me'], ['💾', 'Save a backup, or <b>Start over</b> to reset all your progress on every device']], set: true },
   { t: 'One last thing', art: '🎯', pts: [['✏️', 'A quick check of what you already know'], ['⏭️', 'Words you know get skipped'], ['🤷', 'Not sure? Tap "I don\'t know". That\'s fine!']] }
 ];
 let guideAt = 0, guideBack = 'home';
@@ -2122,10 +2165,11 @@ const EX = {
   },
   mixq(c, item) { // a "Don't mix up" question: pick the right one, or type it
     const m = MIXUPS[item.mx]; if (!m) { qi++; return VIEWS.session(); }
+    if (mixIntro(c, item, m)) return;
     const q = item.q || (item.q = Object.assign(mixQuestion(m, (S.cards[c.id] || {}).b || 0), item.easy ? { mode: 'pick' } : {}));
     const cc = { id: c.id, kind: 'x', ceb: q.right, en: q.en || q.ctx || 'the right way to say it', note: '', audio: false };
     const st = (S.mixStat || {})[m.title] || {}, prog = st.r || st.w ? `<br><span class="muted">This one: ${st.row || 0} of 3 right in a row on different days. Binko brings it back until you have 3.</span>` : '';
-    const extra = `<b>Don't mix up · ${esc(m.title)}.</b> ${m.trick ? m.trick : esc(m.rule)}${prog}${q.wrong ? `<br>❌ <s>${esc(q.wrong)}</s> → ✅ <b>${esc(q.right)}</b>` : ''}`;
+    const extra = `<b>Don't mix up · ${esc(m.title)}.</b> ${m.trick ? m.trick : esc(m.rule)}${prog}${mixTableLink(m)}${q.wrong ? `<br>❌ <s>${esc(q.wrong)}</s> → ✅ <b>${esc(q.right)}</b>` : ''}`;
     const head = `<div class="label">Don't mix up · ${esc(m.title)}</div>`;
     const ask = q.kind === 'fix' ? (q.ctx || q.en ? `<div class="prompt">Meaning: ${esc(q.ctx || q.en)}</div>` : '') : `<div class="prompt">${esc(q.en)}</div>`;
     const blank = q.kind === 'fill' ? `<div class="prompt" style="font-size:1rem">${esc(q.label || 'Fill in the blank')}</div><div class="ceb fillq">${esc(q.sent).replace('___', '<span class="blank" data-ans="' + esc(q.ans) + '">' + (q.mode === 'pick' ? '?' : '&nbsp;') + '</span>')}</div><div class="prompt" style="font-weight:500">${esc(q.en)}</div>` : '';

@@ -10,7 +10,7 @@ const { open, ready, serve, chromium, Report } = require('./lib');
       PATH[0].ids.concat(PATH[1].ids.slice(0, 120)).forEach((id, i) => { if (card(id) && id[0] !== 'r') S.cards[id] = { b: 1 + (i % 6), d: t + 3, r: 3, w: i % 9 === 0 ? 2 : 0 }; });
       RULES.slice(0, 4).forEach(r => S.rules[r.id] = { ok: 1, d: t - 3 }); for (let d = 0; d < 15; d++) S.xp[t - d] = 30 + d; save();
       const out = {}; const wait = ms => new Promise(r => setTimeout(r, ms));
-      for (const k of ['map', 'web', 'then']) { go(k === 'map' ? 'practice' : k === 'web' ? 'home' : 'journey'); await wait(k === 'web' ? 400 : 150);
+      for (const k of ['map', 'web', 'then']) { go(k === 'map' ? 'practice' : k === 'web' ? 'me' : 'journey'); await wait(k === 'web' ? 400 : 150);
         out[k] = { und: /undefined|NaN/.test((document.querySelector(k === 'map' ? '#jmapsec' : k === 'web' ? '#jwebwrap' : '#jbody') || {}).textContent || 'undefined'), wide: document.documentElement.scrollWidth > innerWidth + 1 };
         if (k === 'map') { out.map.binko = document.querySelectorAll('.jstop.now image').length === 1 && !document.querySelector('.jmark'); out.map.stops = document.querySelectorAll('.jstop').length; }
         if (k === 'web') { out.web.nodes = document.querySelectorAll('.jn').length; document.querySelector('.jn').dispatchEvent(new MouseEvent('click', { bubbles: true })); out.web.sheet = !!document.querySelector('#wsheet'); const ws = document.querySelector('#wsheet'); if (ws) ws.remove();

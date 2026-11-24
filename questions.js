@@ -243,6 +243,7 @@ const mixBoardOk = m => { try { return mixBoardData(m).pairs.length >= 3; } catc
 let MG = null;   // the board on screen (tests use MG.solve)
 EX.mixgrid = function (c, item) {
   const vb = item.vb, m = vb ? { title: vb.title, trick: vb.trick || '', rule: '' } : MIXUPS[item.mx]; if (!m) { qi++; return VIEWS.session(); }
+  if (!vb && mixIntro(c, item, m)) return;
   if (!item.board) {   // decide once, so going back to it shows the same board
     let d;
     if (vb) {   // vocabulary: pairs are [meaning, Bisaya, card]; a two-column table is Bisaya | meaning
@@ -257,7 +258,7 @@ EX.mixgrid = function (c, item) {
   const B = item.board, d = B.d, st = (S.mixStat || {})[m.title] || {};
   const cc = { id: c.id, kind: 'x', ceb: m.title, en: '', note: '', audio: false, board: 1 };
   const gradeWords = okBy => { if (!vb) return; Object.entries(okBy).forEach(([id, ok]) => { if (!id || sess.graded.has(id)) return; sess.graded.add(id); if (!sess.newIds.has(id)) grade(id, ok ? 2 : 0, 'board'); if (!ok && !sess.requeued.has(id)) { sess.requeued.add(id); Q.push({ id, type: exType(id) }); } }); sess.requeued.add(c.id); };
-  const done = (ok, right, total, fixes) => { const extra = `<b>${right} of ${total} right.</b>${fixes && fixes.length ? `<br>${fixes.join('<br>')}` : ''}<br>${m.trick ? m.trick : esc(m.rule)}${vb ? (ok ? '' : '<br><span class="muted">The ones you missed come back later in this session.</span>') : `<br><span class="muted">This one: ${(((S.mixStat || {})[m.title] || {}).row || 0) + (ok ? 1 : 0)} of 3 right in a row on different days.</span>`}`; result(cc, item, ok, extra); };
+  const done = (ok, right, total, fixes) => { const extra = `<b>${right} of ${total} right.</b>${fixes && fixes.length ? `<br>${fixes.join('<br>')}` : ''}<br>${m.trick ? m.trick : esc(m.rule)}${vb ? (ok ? '' : '<br><span class="muted">The ones you missed come back later in this session.</span>') : `<br><span class="muted">This one: ${(((S.mixStat || {})[m.title] || {}).row || 0) + (ok ? 1 : 0)} of 3 right in a row on different days.</span>${mixTableLink(m)}`}`; result(cc, item, ok, extra); };
   if (!document.getElementById('mgcss')) document.head.insertAdjacentHTML('beforeend', `<style id="mgcss">
     .mg-bank{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.mg-chip{padding:8px 12px;border-radius:12px;background:var(--card2,#24313a);border:2px solid rgba(255,255,255,.12);font-weight:700;touch-action:none;user-select:none;cursor:grab}
     .mg-chip.sel{border-color:var(--accent,#3bc1a8);transform:translateY(-2px)}.mg-chip.used{visibility:hidden}.mg-slot{display:inline-block;min-width:76px;min-height:34px;padding:6px 10px;border-radius:10px;border:2px dashed rgba(255,255,255,.25);font-weight:700;vertical-align:middle}

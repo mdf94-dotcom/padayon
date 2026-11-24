@@ -37,6 +37,8 @@ async function walk(page, label, log, R) {
     // a part of the session (today's conversation, a story...): open it, look at it, leave with the X, and land back in the session
     if (type === 'seg') { const seg = await page.evaluate(() => Q[qi].seg); await click('#seggo'); await page.waitForTimeout(400); await check('part-' + seg, true);
       await page.locator('#quit').click({ timeout: 6000 }); await page.waitForFunction(() => view === 'session', null, { timeout: 8000 }); R.ok(true, label + ': part ' + seg + ' opens and comes back'); continue; }
+    // a "Don't mix up" tip shown once before its first question
+    if (await page.evaluate(() => /New tip/.test((document.querySelector('#ex .label') || {}).textContent || ''))) { await check('tip', true); await click('#cont'); R.ok(true, label + ': tip shown before its first question'); continue; }
     wrongEvery++; const right = wrongEvery % 3 !== 0;
     // a "Don't mix up" board (lines / drag / table): one real tap-to-place, then solve the rest
     if (type === 'mixgrid') { if (await page.locator('.mg-chip').count()) { await page.locator('.mg-chip').first().click(); await page.locator('.mg-slot').first().click(); } await page.evaluate(() => MG.solve()); await page.waitForTimeout(20); await check('answered-mixgrid', true); await page.locator('#cont').click({ timeout: 6000 }); R.ok(true, label + ': board answered'); continue; }
