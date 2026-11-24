@@ -906,7 +906,14 @@ const SEG_INFO = {
   retell: { name: 'Retell it faster', skill: 'speaking', ok: () => !!segRetell(), d: () => { const x = segRetell(); return x ? `Tell ${x.title} out loud three times: in 40, 30, then 20 seconds.` : ''; }, run: () => { RT = { pick: 0, src: segRetell(), round: 0, seg: 1 }; go('retell'); } }
 };
 const SEG_ROTA = ['real', 'speed', 'story', 'build', 'about', 'numbers', 'retell'];
+// worked out once per moment: the Today page asks several times while it draws
+let SEGS_MEMO = null;
 function segsToday() {
+  const key = today() + ':' + Object.keys(S.cards).length + ':' + JSON.stringify(planDay()).length;
+  if (SEGS_MEMO && SEGS_MEMO.k === key && Date.now() - SEGS_MEMO.t < 2000) return SEGS_MEMO.v.slice();
+  const v = segsTodayRaw(); SEGS_MEMO = { k: key, t: Date.now(), v }; return v.slice();
+}
+function segsTodayRaw() {
   const ok = k => { try { return SEG_INFO[k].ok(); } catch (e) { return false; } };
   // the rotating one goes round the parts that are open, so no part repeats while another hasn't had its turn
   const out = ok('convo') ? ['convo'] : [], open = SEG_ROTA.filter(ok);
@@ -932,7 +939,7 @@ const stillWanted = (r, cx) => r === playReq && cx === audioCtx();
 /* ---------- computer voice: cards with no native recording ----------
    voice/ holds clips made with Meta's MMS Cebuano voice (facebook/mms-tts-ceb, CC BY-NC 4.0), keyed by the cleaned-up Bisaya text. */
 const vkey = s => firstAlt(String(s)).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.,!?¿¡"“”…:;]/g, ' ').replace(/\s+/g, ' ').trim();
-const VOICE_V = 21; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
+const VOICE_V = 22; let VIDX = null; const SHARD = {}, shardLoading = {}; const vurls = {};
 /* The computer voice comes in pieces: a small index, then one piece per stage. You only download the pieces for
    where you are on the path (plus the next one); the rest arrive when a sentence from them is first played. */
 async function loadVoice() {
@@ -1896,8 +1903,8 @@ function verbFormNote(rightToks, r, w) {
 }
 // wrong>right: a one-line reason for the swaps people make most
 const PAIR_WHY = (() => { const o = {}, add = (a, b, t) => { o[a + '>' + b] = t; o[b + '>' + a] = t; };
-  add('gyud', 'kaayo', '<b>kaayo</b> = very (how much: nasuko kaayo = very angry). <b>gyud</b> = really, truly (stresses that it\u2019s true: nasuko gyud = really is angry). For "very", use kaayo.');
-  add('gud', 'kaayo', '<b>kaayo</b> = very (how much). <b>gud / gyud</b> = really, truly (stresses that it\u2019s true). For "very", use kaayo.');
+  add('gyud', 'kaayo', '<b>kaayo</b> = very (how much: nasuko kaayo = very angry). <b>gyud</b> = really, truly (stresses that it\u2019s true: nasuko gyud = really is angry). In everyday talk people use them much the same way, so either counts.');
+  add('gud', 'kaayo', '<b>kaayo</b> = very (how much). <b>gud / gyud</b> = really, truly (stresses that it\u2019s true). In everyday talk either counts.');
   add('lagi', 'bitaw', '<b>lagi</b> = exactly, I said so first (mao lagi!). <b>bitaw</b> = right, I agree, or "oh right" when reminded (mao bitaw).');
   add('ba', 'diay', '<b>mao ba?</b> asks "really?" when it\'s news to you. <b>mao diay</b> says "oh, so that\'s it" once you\'ve figured it out.');
   add('ba', 'lagi', '<b>mao ba?</b> = really? (news to you). <b>mao lagi</b> = exactly, like I said (you knew first).');
@@ -1984,9 +1991,17 @@ const formOf = (a, b) => { const fold = x => String(x || '').toLowerCase().norma
   const one = c => { const t = tokens(firstAlt(c.ceb)).map(lowTok); return t.length === 1 && t[0].length >= 2 ? fold(t[0]) : ''; };
   const names = (c, w) => w && new RegExp("(^|[^a-z'-])" + w.replace(/[-']/g, '\\$&') + "($|[^a-z'-])").test(fold(c.en));
   const wa = one(a), wb = one(b); if (!wa || !wb || wa === wb) return false; return names(a, wb) || names(b, wa); };
+// little words people swap freely: one for the other still counts
+const SWAP_OK = [['sad', 'pud', 'pod', 'sab'], ['ra', 'lang'], ['gyud', 'jud', 'gud', 'kaayo']];
+const swapGroup = t => SWAP_OK.find(g => g.includes(t));
 function casualOk(right, got) {
   const a = tokens(firstAlt(right)).map(lowTok), b = tokens(String(got || '')).map(lowTok);
   if (a.length !== b.length || !a.length) return '';
+  { const sw = a.map((t, i) => [t, b[i]]).filter(([x, y]) => x !== y);
+    if (sw.length && sw.every(([x, y]) => swapGroup(x) && swapGroup(x) === swapGroup(y))) {
+      const [x, y] = sw[0], g = swapGroup(x);
+      return g.includes('kaayo') && (x === 'kaayo' || y === 'kaayo') ? `Counts! People use <b>${esc(y)}</b> and <b>${esc(x)}</b> a lot the same way here. Strictly, kaayo = very (how much) and gyud = really (it\'s true).`
+        : g.includes('sad') ? `Counts! <b>${esc(y)}</b> and <b>${esc(x)}</b> both mean too / also. Sad is the Cebu City way.` : `Counts! <b>ra</b> and <b>lang</b> are swappable here.`; } }
   const diff = a.map((t, i) => [t, b[i], i]).filter(([x, y]) => x !== y); if (diff.length !== 1) return '';
   const [r, w, i] = diff[0], pr = (r.match(/^(mo|mu)(?=[a-z]{3,})/) || [])[1], pw = (w.match(/^(ni|mi)(?=[a-z]{3,})/) || [])[1];
   if (!pr || !pw || r.slice(pr.length) !== w.slice(pw.length) || !a.slice(0, i).some(t => t === 'wala' || t === 'wa')) return '';

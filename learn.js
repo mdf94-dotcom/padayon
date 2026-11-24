@@ -378,8 +378,8 @@ const DIALOGS = [
     ['b', 'Dili uy! Bata pa ko.', "No way! I'm still young.", 'Pa = still.'],
     ['a', 'Naa koy regalo para nimo.', 'I have a gift for you.', 'Para nimo = for you.'],
     ['b', 'Salamat kaayo, Ate!', 'Thank you so much, Ate!', '']] },
-  { title: 'Rainy day', ceb: 'Nag-uwan na pud', a: 'Friend', b: 'You', lines: [
-    ['a', 'Nag-uwan na pud.', "It's raining again.", 'Nag- = happening now. Pud = again, also.'],
+  { title: 'Rainy day', ceb: 'Nag-uwan na sad', a: 'Friend', b: 'You', lines: [
+    ['a', 'Nag-uwan na sad.', "It's raining again.", 'Nag- = happening now. Na sad = again.'],
     ['b', 'Naa kay payong?', 'Do you have an umbrella?', 'Naa kay = do you have (ka + y).'],
     ['a', 'Wala. Nakalimot ko.', 'No. I forgot.', 'Nakalimot = forgot.'],
     ['b', 'Ania, gamita ni akoa.', 'Here, use mine.', 'Gamita = use it. Akoa = mine.'],

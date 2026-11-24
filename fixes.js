@@ -287,14 +287,14 @@ Object.assign(GLOSS_MORE, { nilupad: 'flew (from lupad, fly)', nisakay: 'got on,
     ok: [['Kaon una, dayon tulog.', 'Eat first, then sleep.'], ['Unya na lang.', 'Later.'], ['Ugma na lang.', 'Tomorrow, then.']], no: [],
     fill: [['Kaon una, ___ tulog.', 'dayon', ['dayon', 'ugma'], 'Right after: "Eat first, then sleep."'], ['Naa koy trabaho karon. ___ na lang.', 'Unya', ['Unya', 'Dayon'], 'Not now, later today: "I have work now. Later."']] });
   add({ w: ['sad', 'pud', 'pod', 'nasad', 'utro'], t: ['pud', 'sad', 'nasad'], title: 'sad · pud · nasad · utro',
-    rule: 'sad and pud = too, also. They\'re the same word: sad is more Cebu City, pud more Mindanao, and both are right. nasad = again, it happened another time (na + sad: nag-ulan nasad = it\'s raining again). utro = again, do it over (Utro! = one more time).',
-    trick: '<b>"Too / also" → sad or pud, your pick. "Again" → nasad</b> (it happened again) or <b>utro</b> (do it over).',
-    table: sit([['Me too / you too', 'sad or pud'], ['It happened again', 'nasad'], ['Do it over, one more time', 'utro']]),
-    ok: [['Ako pud!', 'Me too!'], ['Ako sad!', 'Me too!'], ['Nag-ulan nasad.', 'It\'s raining again.'], ['Utro!', 'One more time!']], no: [],
-    fill: [['Nag-ulan ___.', 'nasad', ['nasad', 'pud'], 'It happened again: "It\'s raining again."']] });
+    rule: 'sad = too, also. You\'ll also hear pud / pod for the same thing (more in Mindanao); sad is the Cebu City way, and what this app uses. Both count as right. nasad = again, it happened another time (na + sad: nag-ulan nasad = it\'s raining again). utro = again, do it over (Utro! = one more time).',
+    trick: '<b>"Too / also" → sad</b> (pud is fine too). <b>"Again" → nasad</b> (it happened again) or <b>utro</b> (do it over).',
+    table: sit([['Me too / you too', 'sad'], ['It happened again', 'nasad'], ['Do it over, one more time', 'utro']]),
+    ok: [['Ako sad!', 'Me too!'], ['Ikaw sad?', 'You too?'], ['Nag-ulan nasad.', 'It\'s raining again.'], ['Utro!', 'One more time!']], no: [],
+    fill: [['Nag-ulan ___.', 'nasad', ['nasad', 'sad'], 'It happened again: "It\'s raining again."']] });
   add({ w: ['ra', 'lang'], title: 'ra · lang',
-    rule: 'Both mean only / just, and often either works (usa ra / usa lang = just one). lang is the softener: na lang = instead (ako na lang = I\'ll do it instead), sige lang = it\'s fine, never mind. ra leans to "no more than this": gamay ra = just a little, okay ra = I\'m just fine, karon ra = just now.',
-    trick: '<b>Letting it go, or "instead" → lang</b> (sige lang, ako na lang). <b>"Only this much" → ra</b> (gamay ra, okay ra). Not sure? Either is usually fine.',
+    rule: 'Both mean only / just, and they\'re used all the time, mostly the same way: usa ra and usa lang both mean just one, and either one counts as right. lang is the softener: na lang = instead (ako na lang = I\'ll do it instead), sige lang = it\'s fine, never mind. ra leans to "no more than this": gamay ra = just a little, okay ra = I\'m just fine, karon ra = just now.',
+    trick: '<b>Use whichever comes out.</b> A few set phrases lean one way: sige lang, ako na lang (instead), gamay ra, okay ra. Otherwise ra and lang are swappable.',
     ok: [['Sige lang.', 'It\'s fine, never mind.'], ['Ako na lang.', 'I\'ll do it instead.'], ['Gamay ra.', 'Just a little.'], ['Okay ra ko.', 'I\'m just fine.']], no: [] });
   add({ w: ['maayo', 'maayong', 'nindot', 'lami'], title: 'maayo · nindot · lami',
     rule: 'maayo = good, well, fine: health, how someone acts, how well something works (maayo na ko = I\'m better now; maayo siya = she\'s kind). nindot = nice, beautiful, fun: how something looks or how it went (nindot ang balay; nindot ang salida). lami = delicious: food and drink.',
