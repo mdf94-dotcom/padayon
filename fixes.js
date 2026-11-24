@@ -255,3 +255,71 @@ Object.assign(GLOSS_MORE, { nilupad: 'flew (from lupad, fly)', nisakay: 'got on,
 
   set('unsa · asa · kinsa · kanus-a', '<b>kinsa = who:</b> think <b>kin</b>, your people. <b>asa = where</b> (asa ka? where are you?). <b>unsa = what</b>. <b>kanus-a = when</b>: the long one for the long wait. And <b>pila</b> = how many / how much, <b>ngano</b> = why.');
 })();
+
+// Look-alikes that mean nearly the same thing: when to say which (Mykha: "the difference between mao lagi, mao bitaw,
+// etc. isn't clear"). Each box leads with the situation, not just a translation.
+(() => {
+  const th = 'style="text-align:left;padding:3px 2px;font-size:.76rem"', td = 'style="padding:3px 4px"', tr = 'style="border-top:1px solid rgba(255,255,255,.08)"';
+  const sit = rows => `<div style="overflow-x:auto"><table class="youtab" style="width:100%;border-collapse:collapse;margin:8px 0;font-size:.82rem"><tr><th ${th}>When…</th><th ${th}>Say</th></tr>${rows.map(r => `<tr ${tr}><td ${td} class="muted">${r[0]}</td><td ${td}><b>${r[1]}</b></td></tr>`).join('')}</table></div>`;
+  const add = m => MIXUPS.push(m);
+  add({ w: ['mao', 'mao bitaw', 'mao lagi', 'mao ba', 'mao diay', 'mao na', 'mao gyud', 'bitaw', 'lagi'], t: ['bitaw', 'lagi'], title: 'mao · mao bitaw · mao lagi · mao ba · mao diay',
+    rule: 'mao = that\'s right, that\'s it (confirming). mao bitaw = right, true: you agree with what they just said, or "oh right!" when they remind you. mao lagi = exactly, that\'s what I said: you said or knew it first. mao ba = "really, is that so" (asking, because it\'s news to you). mao diay = oh, so that\'s it (you just figured it out).',
+    trick: '<b>Ask: who knew it first?</b> It\'s news to you → <b>mao ba?</b> (really?) or <b>mao diay</b> (oh, I see). You both already think so → <b>mao bitaw</b>. You knew it first → <b>mao lagi</b> (told you!).',
+    table: sit([['They ask "Is this yours?" and it is', 'Mao. / Oo.'], ['A friend says something you agree with', 'Mao bitaw.'], ['They remind you of something you forgot', 'Bitaw! / Mao bitaw.'], ['They finally say what you\'d been saying', 'Mao lagi!'], ['Surprising news you want to double-check', 'Mao ba?'], ['You just worked out why something happened', 'Mao diay!']]),
+    ok: [['Mao bitaw, init gyud.', 'Right, it really is hot.'], ['Mao lagi!', 'Exactly, like I said!'], ['Mao ba?', 'Really?'], ['Mao diay!', 'Oh, so that\'s it!']], no: [],
+    fill: [['Mao ___!', 'lagi', ['lagi', 'ba', 'diay'], 'You told them it would rain, and now it is: "Exactly, like I said!"'], ['Mao ___, init gyud.', 'bitaw', ['bitaw', 'ba', 'diay'], 'Your friend says it\'s hot and you agree: "Right, it really is hot."'], ['Mao ___? Wala ko kabalo.', 'ba', ['ba', 'lagi', 'bitaw'], 'News to you: "Really? I didn\'t know."'], ['Mao ___!', 'diay', ['diay', 'lagi', 'bitaw'], 'You just found out why the store was closed: "Oh, so that\'s why!"']] });
+  add({ w: ['gyud', 'jud', 'lagi', 'man', 'baya', 'diay', 'gud'], t: ['baya', 'diay'], title: 'gyud · lagi · man · baya · diay (mood words)',
+    rule: 'gyud = really, truly: makes it stronger (nindot gyud = really nice). lagi = of course, come on: insisting (Kaon lagi! = come on, eat!). man = softens and explains: in an answer it gives the reason (Gutom man ko = well, I\'m hungry), in a question it sounds gentler (asa man ka = where are you, gently). baya = you know, mind you: a heads-up or warning (Init baya = careful, it\'s hot). diay = oh! it turns out: it\'s new to you (Naa diay ka! = oh, you\'re here!).',
+    trick: '<b>Match the word to the feeling.</b> Sure and strong → <b>gyud</b>. Insisting, "come on" → <b>lagi</b>. Explaining or asking softly → <b>man</b>. A warning or reminder → <b>baya</b>. Surprised → <b>diay</b>.',
+    table: sit([['You want to make it stronger', 'gyud'], ['You\'re insisting (eat! come!)', 'lagi'], ['You\'re giving the reason, or asking gently', 'man'], ['You\'re warning or reminding them', 'baya'], ['It just surprised you', 'diay']]),
+    ok: [['Nindot gyud!', 'It\'s really nice!'], ['Kaon lagi!', 'Come on, eat!'], ['Gutom man ko.', 'Well, I\'m hungry (that\'s why).'], ['Init baya.', 'Careful, it\'s hot.'], ['Naa diay ka!', 'Oh, you\'re here!']], no: [],
+    fill: [['Nindot ___!', 'gyud', ['gyud', 'baya', 'man'], 'Making it stronger: "It\'s really nice!"'], ['Init ___, hinay-hinay.', 'baya', ['baya', 'gyud', 'diay'], 'A warning: "Careful, it\'s hot. Slowly."'], ['Naa ___ ka!', 'diay', ['diay', 'baya', 'lagi'], 'Surprised to see them: "Oh, you\'re here!"'], ['Kaon ___!', 'lagi', ['lagi', 'diay', 'baya'], 'Insisting: "Come on, eat!"']] });
+  add({ w: ['basin', 'siguro', 'seguro', 'tingali', 'kaha'], title: 'basin · siguro · tingali · kaha',
+    rule: 'basin = might: a possibility, often a worry (basin moulan = it might rain). siguro = probably, I guess: your best guess (siguro naa na siya = he\'s probably there by now). tingali = perhaps: the same idea, a bit more formal. kaha = I wonder, inside a question (asa kaha siya = where could he be, I wonder).',
+    trick: '<b>Worried it could happen → basin. Guessing it\'s likely → siguro. Wondering out loud in a question → kaha.</b> tingali works like siguro, just a little more formal.',
+    table: sit([['It could happen and you\'re a bit worried', 'basin'], ['You\'re guessing, and think it\'s likely', 'siguro'], ['You\'re asking yourself, or wondering out loud', 'kaha (in the question)']]),
+    ok: [['Basin moulan.', 'It might rain.'], ['Siguro naa na siya.', 'He\'s probably there by now.'], ['Asa kaha siya?', 'Where could he be?']], no: [],
+    fill: [['___ moulan, dala og payong.', 'Basin', ['Basin', 'Kaha'], 'A worry: "It might rain, bring an umbrella."'], ['Asa ___ siya?', 'kaha', ['kaha', 'basin'], 'Wondering out loud: "Where could he be?"'], ['___ naa na siya sa balay.', 'Siguro', ['Siguro', 'Kaha'], 'Your best guess: "He\'s probably home by now."']] });
+  add({ w: ['karon', 'ron', 'dayon', 'unya', 'ugma'], title: 'karon · dayon · unya · ugma',
+    rule: 'karon = now, today. dayon = next, right after (kaon, dayon tulog = eat, then sleep), or right away; "Dayon!" also means come in. unya = later, after a while today (unya na lang = later), or "and then" when telling a story. ugma = tomorrow.',
+    trick: '<b>How soon?</b> Now → <b>karon</b>. Right after → <b>dayon</b>. Later today → <b>unya</b>. Tomorrow → <b>ugma</b>.',
+    table: sit([['It\'s happening now', 'karon'], ['It comes right after this', 'dayon'], ['Not now, later today', 'unya'], ['The next day', 'ugma']]),
+    ok: [['Kaon una, dayon tulog.', 'Eat first, then sleep.'], ['Unya na lang.', 'Later.'], ['Ugma na lang.', 'Tomorrow, then.']], no: [],
+    fill: [['Kaon una, ___ tulog.', 'dayon', ['dayon', 'ugma'], 'Right after: "Eat first, then sleep."'], ['Naa koy trabaho karon. ___ na lang.', 'Unya', ['Unya', 'Dayon'], 'Not now, later today: "I have work now. Later."']] });
+  add({ w: ['sad', 'pud', 'pod', 'nasad', 'utro'], t: ['pud', 'sad', 'nasad'], title: 'sad · pud · nasad · utro',
+    rule: 'sad and pud = too, also. They\'re the same word: sad is more Cebu City, pud more Mindanao, and both are right. nasad = again, it happened another time (na + sad: nag-ulan nasad = it\'s raining again). utro = again, do it over (Utro! = one more time).',
+    trick: '<b>"Too / also" → sad or pud, your pick. "Again" → nasad</b> (it happened again) or <b>utro</b> (do it over).',
+    table: sit([['Me too / you too', 'sad or pud'], ['It happened again', 'nasad'], ['Do it over, one more time', 'utro']]),
+    ok: [['Ako pud!', 'Me too!'], ['Ako sad!', 'Me too!'], ['Nag-ulan nasad.', 'It\'s raining again.'], ['Utro!', 'One more time!']], no: [],
+    fill: [['Nag-ulan ___.', 'nasad', ['nasad', 'pud'], 'It happened again: "It\'s raining again."']] });
+  add({ w: ['ra', 'lang'], title: 'ra · lang',
+    rule: 'Both mean only / just, and often either works (usa ra / usa lang = just one). lang is the softener: na lang = instead (ako na lang = I\'ll do it instead), sige lang = it\'s fine, never mind. ra leans to "no more than this": gamay ra = just a little, okay ra = I\'m just fine, karon ra = just now.',
+    trick: '<b>Letting it go, or "instead" → lang</b> (sige lang, ako na lang). <b>"Only this much" → ra</b> (gamay ra, okay ra). Not sure? Either is usually fine.',
+    ok: [['Sige lang.', 'It\'s fine, never mind.'], ['Ako na lang.', 'I\'ll do it instead.'], ['Gamay ra.', 'Just a little.'], ['Okay ra ko.', 'I\'m just fine.']], no: [] });
+  add({ w: ['maayo', 'maayong', 'nindot', 'lami'], title: 'maayo · nindot · lami',
+    rule: 'maayo = good, well, fine: health, how someone acts, how well something works (maayo na ko = I\'m better now; maayo siya = she\'s kind). nindot = nice, beautiful, fun: how something looks or how it went (nindot ang balay; nindot ang salida). lami = delicious: food and drink.',
+    trick: '<b>Food → lami. Looks or fun → nindot. Feeling well, or being good or kind → maayo.</b>',
+    table: sit([['The food tastes good', 'lami'], ['It looks nice, or it was fun', 'nindot'], ['You feel well, or someone is kind', 'maayo']]),
+    ok: [['Lami kaayo!', 'So tasty!'], ['Nindot ang balay.', 'The house is nice.'], ['Maayo na ko.', 'I\'m better now.']], no: [],
+    fill: [['___ kaayo ang adobo!', 'Lami', ['Lami', 'Nindot', 'Maayo'], 'About the food: "The adobo is so tasty!"'], ['___ ang imong sinina.', 'Nindot', ['Nindot', 'Lami'], 'About how it looks: "Your shirt is nice."'], ['___ na ko, salamat.', 'Maayo', ['Maayo', 'Lami'], 'About your health: "I\'m well now, thanks."']] });
+  add({ w: ['kabalo', 'kahibalo', 'kaila'], title: 'kabalo · kaila',
+    rule: 'kabalo (or kahibalo, same word) = know a fact, or know how to do something (kabalo ko = I know; kabalo ka molangoy = can you swim). kaila = know a person or a place, be acquainted (kaila ka niya = do you know him).',
+    trick: '<b>Facts and skills → kabalo. People → kaila.</b>',
+    ok: [['Kabalo ko.', 'I know.'], ['Kabalo ka molangoy?', 'Can you swim?'], ['Kaila ka niya?', 'Do you know him?']], no: [],
+    fill: [['___ ka niya?', 'Kaila', ['Kaila', 'Kabalo'], 'About a person: "Do you know him?"'], ['Wala ko ___ unsaon.', 'kabalo', ['kabalo', 'kaila'], 'About how to do it: "I don\'t know how."']] });
+  add({ w: ['tigulang', 'daan'], title: 'tigulang · daan',
+    rule: 'tigulang = old, for people and animals (tigulang na si Lolo). daan = old, for things: not new (daan nga sapatos = old shoes).',
+    trick: '<b>Alive → tigulang. A thing → daan.</b>',
+    ok: [['Tigulang na ang iro.', 'The dog is old now.'], ['Daan na ang sapatos.', 'The shoes are old now.']], no: [['Daan na si Lolo.', 'Tigulang na si Lolo.']] });
+  add({ w: ['bata', 'anak'], title: 'bata · anak',
+    rule: 'bata = a child, a kid: someone young (bata pa siya = she\'s still a kid). anak = someone\'s child, son or daughter, at any age (akong anak = my child, even if they\'re 40).',
+    trick: '<b>Young → bata. Whose child → anak.</b> Your anak can be a grown-up.',
+    ok: [['Bata pa siya.', 'She\'s still a kid.'], ['Akong anak.', 'My child (son or daughter).']], no: [] });
+  add({ w: ['ingon', 'niingon', 'giingon', 'sulti', 'isulti', 'gisulti'], title: 'ingon · sulti',
+    rule: 'ingon = say, for what someone said (niingon siya nga gutom siya = he said he was hungry; unsay iyang giingon = what did he say). sulti = talk, tell, speak: the act of telling (sultihi ko = tell me; isulti nimo = say it).',
+    trick: '<b>Reporting what was said → ingon. Telling or talking → sulti.</b>',
+    ok: [['Niingon siya nga gutom siya.', 'He said he was hungry.'], ['Sultihi ko.', 'Tell me.']], no: [] });
+})();
+
+// the agreeing phrases say when to use them
+Object.assign(GNOTES, { g19: 'Mao lagi! = Exactly, that\'s what I said! Use it when you said or knew it first, a bit like "see?". Just agreeing → Mao bitaw. News to you → Mao ba? (really?) or Mao diay (oh, I see).', g23: 'Mao bitaw = right, that\'s true. Use it to agree with what someone just said, or "oh right!" when they remind you of something. You knew it first → Mao lagi!' });
