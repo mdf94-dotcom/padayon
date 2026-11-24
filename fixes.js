@@ -323,3 +323,51 @@ Object.assign(GLOSS_MORE, { nilupad: 'flew (from lupad, fly)', nisakay: 'got on,
 
 // the agreeing phrases say when to use them
 Object.assign(GNOTES, { g19: 'Mao lagi! = Exactly, that\'s what I said! Use it when you said or knew it first, a bit like "see?". Just agreeing → Mao bitaw. News to you → Mao ba? (really?) or Mao diay (oh, I see).', g23: 'Mao bitaw = right, that\'s true. Use it to agree with what someone just said, or "oh right!" when they remind you of something. You knew it first → Mao lagi!' });
+
+/* ---------- question bank for the tricks and tables ----------
+   Every trick gets its own questions, so the daily session checks you can USE it, not just that you've read it.
+   Each is a fill-in: [sentence with ___, answer, choices, what it means / the situation, heading]. */
+(() => {
+  const byTitle = t => MIXUPS.find(m => m.title === t);
+  const bank = (t, qs) => { const m = byTitle(t); if (m) m.qbank = (m.qbank || []).concat(qs); };
+  // the five-spot pronoun grid
+  const P = [ // short, alone, -ng, n-, ka-, "X're", "X" possessive, "X" object
+    ['ko', 'ako', 'akong', 'nako', 'kanako', "I'm", 'My', 'me'], ['ka', 'ikaw', 'imong', 'nimo', 'kanimo', "You're", 'Your', 'you'], ['siya', 'siya', 'iyang', 'niya', 'kaniya', "She's", 'Her', 'her'],
+    ['ta', 'kita', 'atong', 'nato', 'kanato', "We're (you too)", 'Our (yours too)', 'us (you too)'], ['mi', 'kami', 'among', 'namo', 'kanamo', "We're (not you)", 'Our (not yours)', 'us (not you)'],
+    ['mo', 'kamo', 'inyong', 'ninyo', 'kaninyo', "You all are", 'Your (all)', 'all of you'], ['sila', 'sila', 'ilang', 'nila', 'kanila', "They're", 'Their', 'them']];
+  const uniq = a => [...new Set(a)];
+  const grid = [];
+  P.forEach((p, i) => {
+    const other = (slot) => P.filter((_, j) => j !== i).map(x => x[slot]);
+    const pickOther = (slot, n) => other(slot).sort(() => 0.5 - Math.random()).slice(0, n);
+    grid.push(['Gutom ___.', p[0], uniq([p[0], p[3], ...pickOther(0, 2)]).slice(0, 4), `"${p[5]} hungry." The short word rides right after the first word.`, 'Which word fits?']);
+    grid.push(['___ balay.', p[2], uniq([p[2], p[3], p[4], ...pickOther(2, 1)]), `"${p[6]} house." Before the thing → the -ng one.`, 'Which word fits?']);
+    grid.push(['Balay ___.', p[3], uniq([p[3], p[2], p[4], ...pickOther(3, 1)]), `"${p[6]} house." After the thing → the n- one.`, 'Which word fits?']);
+    grid.push(['Para ___.', p[4], uniq([p[4], p[3], p[1], ...pickOther(4, 1)]).slice(0, 4), `"For ${p[7]}." To / for → the ka- one.`, 'Which word fits?']);
+  });
+  ['ko · ako · nako · akong · akoa', 'siya · niya · iyang', 'ta (we, with you) · mi (we, not you)', 'ka · ikaw · nimo · imong · imoha', 'kamo · ninyo · kanimo · kaninyo'].forEach(t => {
+    const keep = { 'ko · ako · nako · akong · akoa': ['ko', 'ako', 'akong', 'nako', 'kanako'], 'siya · niya · iyang': ['siya', 'iyang', 'niya', 'kaniya', 'sila', 'ilang', 'nila', 'kanila'], 'ta (we, with you) · mi (we, not you)': ['ta', 'mi', 'atong', 'among', 'nato', 'namo', 'kanato', 'kanamo'], 'ka · ikaw · nimo · imong · imoha': ['ka', 'imong', 'nimo', 'kanimo'], 'kamo · ninyo · kanimo · kaninyo': ['mo', 'inyong', 'ninyo', 'kaninyo', 'kanimo'] }[t];
+    bank(t, grid.filter(q => keep.includes(q[1])));
+  });
+  bank('ta (we, with you) · mi (we, not you)', [['Mangaon ___!', 'ta', ['ta', 'mi'], 'Inviting the person you\'re talking to: "Let\'s eat!"', 'Who\'s included?'], ['Nikaon na ___. Ikaw?', 'mi', ['mi', 'ta'], 'You and your family ate, the person you\'re asking didn\'t: "We already ate. You?"', 'Who\'s included?']]);
+  // m = maybe later, n = now done
+  bank('mo- · ni- · nag- · gi-', [['Ugma, ___ ko.', 'mokaon', ['mokaon', 'nikaon'], '"Tomorrow, I\'ll eat." Not yet → m.', 'Not yet, or happened?'], ['Gahapon, ___ ko og mangga.', 'nikaon', ['nikaon', 'mokaon'], '"Yesterday, I ate a mango." Happened → n.', 'Not yet, or happened?'],
+    ['___ si Mama ganiha.', 'Nagluto', ['Nagluto', 'Magluto'], '"Mama was cooking earlier."', 'Not yet, or happened?'], ['___ ta ugma.', 'Magluto', ['Magluto', 'Nagluto'], '"Let\'s cook tomorrow."', 'Not yet, or happened?'],
+    ['Dili ko ___ sa ngitngit.', 'makakita', ['makakita', 'nakakita'], '"I can\'t see in the dark." After dili → the m form.', 'Not yet, or happened?'], ['___ ko nimo gahapon.', 'Nakakita', ['Nakakita', 'Makakita'], '"I saw you yesterday."', 'Not yet, or happened?'],
+    ['Gusto ko ___.', 'mokaon', ['mokaon', 'nikaon'], '"I want to eat." After gusto → the m form.', 'Not yet, or happened?']]);
+  // i close, a by you, o far
+  bank('kini · kana · kadto', [['___ akong balay.', 'Kini', ['Kini', 'Kana', 'Kadto'], 'You\'re standing in it: "This is my house." i = by me.', 'Near or far?'], ['Unsa ___ sa imong kamot?', 'kana', ['kana', 'kini', 'kadto'], '"What\'s that in your hand?" a = by you.', 'Near or far?'],
+    ['Naa ko ___.', 'dinhi', ['dinhi', 'diha', 'didto'], '"I\'m here."', 'Near or far?'], ['Naa siya ___ sa Cebu.', 'didto', ['didto', 'dinhi', 'diha'], '"She\'s over there in Cebu." o = far away.', 'Near or far?'],
+    ['Ibutang ___ sa imong tupad.', 'diha', ['diha', 'dinhi', 'didto'], '"Put it there, next to you."', 'Near or far?']]);
+  // which no
+  bank('dili · wala · ayaw', [['___ ko mokaon gahapon.', 'Wala', ['Wala', 'Dili', 'Ayaw'], '"I didn\'t eat yesterday." Didn\'t → wala.', 'Which no?'], ['___ ko gutom.', 'Dili', ['Dili', 'Wala', 'Ayaw'], '"I\'m not hungry." Not → dili.', 'Which no?'],
+    ['___ pagdagan!', 'Ayaw', ['Ayaw', 'Dili', 'Wala'], '"Don\'t run!" Telling someone → ayaw.', 'Which no?'], ['___ koy kwarta.', 'Wala', ['Wala', 'Dili', 'Ayaw'], '"I don\'t have money." There isn\'t → wala.', 'Which no?'], ['___ ko moadto ugma.', 'Dili', ['Dili', 'Wala', 'Ayaw'], '"I won\'t go tomorrow." Won\'t → dili.', 'Which no?']]);
+  bank('unsa · asa · kinsa · kanus-a', [['___ ka?', 'Kinsa', ['Kinsa', 'Asa', 'Unsa'], '"Who are you?" kin = people.', 'Which question word?'], ['___ ka?', 'Asa', ['Asa', 'Kinsa', 'Kanus-a'], '"Where are you?"', 'Which question word?'], ['___ ka mouli?', 'Kanus-a', ['Kanus-a', 'Asa', 'Unsa'], '"When are you coming home?"', 'Which question word?']]);
+  // the "When… / Say" tables become "what do you say?" questions
+  MIXUPS.filter(m => m.table && /When…/.test(m.table)).forEach(m => {
+    const rows = [...m.table.matchAll(/<td[^>]*class="muted">([^<]*)<\/td><td[^>]*><b>([^<]*)<\/b>/g)].map(x => [x[1].replace(/&#39;/g, "'"), x[2].split(' / ')[0].split(' or ')[0].replace(/\s*\(.*\)/, '').trim()]);
+    const says = [...new Set(rows.map(r => r[1]))];
+    rows.forEach(([when, say]) => { if (says.length < 2) return; const opts = [say, ...says.filter(s => s !== say).sort(() => 0.5 - Math.random()).slice(0, 2)];
+      (m.qbank = m.qbank || []).push(['___', say, opts, 'When: ' + when.replace(/^./, c => c.toLowerCase()) + '.', 'What do you say?']); });
+  });
+})();

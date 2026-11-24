@@ -219,3 +219,112 @@ VIEWS.retell = function () {
     const end = () => { clearInterval(timerH); RT.round++; if (RT.round === 3) { addXP(10); save(); } render(); }; $('#early').onclick = end;   // XP once, when the third round ends
     timerH = setInterval(() => { const f = 1 - (Date.now() - t0) / (secs * 1000); const tb = $('#tb'), lf = $('#left'); if (!tb) return clearInterval(timerH); tb.style.width = Math.max(0, f * 100) + '%'; lf.textContent = Math.max(0, Math.ceil(f * secs)); if (f <= 0) end(); }, 200); };
 };
+
+/* ---------- "Don't mix up" boards: complete the table, drag into the box, draw lines ----------
+   Built from each group's table (or its examples), so every group gets them. One of the daily session's
+   mix-up questions is a board. Tap works everywhere (tap a word, then its spot); dragging works too. */
+function mixBoardData(m) {
+  const out = { grid: null, pairs: [] };
+  if (m.table) {
+    const doc = new DOMParser().parseFromString(m.table, 'text/html'), trs = [...doc.querySelectorAll('tr')];
+    const head = [...(trs[0] || { children: [] }).children].map(x => x.textContent.trim()), rows = trs.slice(1).map(tr => [...tr.children].map(x => x.textContent.trim()));
+    if (rows.length >= 3 && rows.every(r => r.length === head.length)) {
+      out.grid = { head, rows };
+      const cols = head.map((_, i) => i).filter(i => i > 0), c = cols[Math.floor(Math.random() * cols.length)];
+      const clean = s => s.split(' / ')[0].replace(/\s*\(.*?\)/g, '').trim();
+      const seen = new Set(); rows.forEach(r => { const v = clean(r[c]); if (!v || seen.has(norm(v))) return; seen.add(norm(v)); out.pairs.push([r[0] + (head.length > 2 && head[c] ? ' · ' + head[c] : ''), v]); });
+    }
+  }
+  if (out.pairs.length < 3) { const seen = new Set(); out.pairs = (m.ok || []).filter(([a, b]) => { const k = norm(b); if (seen.has(k) || /[_=]/.test(a)) return false; seen.add(k); return true; }).map(([a, b]) => [b, a.replace(/[.!]$/, '')]); }
+  out.pairs = shuffle(out.pairs).slice(0, 5);
+  return out;
+}
+const mixBoardOk = m => { try { return mixBoardData(m).pairs.length >= 3; } catch (e) { return false; } };
+let MG = null;   // the board on screen (tests use MG.solve)
+EX.mixgrid = function (c, item) {
+  const m = MIXUPS[item.mx]; if (!m) { qi++; return VIEWS.session(); }
+  if (!item.board) {   // decide once, so going back to it shows the same board
+    const d = mixBoardData(m), modes = ['lines', 'drag'].concat(d.grid && d.grid.head.length > 2 ? ['table'] : []);
+    item.board = { mode: item.mode || modes[Math.floor(Math.random() * modes.length)], d, flip: Math.random() < 0.3 };
+    if (item.board.mode === 'table') { const g = d.grid, cells = []; g.rows.forEach((r, i) => r.forEach((v, j) => { if (j > 0 && v && v.length < 26) cells.push([i, j]); })); item.board.blanks = shuffle(cells).slice(0, Math.min(6, Math.max(3, Math.floor(cells.length / 3)))).map(([i, j]) => i + ':' + j); }
+  }
+  const B = item.board, d = B.d, st = (S.mixStat || {})[m.title] || {};
+  const cc = { id: c.id, kind: 'x', ceb: m.title, en: '', note: '', audio: false, board: 1 };
+  const done = (ok, right, total, fixes) => { const extra = `<b>${right} of ${total} right.</b>${fixes && fixes.length ? `<br>${fixes.join('<br>')}` : ''}<br>${m.trick ? m.trick : esc(m.rule)}<br><span class="muted">This one: ${(((S.mixStat || {})[m.title] || {}).row || 0) + (ok ? 1 : 0)} of 3 right in a row on different days.</span>`; result(cc, item, ok, extra); };
+  if (!document.getElementById('mgcss')) document.head.insertAdjacentHTML('beforeend', `<style id="mgcss">
+    .mg-bank{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.mg-chip{padding:8px 12px;border-radius:12px;background:var(--card2,#24313a);border:2px solid rgba(255,255,255,.12);font-weight:700;touch-action:none;user-select:none;cursor:grab}
+    .mg-chip.sel{border-color:var(--accent,#3bc1a8);transform:translateY(-2px)}.mg-chip.used{visibility:hidden}.mg-slot{display:inline-block;min-width:76px;min-height:34px;padding:6px 10px;border-radius:10px;border:2px dashed rgba(255,255,255,.25);font-weight:700;vertical-align:middle}
+    .mg-slot.full{border-style:solid;border-color:rgba(255,255,255,.35)}.mg-slot.hot{border-color:var(--accent,#3bc1a8)}.mg-slot.ok{border-color:#3bc17a;background:rgba(59,193,122,.15)}.mg-slot.bad{border-color:#e46b7a;background:rgba(228,107,122,.15)}
+    .mg-rows{display:flex;flex-direction:column;gap:8px}.mg-row{display:flex;align-items:center;gap:10px;justify-content:space-between}.mg-row .def{flex:1;font-size:.92rem}.mg-fix{display:block;font-size:.8rem;color:#3bc17a;font-weight:700}
+    .mg-lines{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:10px 44px;margin-top:8px}.mg-item{position:relative;padding:10px 12px;border-radius:12px;border:2px solid rgba(255,255,255,.14);background:var(--card2,#1d2830);font-size:.9rem;touch-action:none;user-select:none;cursor:pointer;min-height:44px;display:flex;align-items:center}
+    .mg-item.r{font-weight:700}.mg-item.sel{border-color:var(--accent,#3bc1a8)}.mg-item.ok{border-color:#3bc17a}.mg-item.bad{border-color:#e46b7a}.mg-svg{position:absolute;inset:0;pointer-events:none;overflow:visible}
+    .mg-tab{width:100%;border-collapse:collapse;font-size:.82rem}.mg-tab td,.mg-tab th{padding:4px 3px;text-align:left;border-top:1px solid rgba(255,255,255,.08)}.mg-tab .mg-slot{min-width:52px;min-height:28px;padding:3px 6px;font-size:.82rem}</style>`);
+
+  /* ----- draw lines ----- */
+  if (B.mode === 'lines') {
+    const L = d.pairs.map((p, i) => ({ i, t: B.flip ? p[1] : p[0] })), R = shuffle(d.pairs.map((p, i) => ({ i, t: B.flip ? p[0] : p[1] })));
+    $('#ex').innerHTML = `<div class="label">Don't mix up · ${esc(m.title)}</div><div class="prompt" style="font-size:1rem">Draw a line from each one to its match</div><p class="muted small" style="margin:0">Drag from one box to the other, or tap one and then the other. Tap a box again to undo its line.</p>
+      <div class="mg-lines" id="mgl">${L.map((x, k) => `<div class="mg-item${B.flip ? ' r' : ''}" data-side="L" data-i="${x.i}" style="grid-column:1;grid-row:${k + 1}">${esc(x.t)}</div>`).join('')}${R.map((x, k) => `<div class="mg-item${B.flip ? '' : ' r'}" data-side="R" data-i="${x.i}" style="grid-column:2;grid-row:${k + 1}">${esc(x.t)}</div>`).join('')}<svg class="mg-svg" id="mgsvg"></svg></div>`;
+    foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
+    const box = $('#mgl'), svg = $('#mgsvg'), links = {}, el = (s, i) => box.querySelector(`.mg-item[data-side="${s}"][data-i="${i}"]`); let sel = null, ghost = null, graded = null;
+    const pt = (e, side) => { const a = box.getBoundingClientRect(), b = e.getBoundingClientRect(); return [side === 'L' ? b.right - a.left : b.left - a.left, b.top - a.top + b.height / 2]; };
+    const draw = () => { svg.innerHTML = Object.entries(links).map(([l, r]) => { const [x1, y1] = pt(el('L', l), 'L'), [x2, y2] = pt(el('R', r), 'R'); const col = graded ? (graded[l] ? '#3bc17a' : '#e46b7a') : 'var(--accent,#3bc1a8)'; return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="3" stroke-linecap="round"/><circle cx="${x1}" cy="${y1}" r="5" fill="${col}"/><circle cx="${x2}" cy="${y2}" r="5" fill="${col}"/>`; }).join('') + (ghost || '');
+      $('#chk').disabled = Object.keys(links).length < L.length || !!graded; };
+    const link = (a, b) => { const l = a.dataset.side === 'L' ? a : b, r = a.dataset.side === 'L' ? b : a; if (l.dataset.side === r.dataset.side) return; Object.keys(links).forEach(k => { if (links[k] === r.dataset.i) delete links[k]; }); links[l.dataset.i] = r.dataset.i; draw(); };
+    const unlink = it => { if (it.dataset.side === 'L') delete links[it.dataset.i]; else Object.keys(links).forEach(k => { if (links[k] === it.dataset.i) delete links[k]; }); draw(); };
+    const linked = it => it.dataset.side === 'L' ? links[it.dataset.i] != null : Object.values(links).includes(it.dataset.i);
+    let down = null;
+    box.querySelectorAll('.mg-item').forEach(it => {
+      it.onpointerdown = e => { if (graded) return; down = { it, x: e.clientX, y: e.clientY, moved: false }; try { it.setPointerCapture(e.pointerId); } catch (x) { } };
+      it.onpointermove = e => { if (!down || down.it !== it) return; if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) down.moved = true; if (!down.moved) return;
+        const a = box.getBoundingClientRect(), [x1, y1] = pt(it, it.dataset.side); ghost = `<line x1="${x1}" y1="${y1}" x2="${e.clientX - a.left}" y2="${e.clientY - a.top}" stroke="var(--accent,#3bc1a8)" stroke-width="3" stroke-dasharray="6 5"/>`; draw(); };
+      it.onpointerup = e => { if (!down || down.it !== it) return; const was = down; down = null; ghost = null;
+        if (was.moved) { const t = document.elementFromPoint(e.clientX, e.clientY), tgt = t && t.closest('.mg-item'); if (tgt && tgt !== it && tgt.dataset.side !== it.dataset.side) { box.querySelectorAll('.sel').forEach(x => x.classList.remove('sel')); sel = null; link(it, tgt); } else draw(); return; }
+        if (sel && sel !== it && sel.dataset.side !== it.dataset.side) { sel.classList.remove('sel'); link(sel, it); sel = null; return; }
+        if (sel === it) { it.classList.remove('sel'); sel = null; return; }
+        if (linked(it) && !sel) { unlink(it); return; }
+        if (sel) sel.classList.remove('sel'); sel = it; it.classList.add('sel'); };
+    });
+    addEventListener('resize', draw, { once: true }); setTimeout(draw, 50);
+    $('#chk').onclick = () => { graded = {}; let n = 0; L.forEach(x => { graded[x.i] = links[x.i] === String(x.i); if (graded[x.i]) n++; el('L', x.i).classList.add(graded[x.i] ? 'ok' : 'bad'); }); draw();
+      const miss = L.filter(x => !graded[x.i]).map(x => `${esc(B.flip ? d.pairs[x.i][1] : d.pairs[x.i][0])} → <b>${esc(B.flip ? d.pairs[x.i][0] : d.pairs[x.i][1])}</b>`);
+      done(n === L.length, n, L.length, miss.map(x => '❌ ' + x)); };
+    MG = { solve: () => { L.forEach(x => links[x.i] = String(x.i)); draw(); $('#chk').click(); } };
+    return;
+  }
+
+  /* ----- slots: drag into the box beside its meaning, or complete the table ----- */
+  let slots = [];   // [{ key, ans }]
+  let body = '';
+  if (B.mode === 'table') {
+    const g = d.grid, blanks = new Set(B.blanks);
+    body = `<div class="prompt" style="font-size:1rem">Complete the table</div><p class="muted small" style="margin:0">Drag each word into its spot, or tap a word and then the spot.</p><div style="overflow-x:auto;margin-top:8px"><table class="mg-tab"><tr>${g.head.map(h => `<th class="muted">${esc(h)}</th>`).join('')}</tr>${g.rows.map((r, i) => `<tr>${r.map((v, j) => { const k = i + ':' + j; if (blanks.has(k)) { slots.push({ key: k, ans: v }); return `<td><span class="mg-slot" data-k="${k}"></span></td>`; } return `<td${j ? '' : ' class="muted"'}>${esc(v)}</td>`; }).join('')}</tr>`).join('')}</table></div>`;
+  } else {
+    const rows = d.pairs.map((p, i) => ({ k: String(i), def: B.flip ? p[1] : p[0], ans: B.flip ? p[0] : p[1] }));
+    slots = rows.map(r => ({ key: r.k, ans: r.ans }));
+    body = `<div class="prompt" style="font-size:1rem">Drag each one into the box beside its match</div><p class="muted small" style="margin:0">Or tap one, then tap its box.</p><div class="mg-rows" style="margin-top:10px">${rows.map(r => `<div class="mg-row"><span class="def${B.flip ? ' ' : ''}" style="${B.flip ? 'font-weight:700' : ''}">${esc(r.def)}</span><span class="mg-slot" data-k="${r.k}"></span></div>`).join('')}</div>`;
+  }
+  const slotLabel = k => { if (B.mode === 'table') { const [i, j] = k.split(':').map(Number); return d.grid.rows[i][0] + ' · ' + d.grid.head[j]; } const p = d.pairs[+k]; return B.flip ? p[1] : p[0]; };
+  const chips = shuffle(slots.map((s, i) => ({ id: 'c' + i, v: s.ans })));
+  $('#ex').innerHTML = `<div class="label">Don't mix up · ${esc(m.title)}</div>${body}<div class="mg-bank" id="mgb">${chips.map(x => `<span class="mg-chip" data-c="${x.id}">${esc(x.v)}</span>`).join('')}</div>`;
+  foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
+  const put = {}, chipEl = id => $(`.mg-chip[data-c="${id}"]`), slotEl = k => $(`.mg-slot[data-k="${k}"]`); let sel = null, graded = false;
+  const refresh = () => { document.querySelectorAll('.mg-slot').forEach(s => { const cid = put[s.dataset.k]; s.textContent = cid ? chips.find(x => x.id === cid).v : ''; s.classList.toggle('full', !!cid); });
+    document.querySelectorAll('.mg-chip').forEach(ch => ch.classList.toggle('used', Object.values(put).includes(ch.dataset.c))); $('#chk').disabled = Object.keys(put).length < slots.length || graded; };
+  const place = (cid, k) => { Object.keys(put).forEach(x => { if (put[x] === cid) delete put[x]; }); put[k] = cid; refresh(); };
+  document.querySelectorAll('.mg-slot').forEach(s => s.onclick = () => { if (graded) return; if (sel) { place(sel, s.dataset.k); chipEl(sel).classList.remove('sel'); sel = null; } else if (put[s.dataset.k]) { delete put[s.dataset.k]; refresh(); } });
+  document.querySelectorAll('.mg-chip').forEach(ch => {
+    let dr = null;
+    ch.onpointerdown = e => { if (graded) return; dr = { x: e.clientX, y: e.clientY, moved: false, ghost: null }; try { ch.setPointerCapture(e.pointerId); } catch (x) { } };
+    ch.onpointermove = e => { if (!dr) return; if (!dr.moved && Math.hypot(e.clientX - dr.x, e.clientY - dr.y) > 8) { dr.moved = true; dr.ghost = ch.cloneNode(true); Object.assign(dr.ghost.style, { position: 'fixed', zIndex: 99, pointerEvents: 'none', opacity: .9, margin: 0 }); document.body.appendChild(dr.ghost); }
+      if (!dr.moved) return; dr.ghost.style.left = (e.clientX - 30) + 'px'; dr.ghost.style.top = (e.clientY - 20) + 'px';
+      document.querySelectorAll('.mg-slot.hot').forEach(x => x.classList.remove('hot')); const t = document.elementFromPoint(e.clientX, e.clientY), s = t && t.closest('.mg-slot'); if (s) s.classList.add('hot'); };
+    ch.onpointerup = e => { if (!dr) return; const was = dr; dr = null; if (was.ghost) was.ghost.remove(); document.querySelectorAll('.mg-slot.hot').forEach(x => x.classList.remove('hot'));
+      if (was.moved) { const t = document.elementFromPoint(e.clientX, e.clientY), s = t && t.closest('.mg-slot'); if (s) place(ch.dataset.c, s.dataset.k); return; }
+      if (sel === ch.dataset.c) { ch.classList.remove('sel'); sel = null; return; } document.querySelectorAll('.mg-chip.sel').forEach(x => x.classList.remove('sel')); sel = ch.dataset.c; ch.classList.add('sel'); };
+  });
+  $('#chk').onclick = () => { graded = true; let n = 0;
+    const fixes = []; slots.forEach(s => { const got = chips.find(x => x.id === put[s.key]).v, ok = norm(got) === norm(s.ans), el = slotEl(s.key); el.classList.add(ok ? 'ok' : 'bad'); if (ok) n++; else { fixes.push(`❌ ${esc(slotLabel(s.key))}: <s>${esc(got)}</s> → <b>${esc(s.ans)}</b>`); } });
+    refresh(); slots.forEach(s => { const el = slotEl(s.key); if (el.classList.contains('bad')) el.insertAdjacentHTML('beforeend', `<span class="mg-fix">${esc(s.ans)}</span>`); }); done(n === slots.length, n, slots.length, fixes); };
+  MG = { solve: () => { slots.forEach(s => { const ch = chips.find(x => x.v === s.ans && !Object.values(put).includes(x.id)); put[s.key] = ch.id; }); refresh(); $('#chk').click(); } };
+};

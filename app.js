@@ -306,7 +306,7 @@ function mergeState(a, b) {
   { const td = calDay() + (out.dayShift || 0); if (out.plan[td] && out.plan[td].session && (out.streakReset || 0) >= STREAK_RESET && out.streak.last < calDay()) { const c = calDay(); out.streak.count = out.streak.last === c - 1 ? out.streak.count + 1 : 1; out.streak.last = c; out.streak.best = Math.max(out.streak.best || 0, out.streak.count); } }
   if ((a.streakReset || 0) === (b.streakReset || 0)) { out.freezeWk = Math.max(a.freezeWk || 0, b.freezeWk || 0); out.freezeDay = Math.max(a.freezeDay || 0, b.freezeDay || 0); }
   out.pod = (a.pod && b.pod) ? (a.pod.d >= b.pod.d ? a.pod : b.pod) : (a.pod || b.pod);
-  out.flags = Object.assign({}, b.flags || {}, a.flags || {}); out.storyDone = Object.assign({}, b.storyDone || {}, a.storyDone || {}); out.placed = Math.max(a.placed || 0, b.placed || 0);
+  out.flags = Object.assign({}, b.flags || {}, a.flags || {}); out.storyDone = Object.assign({}, b.storyDone || {}, a.storyDone || {}); out.mixStat = Object.assign({}, b.mixStat || {}); Object.entries(a.mixStat || {}).forEach(([k, v]) => { const w = out.mixStat[k]; if (!w || (v.last || 0) >= (w.last || 0)) out.mixStat[k] = v; }); out.placed = Math.max(a.placed || 0, b.placed || 0);
   out.realDone = {}; [a.realDone || {}, b.realDone || {}].forEach(x => Object.keys(x).forEach(k => out.realDone[k] = Math.max(out.realDone[k] || 0, x[k])));
   // a day that was opened again: a finished session from before the do-over doesn't count, and new words start fresh
   if (out.redoAt && (out.sessAt || 0) < out.redoAt) { const td = calDay() + (out.dayShift || 0); if (out.plan[td]) delete out.plan[td].session; }
@@ -526,6 +526,8 @@ function mixQuestion(m, level) {
   const says = m.ok.filter(([a]) => !/[_=]/.test(a)).map(([a, b]) => ({ kind: 'say', right: a, en: b }));
   const sayOk = says.filter(x => says.some(y => norm(y.en) !== norm(x.en)));
   const fills = (m.fill || []).map(([sent, ans, opts, en]) => ({ kind: 'fill', sent, ans, right: sent.replace('___', ans), en, wopts: opts }));
+  const bankQs = (m.qbank || []).map(([sent, ans, opts, en, label]) => ({ kind: 'fill', sent, ans, right: sent.replace('___', ans), en, wopts: opts, label, bank: 1 }));
+  if (bankQs.length && Math.random() < 0.5) { const q = Object.assign({}, pick(bankQs)); q.mode = level >= 2 && q.sent !== '___' && Math.random() < 0.4 ? 'type' : 'pick'; q.opts = [q.ans, ...q.wopts.filter(o => norm(o) !== norm(q.ans))]; return q; }
   // fill-in-the-blank about half the time when the group has them; otherwise fix a mistake or tell the words apart
   const pool = fills.length && Math.random() < 0.55 ? fills : fixes.length && (!sayOk.length || Math.random() < 0.5) ? fixes : sayOk.length ? sayOk : fills.length ? fills : fixes;
   const q = Object.assign({}, pick(pool));
@@ -535,12 +537,26 @@ function mixQuestion(m, level) {
   else { q.also = says.filter(y => norm(y.en) === norm(q.en)).map(y => y.right); q.opts = [q.right, ...shuffle(says.filter(y => norm(y.en) !== norm(q.en)).map(y => y.right)).slice(0, 3)]; const bad = (m.no || []).find(([, b]) => norm(mixClean(b)) === norm(q.right)); if (bad && !/=/.test(bad[0])) { q.wrong = mixClean(bad[0]); if (!q.opts.some(o => norm(o) === norm(q.wrong))) q.opts.splice(1, 0, q.wrong); q.opts = q.opts.slice(0, 4); } }
   return q;
 }
+
+// how well you know each "Don't mix up" group: right / wrong, how many right in a row, last day seen.
+// A group comes back until you get it right 3 times in a row on different days; then it rests, and checks in now and then.
+function mixStat(mx, ok) {
+  const m = MIXUPS[mx]; if (!m) return; S.mixStat = S.mixStat || {}; const s = S.mixStat[m.title] || (S.mixStat[m.title] = { r: 0, w: 0, row: 0, last: 0, day: 0 });
+  if (ok) { s.r++; if (s.day !== today()) s.row++; } else { s.w++; s.row = 0; }
+  s.last = today(); s.day = today(); save();
+}
+const mixGot = m => ((S.mixStat || {})[m.title] || {}).row >= 3;
 // up to three of these in a daily session, from words you already practice: ones you've missed first
 function mixItems(skip) {
   const seenT = new Map();
   Object.keys(S.cards).filter(id => !skip.has(id) && !S.cards[id].fresh && card(id)).forEach(id => { const c = card(id), k = S.cards[id];
-    (c.mix || []).filter(m => !(m.w || []).length ? (k.b || 0) >= 1 : mixKnown(m) >= 2).forEach(m => { const i = MIXUPS.indexOf(m), sc = (k.w || 0) * 2 - (k.b || 0) + Math.random() * 2; if (!seenT.has(i) || seenT.get(i).sc < sc) seenT.set(i, { id, sc }); }); });
-  return [...seenT.entries()].sort((a, b) => b[1].sc - a[1].sc).slice(0, 3).map(([i, x]) => ({ id: x.id, type: 'mixq', mx: i }));
+    (c.mix || []).filter(m => !(m.w || []).length ? (k.b || 0) >= 1 : mixKnown(m) >= 2).forEach(m => { const i = MIXUPS.indexOf(m), st = (S.mixStat || {})[m.title] || {}, since = today() - (st.last || 0);
+      if (mixGot(m) && since < 7 + 7 * Math.min(3, st.row - 3)) return;   // you've got it: it rests, then checks in less and less often
+      const sc = (k.w || 0) * 2 - (k.b || 0) + Math.random() * 2 + (st.w || 0) * 2 - (st.row || 0) * 2 + (st.last ? 0 : 3) + Math.min(5, since / 3); if (!seenT.has(i) || seenT.get(i).sc < sc) seenT.set(i, { id, sc }); }); });
+  const its = [...seenT.entries()].sort((a, b) => b[1].sc - a[1].sc).slice(0, 3).map(([i, x]) => ({ id: x.id, type: 'mixq', mx: i }));
+  // one of them is a board (complete the table, drag into the box, or draw lines), when its group can make one
+  const bi = its.findIndex(x => typeof mixBoardOk === 'function' && mixBoardOk(MIXUPS[x.mx])); if (bi >= 0) its[bi].type = 'mixgrid';
+  return its;
 }
 // examples for each meaning (examples.js loads after fixes.js)
 if (typeof SENSES !== 'undefined' && typeof EXAMPLES !== 'undefined') { Object.keys(SENSES).forEach(id => { EXAMPLES[id] = SENSES[id][0].ex[0]; }); SENSE_LIST.forEach(([src, k], i) => { EXAMPLES['s' + i] = SENSES[src][k].ex[0]; }); }
@@ -1589,6 +1605,7 @@ VIEWS.session = function () {
 function foot(html) { $('#foot').className = 'foot'; $('#foot').innerHTML = html; }
 function next() { stopAudio(); if (typeof stopRecorder === 'function') stopRecorder(); qi++; try { VIEWS.session(); } catch (e) { console.warn('session step failed:', e.message); view = 'home'; render(); return; } window.scrollTo(0, 0); }
 function result(c, item, ok, extra) {
+  if ((item.type === 'mixq' || item.type === 'mixgrid') && !item.statDone) { item.statDone = 1; mixStat(item.mx, ok === true || ok === 2 || ok === 1); }
   { const ae = document.activeElement; if (ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) ae.blur(); }   // close the phone keyboard so it can't cover the right/wrong panel
   setTimeout(() => { const f = $('#foot'); if (!f) return; const h = window.visualViewport ? visualViewport.height : innerHeight; if (f.getBoundingClientRect().bottom > h + 2 || f.getBoundingClientRect().top > h - 60) f.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, 350);
   const q = ok === true ? 2 : ok === false ? 0 : ok;
@@ -1612,14 +1629,14 @@ function result(c, item, ok, extra) {
   if (q === 0 && sess.mode === 'daily') {
     sess.miss = sess.miss || {}; const n = sess.miss[c.id] = (sess.miss[c.id] || 0) + 1; sess.requeued.add(c.id);
     if (n <= 3) {
-      const easy = item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx, easy: 1 } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' };
+      const easy = item.type === 'mixgrid' ? { id: c.id, type: 'mixq', mx: item.mx, easy: 1 } : item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx, easy: 1 } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' };
       const add = [n >= 2 && item.type !== 'mixq' && c.kind !== 'r' && sess.newIds.has(c.id) ? { id: c.id, type: 'teach', again: 1 } : null, Object.assign(easy, { retry: n })].filter(Boolean);
       // 6 questions later: in Pyc & Rawson (2009) a gap of 6 items beat back-to-back, and longer gaps beat 6, so it
       // comes back after real forgetting has started but while it can still be recalled in the same session
       Q.splice(Math.min(Q.length, qi + 1 + MISS_GAP), 0, ...add);
       retryNote = '<div class="small muted" style="margin-top:4px">🔁 This one comes back in a few questions.</div>';
     } else retryNote = '<div class="small muted" style="margin-top:4px">We\'ll come back to this one tomorrow.</div>';
-  } else if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push(item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
+  } else if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push(item.type === 'mixgrid' ? { id: c.id, type: 'mixgrid', mx: item.mx } : item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
   save();
   // a swapped-in version of the card (build exercises) or a rule sentence plays its own sentence, not the card's recording
   const base = c.kind === 'r' ? null : card(c.id), sentenceOnly = c.kind === 'r' || (base && norm(firstAlt(base.ceb)) !== norm(firstAlt(c.ceb)));
@@ -1627,7 +1644,7 @@ function result(c, item, ok, extra) {
   const f = $('#foot'); f.className = 'foot ' + (q > 0 ? 'good' : 'bad');
   const bxKind = q > 0 && sess.run >= 3 ? 'streak' : q > 0 ? 'right' : 'wrong';
   f.innerHTML = `<div class="row spread" style="gap:12px;align-items:flex-start"><div class="bx ${bxKind}"><img src="icon-192.png?v=full" alt="Binko">${bxKind === 'streak' ? `<span class="run">${sess.run}🔥</span>` : ''}</div><div style="min-width:0;flex:1"><div class="verdict">${q === 2 ? 'Tama!' : q === 1 ? 'Sakto ra. Almost there.' : 'Dili pa. Not yet.'}</div>
-  <div class="ans">${c.kind !== 'r' ? picImg(picFile(c), 'in') : ''}<span>${esc(c.ceb)}</span> <span class="muted" style="font-weight:400">· ${esc(c.en)}</span></div>${phonHtml(c.ceb)}${extra ? `<div class="small">${extra}</div>` : ''}${retryNote}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && c.kind !== 'r' && ruleFor(c.ceb) && ruleLearned(ruleFor(c.ceb).id) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
+  <div class="ans">${c.kind !== 'r' && !c.board ? picImg(picFile(c), 'in') : ''}<span>${esc(c.ceb)}</span>${c.en ? ` <span class="muted" style="font-weight:400">· ${esc(c.en)}</span>` : ''}</div>${c.board ? '' : phonHtml(c.ceb)}${extra ? `<div class="small">${extra}</div>` : ''}${retryNote}${c.note && q < 2 ? `<div class="small muted">${esc(c.note)}</div>` : ''}${q < 2 && tipFor(c) ? `<div class="small"><b>Trick:</b> ${esc(tipFor(c).trick)}</div>` : ''}${q < 2 && c.kind !== 'r' && ruleFor(c.ceb) && ruleLearned(ruleFor(c.ceb).id) ? `<div class="small"><b>Rule ${ruleFor(c.ceb).n}:</b> ${esc(ruleFor(c.ceb).short)}</div>` : ''}</div>
   ${canHear(c) ? `<button class="play sm" id="fplay" aria-label="Play">${I.play}</button>` : ''}</div>
   ${cameoKind ? cameoHtml(cameoKind) : ''}<button class="btn primary block" id="cont">Continue</button>${c.kind !== 'r' && !sentenceOnly ? `<div style="text-align:center">${flagBtn(c.id)}</div>` : ''}`;
   if (canHear(c)) { const hear = btn => sentenceOnly ? playSentence(c.ceb, btn) : play(c.id, 1, btn); $('#fplay').onclick = e => hear(e.currentTarget); if (!['listen', 'tiles', 'dict', 'pron', 'say', 'rid'].includes(item.type)) hear(); }
@@ -2090,10 +2107,11 @@ const EX = {
     const m = MIXUPS[item.mx]; if (!m) { qi++; return VIEWS.session(); }
     const q = item.q || (item.q = Object.assign(mixQuestion(m, (S.cards[c.id] || {}).b || 0), item.easy ? { mode: 'pick' } : {}));
     const cc = { id: c.id, kind: 'x', ceb: q.right, en: q.en || q.ctx || 'the right way to say it', note: '', audio: false };
-    const extra = `<b>Don't mix up · ${esc(m.title)}.</b> ${m.trick ? m.trick : esc(m.rule)}${q.wrong ? `<br>❌ <s>${esc(q.wrong)}</s> → ✅ <b>${esc(q.right)}</b>` : ''}`;
+    const st = (S.mixStat || {})[m.title] || {}, prog = st.r || st.w ? `<br><span class="muted">This one: ${st.row || 0} of 3 right in a row on different days. Binko brings it back until you have 3.</span>` : '';
+    const extra = `<b>Don't mix up · ${esc(m.title)}.</b> ${m.trick ? m.trick : esc(m.rule)}${prog}${q.wrong ? `<br>❌ <s>${esc(q.wrong)}</s> → ✅ <b>${esc(q.right)}</b>` : ''}`;
     const head = `<div class="label">Don't mix up · ${esc(m.title)}</div>`;
     const ask = q.kind === 'fix' ? (q.ctx || q.en ? `<div class="prompt">Meaning: ${esc(q.ctx || q.en)}</div>` : '') : `<div class="prompt">${esc(q.en)}</div>`;
-    const blank = q.kind === 'fill' ? `<div class="prompt" style="font-size:1rem">Fill in the blank</div><div class="ceb fillq">${esc(q.sent).replace('___', '<span class="blank" data-ans="' + esc(q.ans) + '">' + (q.mode === 'pick' ? '?' : '&nbsp;') + '</span>')}</div><div class="prompt" style="font-weight:500">${esc(q.en)}</div>` : '';
+    const blank = q.kind === 'fill' ? `<div class="prompt" style="font-size:1rem">${esc(q.label || 'Fill in the blank')}</div><div class="ceb fillq">${esc(q.sent).replace('___', '<span class="blank" data-ans="' + esc(q.ans) + '">' + (q.mode === 'pick' ? '?' : '&nbsp;') + '</span>')}</div><div class="prompt" style="font-weight:500">${esc(q.en)}</div>` : '';
     if (q.mode === 'pick' && q.kind === 'fill') {
       $('#ex').innerHTML = `${head}${blank}<div class="opts"></div>`;
       const opts = shuffle(q.opts.map((t, i) => ({ id: i ? 'x' + i : 'ok', t, ceb: 1 })));
