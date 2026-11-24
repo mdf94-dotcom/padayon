@@ -217,3 +217,11 @@ MIXUPS.push({ w: ['pa', 'gihapon'], title: 'pa · gihapon',
 
 // words in the stories and Real Bisaya replies that had no meaning in the word pop-up
 Object.assign(GLOSS_MORE, { nilupad: 'flew (from lupad, fly)', nisakay: 'got on, rode (from sakay)', nisimba: 'went to Mass / church (from simba)', tambal: 'medicine; cure', magtiayon: 'married couple; husband and wife', mobiyahe: 'will travel (from biyahe, trip)' });
+
+// "you" vs "you all": one table and one trick for both boxes (Mykha kept mixing these up)
+(() => {
+  const trick = '<b>ny = many.</b> Any "you" word with <b>ny</b> in it is <b>you all</b>: ninyo, inyong, inyoha, kaninyo. No ny = one person. The one exception: <b>mo / kamo</b> is also you all (think ka-mo, more than one ka). Then pick the row by where the word sits: right after the first word → ka / mo. Before the thing → the -ng one (imong / inyong). After the thing → the n- one (nimo / ninyo). After para or "give it" → the ka- one (kanimo / kaninyo).';
+  const rows = [['you (after the first word)', 'Gutom <b>ka</b>?', 'Gutom <b>mo</b>?'], ['you (starting the sentence)', '<b>Ikaw</b> ba?', '<b>Kamo</b> ba?'], ['your, before the thing', '<b>imong</b> balay', '<b>inyong</b> balay'], ['your, after the thing', 'balay <b>nimo</b>', 'balay <b>ninyo</b>'], ['yours, on its own', '<b>imoha</b>', '<b>inyoha</b>'], ['to / for you', 'para <b>kanimo</b>', 'para <b>kaninyo</b>']];
+  const table = `<table class="youtab" style="width:100%;border-collapse:collapse;margin:8px 0;font-size:.92rem"><tr><th></th><th style="text-align:left;padding:4px">one person</th><th style="text-align:left;padding:4px">you all (ny)</th></tr>${rows.map(r => `<tr style="border-top:1px solid rgba(255,255,255,.08)"><td class="muted" style="padding:4px;font-size:.82rem">${r[0]}</td><td style="padding:4px">${r[1]}</td><td style="padding:4px">${r[2]}</td></tr>`).join('')}</table>`;
+  MIXUPS.filter(m => m.title === 'kamo · ninyo · kanimo · kaninyo' || m.title === 'ka · ikaw · nimo · imong · imoha').forEach(m => { m.trick = trick; m.table = table; });
+})();

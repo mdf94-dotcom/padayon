@@ -516,7 +516,7 @@ function ruleList(text) {
 function mixHtml(c, teaching) {
   if (!c || !c.mix || !c.mix.length) return '';
   const ms = teaching ? c.mix.filter(m => !(m.w || []).length || mixKnown(m, c.id) >= 1) : c.mix; if (!ms.length) return '';
-  return ms.map(m => `<div class="panel mix"><div class="label">Don't mix up · ${esc(m.title)}</div>${ruleList(m.rule)}
+  return ms.map(m => `<div class="panel mix"><div class="label">Don't mix up · ${esc(m.title)}</div>${ruleList(m.rule)}${m.trick ? `<div class="small" style="margin:8px 0 0">💡 ${m.trick}</div>` : ''}${m.table || ''}
     <ul class="mixl">${m.ok.map(([a, b]) => `<li>✅ <b>${esc(a)}</b> <span class="muted">${esc(b)}</span></li>`).join('')}${(m.no || []).map(([a, b]) => `<li>❌ <s>${esc(a)}</s> → ✅ <b>${esc(b)}</b></li>`).join('')}</ul></div>`).join('');
 }
 // one question from a "Don't mix up" box: fix a common mistake, or tell apart the words in the box
@@ -1963,7 +1963,7 @@ function mixTipFor(ceb) {
   const hits = MIXUPS.filter(m => (m.t || []).some(t => toks.includes(t)) || (m.w || []).some(w => w.includes(' ') ? whole.includes(w) : toks.includes(w)));
   const score = m => [...(m.w || []), ...(m.t || [])].filter(w => toks.includes(w) && !common.has(w)).length;
   const m = hits.sort((x, y) => score(y) - score(x))[0];
-  return m ? `<div class="panel rulechip"><div class="label">Don't mix up · ${esc(m.title)}</div><div class="small">${esc(m.rule)}</div></div>` : '';
+  return m ? `<div class="panel rulechip"><div class="label">Don't mix up · ${esc(m.title)}</div><div class="small">${m.trick ? '💡 ' + m.trick : esc(m.rule)}</div>${m.table || ''}</div>` : '';
 }
 // a whole line typed from memory: right, right but for a small typo, a casual form people really use, or wrong (and what differs)
 function lineCheck(typed, right) {
@@ -2071,7 +2071,7 @@ const EX = {
     const m = MIXUPS[item.mx]; if (!m) { qi++; return VIEWS.session(); }
     const q = item.q || (item.q = Object.assign(mixQuestion(m, (S.cards[c.id] || {}).b || 0), item.easy ? { mode: 'pick' } : {}));
     const cc = { id: c.id, kind: 'x', ceb: q.right, en: q.en || q.ctx || 'the right way to say it', note: '', audio: false };
-    const extra = `<b>Don't mix up · ${esc(m.title)}.</b> ${esc(m.rule)}${q.wrong ? `<br>❌ <s>${esc(q.wrong)}</s> → ✅ <b>${esc(q.right)}</b>` : ''}`;
+    const extra = `<b>Don't mix up · ${esc(m.title)}.</b> ${m.trick ? m.trick : esc(m.rule)}${q.wrong ? `<br>❌ <s>${esc(q.wrong)}</s> → ✅ <b>${esc(q.right)}</b>` : ''}`;
     const head = `<div class="label">Don't mix up · ${esc(m.title)}</div>`;
     const ask = q.kind === 'fix' ? (q.ctx || q.en ? `<div class="prompt">Meaning: ${esc(q.ctx || q.en)}</div>` : '') : `<div class="prompt">${esc(q.en)}</div>`;
     const blank = q.kind === 'fill' ? `<div class="prompt" style="font-size:1rem">Fill in the blank</div><div class="ceb fillq">${esc(q.sent).replace('___', '<span class="blank" data-ans="' + esc(q.ans) + '">' + (q.mode === 'pick' ? '?' : '&nbsp;') + '</span>')}</div><div class="prompt" style="font-weight:500">${esc(q.en)}</div>` : '';
