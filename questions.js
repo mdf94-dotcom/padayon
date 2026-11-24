@@ -242,15 +242,22 @@ function mixBoardData(m) {
 const mixBoardOk = m => { try { return mixBoardData(m).pairs.length >= 3; } catch (e) { return false; } };
 let MG = null;   // the board on screen (tests use MG.solve)
 EX.mixgrid = function (c, item) {
-  const m = MIXUPS[item.mx]; if (!m) { qi++; return VIEWS.session(); }
+  const vb = item.vb, m = vb ? { title: vb.title, trick: vb.trick || '', rule: '' } : MIXUPS[item.mx]; if (!m) { qi++; return VIEWS.session(); }
   if (!item.board) {   // decide once, so going back to it shows the same board
-    const d = mixBoardData(m), modes = ['lines', 'drag'].concat(d.grid && d.grid.head.length > 2 ? ['table'] : []);
+    let d;
+    if (vb) {   // vocabulary: pairs are [meaning, Bisaya, card]; a two-column table is Bisaya | meaning
+      const flipT = Math.random() < 0.5;
+      d = { pairs: vb.pairs.map(p => [p[0], p[1]]), ids: vb.pairs.map(p => p[2]), grid: vb.grid || { head: ['Bisaya', 'Meaning'], rows: vb.pairs.map(p => [p[1], p[0]]) }, col: vb.grid ? null : (flipT ? 0 : 1) };
+    } else d = mixBoardData(m);
+    const modes = ['lines', 'drag'].concat(d.grid && (d.grid.head.length > 2 || vb) ? ['table'] : []);
     item.board = { mode: item.mode || modes[Math.floor(Math.random() * modes.length)], d, flip: Math.random() < 0.3 };
-    if (item.board.mode === 'table') { const g = d.grid, cells = []; g.rows.forEach((r, i) => r.forEach((v, j) => { if (j > 0 && v && v.length < 26) cells.push([i, j]); })); item.board.blanks = shuffle(cells).slice(0, Math.min(6, Math.max(3, Math.floor(cells.length / 3)))).map(([i, j]) => i + ':' + j); }
+    if (item.board.mode === 'table' && vb) { const g = d.grid; item.board.blanks = vb.kind === 'opp' ? g.rows.map((r, i) => i + ':' + (Math.random() < 0.5 ? 1 : 2)) : g.rows.map((r, i) => i + ':' + d.col); item.board.vcol = 1; }
+    else if (item.board.mode === 'table') { const g = d.grid, cells = []; g.rows.forEach((r, i) => r.forEach((v, j) => { if (j > 0 && v && v.length < 26) cells.push([i, j]); })); item.board.blanks = shuffle(cells).slice(0, Math.min(6, Math.max(3, Math.floor(cells.length / 3)))).map(([i, j]) => i + ':' + j); }
   }
   const B = item.board, d = B.d, st = (S.mixStat || {})[m.title] || {};
   const cc = { id: c.id, kind: 'x', ceb: m.title, en: '', note: '', audio: false, board: 1 };
-  const done = (ok, right, total, fixes) => { const extra = `<b>${right} of ${total} right.</b>${fixes && fixes.length ? `<br>${fixes.join('<br>')}` : ''}<br>${m.trick ? m.trick : esc(m.rule)}<br><span class="muted">This one: ${(((S.mixStat || {})[m.title] || {}).row || 0) + (ok ? 1 : 0)} of 3 right in a row on different days.</span>`; result(cc, item, ok, extra); };
+  const gradeWords = okBy => { if (!vb) return; Object.entries(okBy).forEach(([id, ok]) => { if (!id || sess.graded.has(id)) return; sess.graded.add(id); if (!sess.newIds.has(id)) grade(id, ok ? 2 : 0, 'board'); if (!ok && !sess.requeued.has(id)) { sess.requeued.add(id); Q.push({ id, type: exType(id) }); } }); sess.requeued.add(c.id); };
+  const done = (ok, right, total, fixes) => { const extra = `<b>${right} of ${total} right.</b>${fixes && fixes.length ? `<br>${fixes.join('<br>')}` : ''}<br>${m.trick ? m.trick : esc(m.rule)}${vb ? (ok ? '' : '<br><span class="muted">The ones you missed come back later in this session.</span>') : `<br><span class="muted">This one: ${(((S.mixStat || {})[m.title] || {}).row || 0) + (ok ? 1 : 0)} of 3 right in a row on different days.</span>`}`; result(cc, item, ok, extra); };
   if (!document.getElementById('mgcss')) document.head.insertAdjacentHTML('beforeend', `<style id="mgcss">
     .mg-bank{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.mg-chip{padding:8px 12px;border-radius:12px;background:var(--card2,#24313a);border:2px solid rgba(255,255,255,.12);font-weight:700;touch-action:none;user-select:none;cursor:grab}
     .mg-chip.sel{border-color:var(--accent,#3bc1a8);transform:translateY(-2px)}.mg-chip.used{visibility:hidden}.mg-slot{display:inline-block;min-width:76px;min-height:34px;padding:6px 10px;border-radius:10px;border:2px dashed rgba(255,255,255,.25);font-weight:700;vertical-align:middle}
@@ -263,7 +270,7 @@ EX.mixgrid = function (c, item) {
   /* ----- draw lines ----- */
   if (B.mode === 'lines') {
     const L = d.pairs.map((p, i) => ({ i, t: B.flip ? p[1] : p[0] })), R = shuffle(d.pairs.map((p, i) => ({ i, t: B.flip ? p[0] : p[1] })));
-    $('#ex').innerHTML = `<div class="label">Don't mix up · ${esc(m.title)}</div><div class="prompt" style="font-size:1rem">Draw a line from each one to its match</div><p class="muted small" style="margin:0">Drag from one box to the other, or tap one and then the other. Tap a box again to undo its line.</p>
+    $('#ex').innerHTML = `<div class="label">${vb ? 'Your words' : "Don't mix up"} · ${esc(m.title)}</div><div class="prompt" style="font-size:1rem">Draw a line from each one to its match</div><p class="muted small" style="margin:0">Drag from one box to the other, or tap one and then the other. Tap a box again to undo its line.</p>
       <div class="mg-lines" id="mgl">${L.map((x, k) => `<div class="mg-item${B.flip ? ' r' : ''}" data-side="L" data-i="${x.i}" style="grid-column:1;grid-row:${k + 1}">${esc(x.t)}</div>`).join('')}${R.map((x, k) => `<div class="mg-item${B.flip ? '' : ' r'}" data-side="R" data-i="${x.i}" style="grid-column:2;grid-row:${k + 1}">${esc(x.t)}</div>`).join('')}<svg class="mg-svg" id="mgsvg"></svg></div>`;
     foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
     const box = $('#mgl'), svg = $('#mgsvg'), links = {}, el = (s, i) => box.querySelector(`.mg-item[data-side="${s}"][data-i="${i}"]`); let sel = null, ghost = null, graded = null;
@@ -288,6 +295,7 @@ EX.mixgrid = function (c, item) {
     addEventListener('resize', draw, { once: true }); setTimeout(draw, 50);
     $('#chk').onclick = () => { graded = {}; let n = 0; L.forEach(x => { graded[x.i] = links[x.i] === String(x.i); if (graded[x.i]) n++; el('L', x.i).classList.add(graded[x.i] ? 'ok' : 'bad'); }); draw();
       const miss = L.filter(x => !graded[x.i]).map(x => `${esc(B.flip ? d.pairs[x.i][1] : d.pairs[x.i][0])} → <b>${esc(B.flip ? d.pairs[x.i][0] : d.pairs[x.i][1])}</b>`);
+      if (vb) { const by = {}; L.forEach(x => { const id = d.ids[x.i]; by[id] = (by[id] !== false) && graded[x.i]; }); gradeWords(by); }
       done(n === L.length, n, L.length, miss.map(x => '❌ ' + x)); };
     MG = { solve: () => { L.forEach(x => links[x.i] = String(x.i)); draw(); $('#chk').click(); } };
     return;
@@ -298,15 +306,15 @@ EX.mixgrid = function (c, item) {
   let body = '';
   if (B.mode === 'table') {
     const g = d.grid, blanks = new Set(B.blanks);
-    body = `<div class="prompt" style="font-size:1rem">Complete the table</div><p class="muted small" style="margin:0">Drag each word into its spot, or tap a word and then the spot.</p><div style="overflow-x:auto;margin-top:8px"><table class="mg-tab"><tr>${g.head.map(h => `<th class="muted">${esc(h)}</th>`).join('')}</tr>${g.rows.map((r, i) => `<tr>${r.map((v, j) => { const k = i + ':' + j; if (blanks.has(k)) { slots.push({ key: k, ans: v }); return `<td><span class="mg-slot" data-k="${k}"></span></td>`; } return `<td${j ? '' : ' class="muted"'}>${esc(v)}</td>`; }).join('')}</tr>`).join('')}</table></div>`;
+    body = `<div class="prompt" style="font-size:1rem">Complete the table</div><p class="muted small" style="margin:0">Drag each word into its spot, or tap a word and then the spot.</p><div style="overflow-x:auto;margin-top:8px"><table class="mg-tab"><tr>${g.head.map(h => `<th class="muted">${esc(h)}</th>`).join('')}</tr>${g.rows.map((r, i) => `<tr>${r.map((v, j) => { const k = i + ':' + j; if (blanks.has(k)) { slots.push({ key: k, ans: v }); return `<td><span class="mg-slot" data-k="${k}"></span></td>`; } return `<td${j || vb ? '' : ' class="muted"'}${vb && j === 0 && !B.vcol ? '' : ''}>${vb && ((vb.grid && (j === 1 || j === 2)) || (!vb.grid && j === 0)) ? '<b>' + esc(v) + '</b>' : esc(v)}</td>`; }).join('')}</tr>`).join('')}</table></div>`;
   } else {
     const rows = d.pairs.map((p, i) => ({ k: String(i), def: B.flip ? p[1] : p[0], ans: B.flip ? p[0] : p[1] }));
     slots = rows.map(r => ({ key: r.k, ans: r.ans }));
     body = `<div class="prompt" style="font-size:1rem">Drag each one into the box beside its match</div><p class="muted small" style="margin:0">Or tap one, then tap its box.</p><div class="mg-rows" style="margin-top:10px">${rows.map(r => `<div class="mg-row"><span class="def${B.flip ? ' ' : ''}" style="${B.flip ? 'font-weight:700' : ''}">${esc(r.def)}</span><span class="mg-slot" data-k="${r.k}"></span></div>`).join('')}</div>`;
   }
-  const slotLabel = k => { if (B.mode === 'table') { const [i, j] = k.split(':').map(Number); return d.grid.rows[i][0] + ' · ' + d.grid.head[j]; } const p = d.pairs[+k]; return B.flip ? p[1] : p[0]; };
+  const slotLabel = k => { if (B.mode === 'table') { const [i, j] = k.split(':').map(Number); return vb ? d.grid.rows[i].filter((_, x) => x !== j).join(' · ') : d.grid.rows[i][0] + ' · ' + d.grid.head[j]; } const p = d.pairs[+k]; return B.flip ? p[1] : p[0]; };
   const chips = shuffle(slots.map((s, i) => ({ id: 'c' + i, v: s.ans })));
-  $('#ex').innerHTML = `<div class="label">Don't mix up · ${esc(m.title)}</div>${body}<div class="mg-bank" id="mgb">${chips.map(x => `<span class="mg-chip" data-c="${x.id}">${esc(x.v)}</span>`).join('')}</div>`;
+  $('#ex').innerHTML = `<div class="label">${vb ? 'Your words' : "Don't mix up"} · ${esc(m.title)}</div>${body}<div class="mg-bank" id="mgb">${chips.map(x => `<span class="mg-chip" data-c="${x.id}">${esc(x.v)}</span>`).join('')}</div>`;
   foot(`<button class="btn primary block" id="chk" disabled>Check</button>`);
   const put = {}, chipEl = id => $(`.mg-chip[data-c="${id}"]`), slotEl = k => $(`.mg-slot[data-k="${k}"]`); let sel = null, graded = false;
   const refresh = () => { document.querySelectorAll('.mg-slot').forEach(s => { const cid = put[s.dataset.k]; s.textContent = cid ? chips.find(x => x.id === cid).v : ''; s.classList.toggle('full', !!cid); });
@@ -325,6 +333,81 @@ EX.mixgrid = function (c, item) {
   });
   $('#chk').onclick = () => { graded = true; let n = 0;
     const fixes = []; slots.forEach(s => { const got = chips.find(x => x.id === put[s.key]).v, ok = norm(got) === norm(s.ans), el = slotEl(s.key); el.classList.add(ok ? 'ok' : 'bad'); if (ok) n++; else { fixes.push(`❌ ${esc(slotLabel(s.key))}: <s>${esc(got)}</s> → <b>${esc(s.ans)}</b>`); } });
+    if (vb) { const by = {}; slots.forEach(s => { const row = B.mode === 'table' ? +s.key.split(':')[0] : +s.key, got = chips.find(x => x.id === put[s.key]).v, ok = norm(got) === norm(s.ans);
+      const ids = vb.kind === 'opp' ? [vb.opp[row].ia, vb.opp[row].ib] : [d.ids[row]]; ids.forEach(id => { by[id] = (by[id] !== false) && ok; }); }); gradeWords(by); }
     refresh(); slots.forEach(s => { const el = slotEl(s.key); if (el.classList.contains('bad')) el.insertAdjacentHTML('beforeend', `<span class="mg-fix">${esc(s.ans)}</span>`); }); done(n === slots.length, n, slots.length, fixes); };
   MG = { solve: () => { slots.forEach(s => { const ch = chips.find(x => x.v === s.ans && !Object.values(put).includes(x.id)); put[s.key] = ch.id; }); refresh(); $('#chk').click(); } };
 };
+
+/* ---------- vocabulary boards: the same table / drag / lines questions for all your words ----------
+   Each session turns a handful of your due reviews into one board, grouped so they belong together (a verb and
+   its forms, opposites, or a topic like family or food), and one board of today's new words near the end.
+   Every word on a board is graded on its own; any you miss comes back as a regular question. */
+const VB_TOPICS = [
+  ['Family', /\b(mother|father|mom|dad|mama|papa|sister|brother|sibling|grand\w*|aunt|uncle|cousin|son|daughter|wife|husband|spouse|family|baby|parents?|relatives?|in-law)\b/],
+  ['Body', /\b(head|hands?|foot|feet|eyes?|ears?|nose|mouth|teeth|tooth|hair|stomach|belly|legs?|arms?|face|fingers?|knees?|neck|shoulders?|skin|body|back)\b/],
+  ['Food and eating', /\b(rice|food|eat|eats|eating|ate|eaten|fish|chicken|pork|meat|fruit|banana|mango|bread|eggs?|coffee|soup|vegetables?|sweet|salty|sugar|delicious|tasty|hungry|full|drink|drinks|drinking|drank|cook|cooks|cooking|cooked|breakfast|lunch|dinner|snack)\b/],
+  ['Time', /\b(today|tomorrow|yesterday|morning|noon|afternoon|evening|night|tonight|week|month|year|now|later|early|late|hours?|minutes?|monday|tuesday|wednesday|thursday|friday|saturday|sunday|always|sometimes|never)\b/],
+  ['Weather', /\b(rain|rains|raining|rainy|sun|sunny|hot|cold|wind|windy|cloud|cloudy|storm|weather|typhoon|heat)\b/],
+  ['Feelings', /\b(happy|sad|angry|mad|tired|scared|afraid|shy|ashamed|bored|excited|love|miss|worried|lonely|feel|feels|feeling|sick|hurt|glad|jealous)\b/],
+  ['Places', /\b(house|home|school|church|market|store|shop|city|town|room|kitchen|street|road|beach|sea|mountain|hospital|office|yard|bathroom|province)\b/],
+  ['Animals', /\b(dog|cat|bird|pig|cow|carabao|goat|horse|mosquito|ants?|animals?|rooster|lizard|rat|mouse)\b/],
+  ['Colors', /\b(red|blue|green|yellow|white|black|colou?rs?|brown|pink|orange|purple)\b/],
+  ['Numbers', /^(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|fifty|hundred|thousand|numbers?|first|second|third|half)\b/],
+  ['Going and doing', /^(to )?(go|goes|going|went|gone|come|comes|coming|came|walk|walks|walking|walked|run|runs|running|ran|leave|leaving|left|arrive|arrived|arriving|return|returned|sit|sitting|sat|stand|standing|stood|sleep|sleeping|slept|wake up|woke up|swim|swimming|swam|ride|riding|rode|play|playing|played|work|working|worked|study|studying|studied|bathe|bathing|take a bath)\b/]];
+// opposites, both sides standard Cebuano
+const VB_OPP = [['dako', 'gamay', 'big', 'small'], ['init', 'bugnaw', 'hot', 'cold'], ['taas', 'mubo', 'tall / long', 'short'], ['bag-o', 'daan', 'new', 'old (thing)'], ['sayo', 'ulahi', 'early', 'late'], ['puti', 'itom', 'white', 'black'],
+  ['tambok', 'niwang', 'fat', 'thin'], ['paspas', 'hinay', 'fast', 'slow'], ['layo', 'duol', 'far', 'near'], ['lisod', 'sayon', 'hard', 'easy'], ['adlaw', 'gabii', 'day', 'night'], ['sulod', 'gawas', 'inside', 'outside'],
+  ['bug-at', 'gaan', 'heavy', 'light'], ['limpyo', 'hugaw', 'clean', 'dirty'], ['basa', 'uga', 'wet', 'dry'], ['daghan', 'gamay', 'many / a lot', 'few / a little'], ['nindot', 'bati', 'nice', 'ugly / bad'], ['tigulang', 'bata', 'old (person)', 'young'],
+  ['abli', 'sira', 'open', 'closed'], ['lalaki', 'babaye', 'man / male', 'woman / female'], ['oo', 'dili', 'yes', 'no'], ['naa', 'wala', 'there is', 'there isn\'t']];
+const VB_PRE = /^(mo|ni|mi|nag|mag|naka|maka|nang|mang|gi|pag)-?/;
+const vbEn = c => { const e = String(c.en).split(/;|\s\/\s/)[0].trim(), bare = e.replace(/\s*\([^)]*\)?/g, '').trim(); return bare.length >= 2 ? bare : e; };
+const vbKnown = id => { const k = S.cards[id]; return k && !k.fresh && (k.b || 0) >= 1; };
+// the groups a word belongs to
+function vbGroups(pool) {
+  const fam = {}, top = {}, opp = [];
+  pool.forEach(id => { const c = card(id); if (!c || !/^[wpm]/.test(id) || tokens(c.ceb).length > 2) return;
+    const w = lowTok(firstAlt(c.ceb));
+    if (tokens(c.ceb).length === 1) { const root = w.replace(VB_PRE, ''); if (root.length >= 3 && (root === w || VB_PRE.test(w))) (fam[root] = fam[root] || []).push(id); }
+    const e = vbEn(c).replace(/\s*\([^)]*\)/g, '').toLowerCase(); const t = VB_TOPICS.find(([, re]) => re.test(e)); if (t) (top[t[0]] = top[t[0]] || []).push(id); });
+  VB_OPP.forEach(([a, b, ea, eb]) => { const ia = cardForTok(a), ib = cardForTok(b); if (ia && ib && pool.includes(ia) && pool.includes(ib)) opp.push({ a, b, ea, eb, ia, ib }); });
+  return { fam: Object.entries(fam).filter(([r, ids]) => ids.length >= 3), top: Object.entries(top).filter(([t, ids]) => ids.length >= 4), opp };
+}
+// turn a set of cards into board pairs [meaning, bisaya, id], dropping repeats so every match has one answer
+function vbPairs(ids, n) {
+  const seenE = new Set(), seenC = new Set(), out = [];
+  shuffle(ids.slice()).forEach(id => { const c = card(id); if (!c || out.length >= n) return; const e = vbEn(c), b = firstAlt(c.ceb).replace(/[.!]$/, ''); if (!e || e.length > 40 || seenE.has(norm(e)) || seenC.has(norm(b))) return; seenE.add(norm(e)); seenC.add(norm(b)); out.push([e, b, id]); });
+  return out;
+}
+function vocabBoards(q, nw) {
+  const known = Object.keys(S.cards).filter(vbKnown), out = [];
+  const reviewIdx = q.map((x, i) => ({ x, i })).filter(({ x }) => !x.recap && !x.retry && ['mc', 'listen', 'type', 'tiles', 'speak', 'dict', 'build'].includes(x.type) && /^[wpm]/.test(x.id) && vbKnown(x.id));
+  const dueSet = new Set(reviewIdx.map(r => r.x.id));
+  if (known.length >= 12 && dueSet.size >= 3) {
+    const g = vbGroups(known); let pick = null;
+    const withDue = ids => ids.filter(id => dueSet.has(id)).length;
+    // a verb and its forms > opposites > a topic > just your due words
+    const fams = shuffle(g.fam.filter(([, ids]) => withDue(ids) >= 1));
+    if (fams.length && Math.random() < 0.5) { const [root, ids] = fams[0]; const p = vbPairs(ids, 5); if (p.length >= 3) pick = { title: 'One root, different forms · ' + root, kind: 'family', pairs: p, trick: 'Same root, different start: <b>mo-</b> will, <b>ni- / mi-</b> did, <b>nag-</b> doing (or did, ongoing), <b>maka- / naka-</b> can / managed to, <b>gi-</b> done to it.' }; }
+    const opps = g.opp.filter(o => dueSet.has(o.ia) || dueSet.has(o.ib));
+    if (!pick && opps.length >= 2 && Math.random() < 0.5) { const os = shuffle(g.opp.slice()).sort((x, y) => (dueSet.has(y.ia) || dueSet.has(y.ib)) - (dueSet.has(x.ia) || dueSet.has(x.ib))).slice(0, 4);
+      pick = { title: 'Opposites', kind: 'opp', opp: os, pairs: os.map(o => [o.ea + ' ↔ ' + o.eb, o.a + ' · ' + o.b, o.ia]), grid: { head: ['means', 'word', 'opposite', 'means'], rows: os.map(o => [o.ea, o.a, o.b, o.eb]) }, ids: os.flatMap(o => [o.ia, o.ib]), trick: 'Learn them in pairs: when you know one side, you\'ve nearly got the other.' }; }
+    const tops = shuffle(g.top.filter(([, ids]) => withDue(ids) >= 1));
+    if (!pick && tops.length) { const [t, ids] = tops[0]; const due = ids.filter(id => dueSet.has(id)), rest = shuffle(ids.filter(id => !dueSet.has(id))); const p = vbPairs(due.concat(rest), 5); if (p.length >= 4) pick = { title: t, kind: 'topic', pairs: p }; }
+    if (!pick) { const p = vbPairs([...dueSet], 5); if (p.length >= 3) pick = { title: 'Due today', kind: 'review', pairs: p }; }
+    if (pick) {
+      const ids = pick.ids || pick.pairs.map(p => p[2]);
+      // the due ones on the board come out of the session's single questions, so the session stays the same length
+      const drop = reviewIdx.filter(r => ids.includes(r.x.id)), at = drop.length ? drop[0].i : Math.floor(q.length * 0.3);
+      drop.slice().reverse().forEach(r => q.splice(r.i, 1));
+      q.splice(Math.min(at, q.length), 0, { id: ids[0], type: 'mixgrid', vb: pick });
+      out.push(pick);
+    }
+  }
+  // today's new words, together, near the end (it stands in for a few of the one-at-a-time recaps)
+  const fresh = (nw || []).filter(id => /^[wpm]/.test(id) && card(id));
+  if (fresh.length >= 4) { const p = vbPairs(fresh, 5); if (p.length >= 4) {
+    const ids = p.map(x => x[2]); let cut = 0; for (let i = q.length - 1; i >= 0 && cut < 3; i--) if (q[i].recap && ids.includes(q[i].id)) { q.splice(i, 1); cut++; }
+    q.splice(Math.max(0, q.length - 2), 0, { id: ids[0], type: 'mixgrid', vb: { title: "Today's new words", kind: 'new', pairs: p } }); } }
+  return out;
+}

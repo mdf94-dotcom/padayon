@@ -877,6 +877,8 @@ function buildSession() {
   // every new word, not just the first ten (Karpicke & Roediger 2008: words recalled once and dropped are forgotten
   // far faster than words recalled again later in the session)
   if (nw.length) shuffle(nw.filter(id => id[0] !== 'r').slice(0, segs.length ? 10 : 15)).forEach(id => q.push({ id, type: exType(id, true), recap: 1 }));
+  // vocabulary boards: a few due reviews as one table / drag / lines question, and today's new words together near the end
+  if (!extraRound && typeof vocabBoards === 'function') try { vocabBoards(q, nw); } catch (e) { console.warn('boards:', e.message); }
   // the parts: the conversation about a third of the way in, the other about two thirds; never last, so the session
   // always has a question to come back to
   segs.forEach((k, j) => q.splice(Math.max(1, Math.min(q.length - 1, Math.floor(q.length * (segs.length === 1 ? 0.5 : j ? 0.68 : 0.35)))), 0, { id: 'seg', type: 'seg', seg: k }));
@@ -1515,12 +1517,12 @@ const minsText = n => `${n} new words a day is about ${MINS[n] || Math.round(n *
 const IPHONE_MUSIC = 'On iPhone, music only plays when your phone is not on silent (ring switch or Action button set to ring). The Bisaya audio always plays.';
 /* ---------- the guide: shown once to everyone after a big update (bump GUIDE_V), and any time from Me ----------
    Keep it up to date: every new feature gets a point on the page for the tab where it lives. */
-const GUIDE_V = 5;
+const GUIDE_V = 6;
 /* The guide: short, visual pages. Each page has a picture, a few short points, and shows where to find it. */
 const GUIDE = [
   { t: 'Welcome to Padayon!', art: '👋', pts: [['🗣️', 'Learn the Bisaya your family speaks'], ['⏱️', 'About 15 minutes a day'], ['<img src="icon-192.png?v=full" alt="" class="gface">', 'Binko, our BIG robot friend, helps along the way']] },
   { t: 'Your day', tab: 'home', art: '☀️', pts: [['▶️', '<b>Start</b> your daily session. It\'s the only thing to do each day'], ['💬', 'It has everything in it: reviews, new words, a grammar rule, today\'s <b>conversation</b>, and one more part that changes each day (a story, Real Bisaya, a speed round, numbers, building sentences, talking about yourself or retelling a story)'], ['↩️', 'Each part opens its own screen, then brings you right back to the session'], ['🔥', 'Keep your streak. One missed day a week is free 🧊'], ['💬', 'Say the <b>phrase of the day</b> to someone'], ['🤖', 'Binko greets you with today\'s plan and what needs work'], ['⏸️', 'Leave a lesson any time. Continue picks up right where you stopped'], ['🍀', 'Come back to Today and a Lucky Clover shares a fun fact, a legend or a famous Filipino quote, with their own music']] },
-  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A "sounds like" guide, and a picture when one really shows the word'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🆕', 'New kinds of questions: reply to what someone says, hear the difference, fill the gap'], ['🔀', 'A word with several meanings (like <b>naa</b>) gets one card per meaning, learned on different days. Tap a meaning to compare it'], ['🔁', 'Miss one? It comes back six questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
+  { t: 'New words', tab: 'home', art: '🍌', pts: [['🖼️', 'A "sounds like" guide, and a picture when one really shows the word'], ['🔊', 'Tap to hear it'], ['📝', 'Examples only use words you already know'], ['🆕', 'New kinds of questions: reply to what someone says, hear the difference, fill the gap'], ['🧩', 'Boards: draw lines between matches, drag words into the box beside their meaning, or complete a table. They group words that go together: a verb and its forms, opposites, a topic like family or food, and today\'s new words'], ['💡', '"Don\'t mix up" boxes now have a trick and a table, and their own questions. Each one keeps coming back until you get it right 3 times in a row on different days'], ['🔀', 'A word with several meanings (like <b>naa</b>) gets one card per meaning, learned on different days. Tap a meaning to compare it'], ['🔁', 'Miss one? It comes back six questions later, until you get it right'], ['🧠', 'Each word comes back right before you\'d forget it. Hard ones sooner, easy ones later'], ['👆', 'Tap any word in <b>Word by word</b> to see what it means'], ['🔤', 'After you answer, every choice shows what it means'], ['🚩', 'Audio sounds off? Tap <b>Sounds wrong?</b> to flag it']] },
   { t: 'Grammar', tab: 'home', art: '🧩', pts: [['📘', 'Grammar first: rules and sentence patterns come before new vocabulary, up to two rules a day'], ['📈', 'Questions get harder each time'], ['✅', '<b>Don\'t mix up</b> boxes: easy-to-confuse words side by side, with ✅ right and ❌ wrong examples. Look-alike words are learned on different days, then once you know two of them they come back as questions: fill in the blank, or pick or type the right one'], ['🤔', 'Miss one? See exactly why']] },
   { t: 'Practice', tab: 'practice', art: '🎧', pts: [['➕', 'Extra practice any time. None of it is needed: the daily session already has a bit of each'], ['⚡', 'Speed round and dictation'], ['🎤', 'Shadowing and conversations. In a conversation, say your line out loud or type it to have it checked. Stuck? There\'s a hint'], ['📖', 'Binko\'s stories and Real Bisaya'], ['🔢', '<b>Numbers &amp; time:</b> say any number up to a billion, and tell the time']] },
   { t: 'Games', tab: 'rushhome', art: '🏆', pts: [['🏆', '<b>Rush:</b> words from easy to hard, one miss ends it'], ['🗺️', '<b>Province and Language Rush:</b> on a map of the Philippines. Hear every name and see how it sounds'], ['📍', 'Study the map first, no pressure'], ['⌨️', '<b>Multiple choice or typing</b>, your pick. Switch any time at the top of Games']], input: true },
@@ -1605,7 +1607,7 @@ VIEWS.session = function () {
 function foot(html) { $('#foot').className = 'foot'; $('#foot').innerHTML = html; }
 function next() { stopAudio(); if (typeof stopRecorder === 'function') stopRecorder(); qi++; try { VIEWS.session(); } catch (e) { console.warn('session step failed:', e.message); view = 'home'; render(); return; } window.scrollTo(0, 0); }
 function result(c, item, ok, extra) {
-  if ((item.type === 'mixq' || item.type === 'mixgrid') && !item.statDone) { item.statDone = 1; mixStat(item.mx, ok === true || ok === 2 || ok === 1); }
+  if ((item.type === 'mixq' || (item.type === 'mixgrid' && !item.vb)) && !item.statDone) { item.statDone = 1; mixStat(item.mx, ok === true || ok === 2 || ok === 1); }
   { const ae = document.activeElement; if (ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) ae.blur(); }   // close the phone keyboard so it can't cover the right/wrong panel
   setTimeout(() => { const f = $('#foot'); if (!f) return; const h = window.visualViewport ? visualViewport.height : innerHeight; if (f.getBoundingClientRect().bottom > h + 2 || f.getBoundingClientRect().top > h - 60) f.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, 350);
   const q = ok === true ? 2 : ok === false ? 0 : ok;
@@ -1629,14 +1631,14 @@ function result(c, item, ok, extra) {
   if (q === 0 && sess.mode === 'daily') {
     sess.miss = sess.miss || {}; const n = sess.miss[c.id] = (sess.miss[c.id] || 0) + 1; sess.requeued.add(c.id);
     if (n <= 3) {
-      const easy = item.type === 'mixgrid' ? { id: c.id, type: 'mixq', mx: item.mx, easy: 1 } : item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx, easy: 1 } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' };
+      const easy = item.type === 'mixgrid' ? (item.vb ? { id: c.id, type: 'mc' } : { id: c.id, type: 'mixq', mx: item.mx, easy: 1 }) : item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx, easy: 1 } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' };
       const add = [n >= 2 && item.type !== 'mixq' && c.kind !== 'r' && sess.newIds.has(c.id) ? { id: c.id, type: 'teach', again: 1 } : null, Object.assign(easy, { retry: n })].filter(Boolean);
       // 6 questions later: in Pyc & Rawson (2009) a gap of 6 items beat back-to-back, and longer gaps beat 6, so it
       // comes back after real forgetting has started but while it can still be recalled in the same session
       Q.splice(Math.min(Q.length, qi + 1 + MISS_GAP), 0, ...add);
       retryNote = '<div class="small muted" style="margin-top:4px">🔁 This one comes back in a few questions.</div>';
     } else retryNote = '<div class="small muted" style="margin-top:4px">We\'ll come back to this one tomorrow.</div>';
-  } else if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push(item.type === 'mixgrid' ? { id: c.id, type: 'mixgrid', mx: item.mx } : item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
+  } else if (q === 0 && !sess.requeued.has(c.id)) { sess.requeued.add(c.id); Q.push(item.type === 'mixgrid' ? (item.vb ? { id: c.id, type: exType(c.id) } : { id: c.id, type: 'mixgrid', mx: item.mx }) : item.type === 'mixq' ? { id: c.id, type: 'mixq', mx: item.mx } : { id: c.id, type: c.kind === 'r' ? 'rq' : c.kind === 'f' || c.kind === 'd' ? 'build' : c.audio ? pick(['listen', 'mc']) : 'mc' }); }
   save();
   // a swapped-in version of the card (build exercises) or a rule sentence plays its own sentence, not the card's recording
   const base = c.kind === 'r' ? null : card(c.id), sentenceOnly = c.kind === 'r' || (base && norm(firstAlt(base.ceb)) !== norm(firstAlt(c.ceb)));
